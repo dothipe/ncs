@@ -1,12 +1,12 @@
 {
-  "projectId": "vscs-500408",
-  "appId": "1:190428284725:web:65223720ae603c7676ae7c",
-  "apiKey": "AIzaSyBc_xUITQzhqhh3jly3lv7Fkn2LZuVoXjI",
-  "authDomain": "vscs-500408.firebaseapp.com",
+  "projectId": "ncs-vscs-asia",
+  "appId": "1:943194734991:web:04a1602a245a7a8e4c4bfa",
+  "apiKey": "AIzaSyCKiMEzohowJ3UbWTliL6cibRpzrJrwdF0",
+  "authDomain": "ncs-vscs-asia.firebaseapp.com",
   "firestoreDatabaseId": "ai-studio-ncsvscvietnamsli-8b781f81-bfed-4913-9810-6113db23caba",
-  "storageBucket": "vscs-500408.firebasestorage.app",
-  "messagingSenderId": "190428284725",
+  "storageBucket": "ncs-vscs-asia.firebasestorage.app",
+  "messagingSenderId": "943194734991",
   "measurementId": "",
-  "oAuthClientId": "190428284725-n8jq1n5s6bng30ec84rh7fc8bt8rjrfe.apps.googleusercontent.com",
+  "oAuthClientId": "943194734991-7v9se9ats7api7j1h8nghicb3nvkl0p0.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }

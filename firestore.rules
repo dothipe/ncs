@@ -11,6 +11,7 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // We do NOT use native emailVerified check directly in rules to avoid strict Google dependency if bypass is active
     function isEmailVerified() {
       return isSignedIn();
     }
