@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">VSC Slingshot</string>
+    <string name="title_activity_main">VSC Slingshot</string>
+    <string name="package_name">com.vietnamslingshot.score</string>
+    <string name="custom_url_scheme">com.vietnamslingshot.score</string>
+</resources>

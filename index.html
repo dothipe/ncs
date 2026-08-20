@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VSC - Vietnam Slingshot Champs</title>
+    <link rel="icon" type="image/png" href="https://lh3.googleusercontent.com/d/1CAz9xUSO8XIvtEy9TYqil228Cz-jYcIM" />
+    <script>
+      // Safe localStorage, sessionStorage, alert, confirm, and prompt polyfills for sandboxed iframe compatibility
+      (function() {
+        var testKey = "__storage_test__";
+        var storageAvailable = true;
+        try {
+          window.localStorage.setItem(testKey, testKey);
+          window.localStorage.removeItem(testKey);
+        } catch (e) {
+          storageAvailable = false;
+        }
+
+        if (!storageAvailable) {
+          console.warn("localStorage is blocked, installing in-memory polyfill in head...");
+          var memoryStorage = {};
+          var polyfillStorage = {
+            getItem: function(key) {
+              return Object.prototype.hasOwnProperty.call(memoryStorage, key) ? memoryStorage[key] : null;
+            },
+            setItem: function(key, value) {
+              memoryStorage[key] = String(value);
+            },
+            removeItem: function(key) {
+              delete memoryStorage[key];
+            },
+            clear: function() {
+              memoryStorage = {};
+            },
+            key: function(index) {
+              var keys = Object.keys(memoryStorage);
+              return index >= 0 && index < keys.length ? keys[index] : null;
+            },
+            get length() {
+              return Object.keys(memoryStorage).length;
+            }
+          };
+          try {
+            Object.defineProperty(window, 'localStorage', {
+              value: polyfillStorage,
+              writable: true,
+              configurable: true
+            });
+          } catch (err) {
+            try {
+              window.localStorage = polyfillStorage;
+            } catch (_) {}
+          }
+        }
+
+        var sessionAvailable = true;
+        try {
+          window.sessionStorage.setItem(testKey, testKey);
+          window.sessionStorage.removeItem(testKey);
+        } catch (e) {
+          sessionAvailable = false;
+        }
+
+        if (!sessionAvailable) {
+          console.warn("sessionStorage is blocked, installing in-memory polyfill in head...");
+          var memorySessionStorage = {};
+          var polyfillSessionStorage = {
+            getItem: function(key) {
+              return Object.prototype.hasOwnProperty.call(memorySessionStorage, key) ? memorySessionStorage[key] : null;
+            },
+            setItem: function(key, value) {
+              memorySessionStorage[key] = String(value);
+            },
+            removeItem: function(key) {
+              delete memorySessionStorage[key];
+            },
+            clear: function() {
+              memorySessionStorage = {};
+            },
+            key: function(index) {
+              var keys = Object.keys(memorySessionStorage);
+              return index >= 0 && index < keys.length ? keys[index] : null;
+            },
+            get length() {
+              return Object.keys(memorySessionStorage).length;
+            }
+          };
+          try {
+            Object.defineProperty(window, 'sessionStorage', {
+              value: polyfillSessionStorage,
+              writable: true,
+              configurable: true
+            });
+          } catch (err) {
+            try {
+              window.sessionStorage = polyfillSessionStorage;
+            } catch (_) {}
+          }
+        }
+
+        // alert, confirm, prompt overrides (fully self-contained, no native calls to avoid sandboxed iframe exceptions)
+        try {
+          window.confirm = function (message) {
+            console.log("[Polyfill] Intercepted confirm:", message);
+            return true;
+          };
+        } catch (e) {
+          console.warn("[Polyfill] Could not override window.confirm", e);
+        }
+
+        try {
+          window.alert = function (message) {
+            console.log("[Polyfill] Intercepted alert:", message);
+          };
+        } catch (e) {
+          console.warn("[Polyfill] Could not override window.alert", e);
+        }
+
+        try {
+          window.prompt = function (message, defaultValue) {
+            console.log("[Polyfill] Intercepted prompt:", message);
+            return defaultValue || "";
+          };
+        } catch (e) {
+          console.warn("[Polyfill] Could not override window.prompt", e);
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

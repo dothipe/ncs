@@ -1,0 +1,145 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global safety net: default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helper Functions ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn();
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isAdmin() {
+      return isEmailVerified() && 
+             request.auth.token != null && 
+             'email' in request.auth.token && (
+               request.auth.token.email == "vscvietnamslingshot@gmail.com" ||
+               request.auth.token.email == "nahnatofficial@gmail.com"
+             );
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- User Profiles ---
+    function isValidUser(data) {
+      return ('uid' in data && data.uid is string && data.uid.size() <= 128) &&
+             ('email' in data && data.email is string && data.email.size() <= 256) &&
+             ('displayName' in data && data.displayName is string && data.displayName.size() <= 100) &&
+             (!('photoURL' in data) || data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 2048)) &&
+             ('role' in data && data.role is string && (data.role == "user" || data.role == "admin"));
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      
+      allow create: if isEmailVerified() && 
+                    userId == request.auth.uid && 
+                    isValidUser(incoming()) && 
+                    incoming().uid == request.auth.uid &&
+                    // Forbid users from assigning themselves admin role
+                    (('role' in incoming() && incoming().role == "user") || isAdmin());
+                    
+      allow update: if isEmailVerified() && 
+                    (userId == request.auth.uid || isAdmin()) && 
+                    isValidUser(incoming()) &&
+                    // Role is an immortal/protected field for standard users
+                    (!('role' in existing()) || !('role' in incoming()) || incoming().role == existing().role || isAdmin()) &&
+                    (!('uid' in existing()) || !('uid' in incoming()) || incoming().uid == existing().uid) &&
+                    (!('email' in existing()) || !('email' in incoming()) || incoming().email == existing().email);
+                    
+      allow delete: if isAdmin();
+    }
+
+    // --- Tournaments ---
+    function isValidTournament(data) {
+      return (!('id' in data) || data.id is string) &&
+             (!('matchName' in data) || data.matchName is string) &&
+             (!('competitionMode' in data) || data.competitionMode is string);
+    }
+
+    match /tournaments/{tournamentId} {
+      allow read: if true; // Public spectators need to access scores & brackets
+      
+      allow create: if isValidId(tournamentId) &&
+                    isValidTournament(incoming());
+                    
+      allow update: if isValidId(tournamentId) && 
+                    isValidTournament(incoming());
+                    
+      allow delete: if isValidId(tournamentId) && (
+                      !('creatorId' in existing()) ||
+                      (
+                        isEmailVerified() && (
+                          isAdmin() ||
+                          ('creatorId' in existing() && existing().creatorId == request.auth.uid) ||
+                          ('subAdmins' in existing() && existing().subAdmins is list && request.auth.token != null && 'email' in request.auth.token && request.auth.token.email in existing().subAdmins)
+                        )
+                      )
+                    );
+    }
+
+    // --- VSC Official System Athletes ---
+    function isValidVscSystemAthletes(data) {
+      return data.athletes is list && data.athletes.size() <= 5000;
+    }
+
+    match /vsc_system_athletes/{documentId} {
+      allow read: if true;
+      allow write: if isEmailVerified() && isValidId(documentId) && isValidVscSystemAthletes(incoming());
+    }
+
+    // --- VSC Official System Clubs ---
+    function isValidClub(data) {
+      return ('id' in data && data.id is string) &&
+             ('name' in data && data.name is string && data.name.size() <= 200) &&
+             (!('creatorId' in data) || data.creatorId is string) &&
+             (!('creatorEmail' in data) || data.creatorEmail is string) &&
+             (!('avatarUrl' in data) || data.avatarUrl is string) &&
+             (!('logoUrl' in data) || data.logoUrl is string) &&
+             (!('province' in data) || data.province is string) &&
+             (!('leaderId' in data) || data.leaderId is string) &&
+             (!('leaderName' in data) || data.leaderName is string) &&
+             (!('leaderEmail' in data) || data.leaderEmail is string) &&
+             (!('description' in data) || data.description is string) &&
+             (!('members' in data) || data.members is list) &&
+             (!('pendingRequests' in data) || data.pendingRequests is list);
+    }
+
+    match /vsc_system_clubs/{clubId} {
+      allow read: if true;
+      allow create: if isEmailVerified() && 
+                    isValidId(clubId) && 
+                    isValidClub(incoming()) && (
+                      isAdmin() ||
+                      !('leaderId' in incoming()) ||
+                      incoming().leaderId == "" ||
+                      incoming().leaderId == request.auth.uid
+                    );
+      allow update: if isEmailVerified() && 
+                    isValidId(clubId) && 
+                    isValidClub(incoming());
+      allow delete: if isEmailVerified() && 
+                    isValidId(clubId) && (
+                      isAdmin() ||
+                      ('leaderId' in existing() && existing().leaderId == request.auth.uid) ||
+                      ('creatorId' in existing() && existing().creatorId == request.auth.uid)
+                    );
+    }
+  }
+}

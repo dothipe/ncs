@@ -1,0 +1,8 @@
+{
+  "name": "NCS VSC / Vietnam Slingshot Champs",
+  "description": "Ứng dụng ghi điểm, quản lý vận động viên và tính điểm tự động cho môn thể thao bắn ná cao su sử dụng cho bia mục tiêu (Slingshot) - Vietnam Slingshot Championship. Hỗ trợ thiết lập cự ly, hệ số điểm nhân, số lượt bắn và lưu trữ lịch sử.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

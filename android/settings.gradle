@@ -1,0 +1,18 @@
+include ':app'
+def cordovaPluginsDir = file('./capacitor-cordova-android-plugins')
+if (cordovaPluginsDir.exists()) {
+    include ':capacitor-cordova-android-plugins'
+    project(':capacitor-cordova-android-plugins').projectDir = cordovaPluginsDir
+}
+
+def capacitorAndroidDir = file('../node_modules/@capacitor/android/capacitor')
+if (!capacitorAndroidDir.exists()) {
+    throw new GradleException("\n\n================================================================================\n" +
+            " [CHÚ Ý] KHÔNG TÌM THẤY THƯ MỤC 'node_modules'!\n" +
+            " Vui lòng mở Command Prompt / Terminal tại thư mục gốc của dự án và chạy lệnh:\n" +
+            "     npm install\n" +
+            " (Để tải về đầy đủ thư viện Capacitor Android trước khi mở/đồng bộ ứng dụng).\n" +
+            "================================================================================\n\n")
+}
+
+apply from: 'capacitor.settings.gradle'

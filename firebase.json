@@ -1,0 +1,12 @@
+{
+  "firestore": [
+    {
+      "database": "(default)",
+      "rules": "firestore.rules"
+    },
+    {
+      "database": "ai-studio-ncsvscvietnamsli-8b781f81-bfed-4913-9810-6113db23caba",
+      "rules": "firestore.rules"
+    }
+  ]
+}

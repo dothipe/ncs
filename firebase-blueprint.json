@@ -1,0 +1,88 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Store registered users and their general roles",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Tournament": {
+      "title": "Tournament",
+      "description": "Store tournaments with their full configs, athletes, and real-time scores",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "matchName": { "type": "string" },
+        "creatorId": { "type": "string" },
+        "creatorEmail": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date" },
+        "updatedAt": { "type": "string", "format": "date" },
+        "referees": { "type": "array" },
+        "subAdmins": { "type": "array" },
+        "isPublic": { "type": "boolean" },
+        "competitionMode": { "type": "string" },
+        "shotsCount": { "type": "number" },
+        "teamShotsCount": { "type": "number" },
+        "directMaxPoints": { "type": "number" },
+        "teamDirectMaxPoints": { "type": "number" },
+        "distances": { "type": "array" },
+        "teamDistances": { "type": "array" },
+        "athletes": { "type": "array" },
+        "teamAthletes": { "type": "array" },
+        "inputAthletes": { "type": "array" },
+        "teamInputAthletes": { "type": "array" }
+      },
+      "required": ["id", "matchName", "creatorId", "creatorEmail"]
+    },
+    "VscSystemAthletes": {
+      "title": "VscSystemAthletes",
+      "description": "Global list of VSC system athletes",
+      "type": "object",
+      "properties": {
+        "athletes": { "type": "array" },
+        "updatedAt": { "type": "string", "format": "date" }
+      },
+      "required": ["athletes"]
+    },
+    "Club": {
+      "title": "Club",
+      "description": "Global official club of the system",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "province": { "type": "string" },
+        "creatorId": { "type": "string" },
+        "creatorEmail": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "#/entities/User",
+      "description": "Registered user profile information"
+    },
+    "tournaments/{tournamentId}": {
+      "schema": "#/entities/Tournament",
+      "description": "Active slingshot tournament and shooting configuration details"
+    },
+    "vsc_system_athletes/{documentId}": {
+      "schema": "#/entities/VscSystemAthletes",
+      "description": "Global official roster of pre-approved athletes"
+    },
+    "vsc_system_clubs/{clubId}": {
+      "schema": "#/entities/Club",
+      "description": "Global official list of clubs"
+    }
+  }
+}
