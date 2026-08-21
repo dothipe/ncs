@@ -4602,7 +4602,7 @@ export default function App() {
           </p>
           <div className="flex gap-4 mt-1 text-[10px] font-bold">
             <a 
-              href="https://console.firebase.google.com/project/gen-lang-client-0768276535/firestore/databases/ai-studio-2edda41e-6b05-428e-b489-4034b2252242/data?openUpgradeDialog=true" 
+              href="https://console.firebase.google.com/project/ncs-vscs-asia/firestore/databases/ai-studio-ncsvscvietnamsli-8b781f81-bfed-4913-9810-6113db23caba/data?openUpgradeDialog=true" 
               target="_blank" 
               rel="noopener noreferrer"
               className="underline hover:text-yellow-200"
