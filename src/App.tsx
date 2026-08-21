@@ -4050,6 +4050,13 @@ export default function App() {
 
   // Filter athletes for the input board view list
   const filteredInputAthletes = inputAthletes.filter((a) => {
+    if (a.calledBy) {
+      const myEmail = (currentUser?.email || "anonymous").toLowerCase().trim();
+      const calledEmail = a.calledBy.toLowerCase().trim();
+      if (calledEmail !== myEmail) {
+        return false;
+      }
+    }
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
     return (
@@ -4078,6 +4085,13 @@ export default function App() {
 
   // Filter team athletes for the input board view list
   const filteredTeamInputAthletes = teamInputAthletes.filter((a) => {
+    if (a.calledBy) {
+      const myEmail = (currentUser?.email || "anonymous").toLowerCase().trim();
+      const calledEmail = a.calledBy.toLowerCase().trim();
+      if (calledEmail !== myEmail) {
+        return false;
+      }
+    }
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
     return (
@@ -4147,9 +4161,19 @@ export default function App() {
             </div>
 
             {(() => {
-              const unselected = masterAthletes.filter(
-                (m) => !currentInputAthletes.some((a) => a.id === m.id) && m.status !== "Bỏ thi" && (competitionMode !== "team" || m.isPrimaryTeam)
-              );
+              const unselected = masterAthletes.filter((m) => {
+                if (m.status === "Bỏ thi") return false;
+                if (competitionMode === "team" && !m.isPrimaryTeam) return false;
+                
+                // Exclude only if already called by ME (the current user)
+                const isAlreadyCalledByMe = currentInputAthletes.some((a) => {
+                  if (a.id !== m.id) return false;
+                  const myEmail = (currentUser?.email || "anonymous").toLowerCase().trim();
+                  const caller = (a.calledBy || "anonymous").toLowerCase().trim();
+                  return caller === myEmail;
+                });
+                return !isAlreadyCalledByMe;
+              });
               const filtered = unselected.filter((m) => {
                 if (!inputBoardAddSearch.trim()) return true;
                 const s = inputBoardAddSearch.toLowerCase();
@@ -4162,7 +4186,12 @@ export default function App() {
 
               if (filtered.length === 0) return null;
 
-              const allowedFiltered = filtered;
+              const allowedFiltered = filtered.filter((f) => {
+                const documentActivePlayer = currentInputAthletes.find((a) => a.id === f.id);
+                const caller = documentActivePlayer?.calledBy ? documentActivePlayer.calledBy.toLowerCase().trim() : "";
+                const myEmail = (currentUser?.email || "anonymous").toLowerCase().trim();
+                return !(caller && caller !== "anonymous" && caller !== myEmail);
+              });
               const allFilteredSelected = allowedFiltered.length > 0 && allowedFiltered.every((f) => selectedInputBoardAthleteIds.includes(f.id));
 
               const handleToggleSelectAll = () => {
@@ -4201,9 +4230,19 @@ export default function App() {
           {/* Athlete Roster Scroll Area */}
           <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2 min-h-[220px]">
             {(() => {
-              const unselected = masterAthletes.filter(
-                (m) => !currentInputAthletes.some((a) => a.id === m.id) && m.status !== "Bỏ thi" && (competitionMode !== "team" || m.isPrimaryTeam)
-              );
+              const unselected = masterAthletes.filter((m) => {
+                if (m.status === "Bỏ thi") return false;
+                if (competitionMode === "team" && !m.isPrimaryTeam) return false;
+                
+                // Exclude only if already called by ME (the current user)
+                const isAlreadyCalledByMe = currentInputAthletes.some((a) => {
+                  if (a.id !== m.id) return false;
+                  const myEmail = (currentUser?.email || "anonymous").toLowerCase().trim();
+                  const caller = (a.calledBy || "anonymous").toLowerCase().trim();
+                  return caller === myEmail;
+                });
+                return !isAlreadyCalledByMe;
+              });
               const filtered = unselected.filter((m) => {
                 if (!inputBoardAddSearch.trim()) return true;
                 const s = inputBoardAddSearch.toLowerCase();
