@@ -549,12 +549,16 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
                                     alert(language === "en" ? `Error: This athlete is being scored by another referee (${lockedByRefereeEmail}). You cannot edit!` : `Lỗi: Vận động viên này đang được ghi điểm bởi trọng tài khác (${lockedByRefereeEmail}). Bạn không được chỉnh sửa!`);
                                     return;
                                   }
+                                  if (!isInputTab && !isScoringEditAuthorized) {
+                                    onTriggerUnlockModal?.();
+                                    return;
+                                  }
                                   if (!isDistancePreExisting) {
                                     onToggleScore(athlete.id, distance.id, shotIdx);
                                   }
                                 }}
                                 className={`text-center p-1 transition-colors relative border-r border-gray-100 ${
-                                  isDistancePreExisting || isLockedByOtherReferee
+                                  isDistancePreExisting || isLockedByOtherReferee || (!isInputTab && !isScoringEditAuthorized)
                                     ? "cursor-not-allowed bg-slate-100/40 dark:bg-slate-900/10" 
                                     : "cursor-pointer hover:bg-blue-50/75"
                                 } ${

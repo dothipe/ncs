@@ -2028,7 +2028,7 @@ export default function App() {
         // Calculate role dynamically for the incoming document to avoid stale state and dependency-array loops
         const isOwner = currentUser && (docVal.creatorId === currentUser.uid || isGlobalAdmin);
         const isSubAdmin = currentUser && (docVal.subAdmins?.some((email: string) => email.toLowerCase().trim() === currentUser.email?.toLowerCase().trim()));
-        const isReferee = currentUser && (docVal.referees?.includes(currentUser.email || ""));
+        const isReferee = currentUser && (docVal.referees?.some((email: string) => email.toLowerCase().trim() === currentUser.email?.toLowerCase().trim()));
         const isOnlineTour = activeHistoryId?.startsWith("tour-");
         const hasEnded = isOnlineTour && isTournamentEndedPast30Days(docVal.endDate, docVal.startDate);
 
@@ -2568,6 +2568,7 @@ export default function App() {
   // Toggles the hit state of a specific check box
   const executeToggleScore = (athleteId: string, distanceId: string, shotIndex: number) => {
     if (competitionMode === "individual") {
+      setInputAthletes((prev) => prev.filter((a) => a.id !== athleteId));
       setAthletes((prev) =>
         prev.map((athlete) => {
           if (athlete.id !== athleteId) return athlete;
@@ -2601,6 +2602,7 @@ export default function App() {
         })
       );
     } else {
+      setTeamInputAthletes((prev) => prev.filter((a) => a.id !== athleteId));
       setTeamAthletes((prev) =>
         prev.map((athlete) => {
           if (athlete.id !== athleteId) return athlete;
@@ -2843,6 +2845,7 @@ export default function App() {
 
   const executeDirectScoreUpdate = (athleteId: string, distanceId: string, value: number | null) => {
     if (competitionMode === "individual") {
+      setInputAthletes((prev) => prev.filter((a) => a.id !== athleteId));
       setAthletes((prev) =>
         prev.map((athlete) => {
           if (athlete.id !== athleteId) return athlete;
@@ -2863,6 +2866,7 @@ export default function App() {
         })
       );
     } else {
+      setTeamInputAthletes((prev) => prev.filter((a) => a.id !== athleteId));
       setTeamAthletes((prev) =>
         prev.map((athlete) => {
           if (athlete.id !== athleteId) return athlete;
