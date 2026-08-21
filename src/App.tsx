@@ -388,145 +388,32 @@ export default function App() {
   const [isStorageRestoring, setIsStorageRestoring] = useState(true);
   const [isNewTournamentModalOpen, setIsNewTournamentModalOpen] = useState(false);
 
-  // --- Persistent States from LocalStorage ---
-  const [matchName, setMatchName] = useState<string>(() => {
-    const saved = localStorage.getItem("slingshot_match_name");
-    return saved !== null ? saved : "Giải Vô Địch Bắn Ná Slingshot 2026";
-  });
+  // --- States with clean default values (all persisted state is fully loaded from online Firestore) ---
+  const [matchName, setMatchName] = useState<string>("Giải Vô Địch Bắn Ná Slingshot 2026");
 
-  const [startDate, setStartDate] = useState<string>(() => {
-    return localStorage.getItem("slingshot_start_date") || "";
-  });
+  const [startDate, setStartDate] = useState<string>("");
 
-  const [endDate, setEndDate] = useState<string>(() => {
-    return localStorage.getItem("slingshot_end_date") || "";
-  });
+  const [endDate, setEndDate] = useState<string>("");
 
-  const [bannerUrl, setBannerUrl] = useState<string>(() => {
-    return localStorage.getItem("slingshot_banner_url") || "";
-  });
+  const [bannerUrl, setBannerUrl] = useState<string>("");
 
-  const [avatarUrl, setAvatarUrl] = useState<string>(() => {
-    return localStorage.getItem("slingshot_avatar_url") || "";
-  });
+  const [avatarUrl, setAvatarUrl] = useState<string>("");
 
   const [headerTempName, setHeaderTempName] = useState<string>(matchName);
 
   const restoreAllData = async () => {
     try {
-      const [
-        avatars,
-        matchNameVal,
-        distancesVal,
-        shotsCountVal,
-        athletesVal,
-        masterAthletesVal,
-        historyVal,
-        storedAthleteListsVal,
-        activeHistoryIdVal,
-        inputAthletesVal,
-        competitionModeVal,
-        teamDistancesVal,
-        teamShotsCountVal,
-        teamAthletesVal,
-        teamInputAthletesVal,
-        clubsVal,
-        startDateVal,
-        endDateVal,
-        bannerUrlVal,
-        avatarUrlVal,
-        laneCapacityVal,
-      ] = await Promise.all([
-        deviceStorage.get("slingshot_avatars"),
-        deviceStorage.get("slingshot_match_name"),
-        deviceStorage.get("slingshot_distances"),
-        deviceStorage.get("slingshot_shots_count"),
-        deviceStorage.get("slingshot_athletes"),
-        deviceStorage.get("slingshot_master_athletes"),
-        deviceStorage.get("slingshot_history"),
-        deviceStorage.get("slingshot_stored_athlete_lists"),
-        deviceStorage.get("slingshot_active_history_id"),
-        deviceStorage.get("slingshot_input_athletes"),
-        deviceStorage.get("slingshot_competition_mode"),
-        deviceStorage.get("slingshot_team_distances"),
-        deviceStorage.get("slingshot_team_shots_count"),
-        deviceStorage.get("slingshot_team_athletes"),
-        deviceStorage.get("slingshot_team_input_athletes"),
-        deviceStorage.get("slingshot_clubs"),
-        deviceStorage.get("slingshot_start_date"),
-        deviceStorage.get("slingshot_end_date"),
-        deviceStorage.get("slingshot_banner_url"),
-        deviceStorage.get("slingshot_avatar_url"),
-        deviceStorage.get("slingshot_active_tournament_lane_capacity"),
-      ]);
-
-      if (avatars) {
-        try {
-          localStorage.setItem("slingshot_avatars", JSON.stringify(avatars));
-        } catch (e) {
-          console.warn("localStorage avatars sync error:", e);
-        }
-      }
-
-      let hasTourParam = false;
       let urlTourParam: string | null = null;
       if (typeof window !== "undefined") {
         const params = new URLSearchParams(window.location.search);
         urlTourParam = params.get("tour") || params.get("id");
-        if (urlTourParam && urlTourParam.startsWith("tour-")) {
-          hasTourParam = true;
-        }
       }
 
-      const localActiveHistoryId = activeHistoryIdVal || (typeof window !== "undefined" ? localStorage.getItem("slingshot_active_history_id") : null);
-      const targetOnlineId = (hasTourParam && urlTourParam) ? urlTourParam : localActiveHistoryId;
-      const isOnlineTourActive = !!(targetOnlineId && targetOnlineId.startsWith("tour-"));
-      const isSwitchingTour = !!(hasTourParam && urlTourParam !== localActiveHistoryId);
-
-      // CRITICAL: Do NOT restore local draft storage data if an online tournament is active.
-      // Online tournaments are loaded directly from Firestore in real-time.
-      if (!isOnlineTourActive && !isSwitchingTour) {
-        if (matchNameVal) {
-          setMatchName(matchNameVal);
-          setHeaderTempName(matchNameVal);
-        }
-        if (startDateVal) setStartDate(startDateVal);
-        if (endDateVal) setEndDate(endDateVal);
-        if (bannerUrlVal) setBannerUrl(bannerUrlVal);
-        if (avatarUrlVal) setAvatarUrl(avatarUrlVal);
-        if (distancesVal) setDistances(distancesVal);
-        if (shotsCountVal) setShotsCount(Number(shotsCountVal));
-        if (athletesVal) setAthletes(restoreBase64Avatars(athletesVal));
-        if (masterAthletesVal) setMasterAthletes(restoreBase64Avatars(masterAthletesVal));
-        if (inputAthletesVal) setInputAthletes(restoreBase64Avatars(inputAthletesVal));
-        if (competitionModeVal) setCompetitionMode(competitionModeVal as "individual" | "team");
-        if (teamDistancesVal) setTeamDistances(teamDistancesVal);
-        if (teamShotsCountVal) setTeamShotsCount(Number(teamShotsCountVal));
-        if (teamAthletesVal) setTeamAthletes(restoreBase64Avatars(teamAthletesVal));
-        if (teamInputAthletesVal) setTeamInputAthletes(restoreBase64Avatars(teamInputAthletesVal));
-        if (laneCapacityVal) setLaneCapacity(Number(laneCapacityVal));
-      }
-
-      if (historyVal) {
-        const parsedHistory = restoreBase64Avatars(historyVal);
-        setHistory((parsedHistory || []).filter((h: any) => h && h.matchName && h.matchName.trim()));
-      }
-      if (storedAthleteListsVal) {
-        const parsedLists = restoreBase64Avatars(storedAthleteListsVal);
-        setStoredAthleteLists((parsedLists || []).filter((l: any) => l && l.name && l.name.trim()));
-      }
-      
-      if (hasTourParam && urlTourParam) {
+      if (urlTourParam && urlTourParam.startsWith("tour-")) {
         setActiveHistoryId(urlTourParam);
-        localStorage.setItem("slingshot_active_history_id", urlTourParam);
-      } else {
-        setActiveHistoryId(localActiveHistoryId);
       }
-      
-      if (clubsVal) setClubs(clubsVal);
-
     } catch (e) {
-      console.error("Critical error during device storage restoration:", e);
+      console.error("Critical error during online parameter parsing:", e);
     } finally {
       setIsStorageRestoring(false);
     }
@@ -575,27 +462,12 @@ export default function App() {
   };
 
   const [distances, setDistances] = useState<DistanceConfig[]>(() => {
-    const saved = localStorage.getItem("slingshot_distances");
-    return saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(DEFAULT_DISTANCES));
+    return JSON.parse(JSON.stringify(DEFAULT_DISTANCES));
   });
 
-  const [shotsCount, setShotsCount] = useState<number>(() => {
-    const saved = localStorage.getItem("slingshot_shots_count");
-    return saved ? Number(saved) : DEFAULT_SHOTS_COUNT;
-  });
+  const [shotsCount, setShotsCount] = useState<number>(DEFAULT_SHOTS_COUNT);
 
-  const [athletes, setAthletes] = useState<Athlete[]>(() => {
-    const saved = localStorage.getItem("slingshot_athletes");
-    const parsed = saved ? restoreBase64Avatars(JSON.parse(saved)) : [];
-    const seen = new Set<string>();
-    return parsed.filter((a: Athlete) => {
-      if (!a || !a.id) return false;
-      const stripped = a.id.trim();
-      if (seen.has(stripped)) return false;
-      seen.add(stripped);
-      return true;
-    });
-  });
+  const [athletes, setAthletes] = useState<Athlete[]>([]);
 
   const [competitionMode, setCompetitionMode] = useState<"individual" | "team">(() => {
     if (typeof window !== "undefined") {
@@ -605,14 +477,10 @@ export default function App() {
         return modeParam;
       }
     }
-    const saved = localStorage.getItem("slingshot_competition_mode");
-    return (saved as "individual" | "team") || "individual";
+    return "individual";
   });
 
-  const [tournamentType, setTournamentType] = useState<"individual" | "team" | "combined">(() => {
-    const saved = localStorage.getItem("slingshot_tournament_type");
-    return (saved as "individual" | "team" | "combined") || "combined";
-  });
+  const [tournamentType, setTournamentType] = useState<"individual" | "team" | "combined">("combined");
 
   useEffect(() => {
     if (tournamentType === "individual" && competitionMode !== "individual") {
@@ -668,102 +536,30 @@ export default function App() {
   }, []);
 
   const [teamDistances, setTeamDistances] = useState<DistanceConfig[]>(() => {
-    const saved = localStorage.getItem("slingshot_team_distances");
-    return saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(DEFAULT_DISTANCES));
+    return JSON.parse(JSON.stringify(DEFAULT_DISTANCES));
   });
 
-  const [teamShotsCount, setTeamShotsCount] = useState<number>(() => {
-    const saved = localStorage.getItem("slingshot_team_shots_count");
-    return saved ? Number(saved) : DEFAULT_SHOTS_COUNT;
-  });
+  const [teamShotsCount, setTeamShotsCount] = useState<number>(DEFAULT_SHOTS_COUNT);
 
-  const [directMaxShots, setDirectMaxShots] = useState<number>(() => {
-    const saved = localStorage.getItem("slingshot_direct_max_shots");
-    return saved ? Number(saved) : 10;
-  });
+  const [directMaxShots, setDirectMaxShots] = useState<number>(10);
 
-  const [directMaxPoints, setDirectMaxPoints] = useState<number | undefined>(() => {
-    const saved = localStorage.getItem("slingshot_direct_max_points");
-    return saved && saved !== "undefined" && saved !== "null" ? Number(saved) : undefined;
-  });
+  const [directMaxPoints, setDirectMaxPoints] = useState<number | undefined>(undefined);
 
-  const [teamDirectMaxShots, setTeamDirectMaxShots] = useState<number>(() => {
-    const saved = localStorage.getItem("slingshot_team_direct_max_shots");
-    return saved ? Number(saved) : 10;
-  });
+  const [teamDirectMaxShots, setTeamDirectMaxShots] = useState<number>(10);
 
-  const [teamDirectMaxPoints, setTeamDirectMaxPoints] = useState<number | undefined>(() => {
-    const saved = localStorage.getItem("slingshot_team_direct_max_points");
-    return saved && saved !== "undefined" && saved !== "null" ? Number(saved) : undefined;
-  });
+  const [teamDirectMaxPoints, setTeamDirectMaxPoints] = useState<number | undefined>(undefined);
 
-  const [laneCapacity, setLaneCapacity] = useState<number>(() => {
-    const saved = localStorage.getItem("slingshot_active_tournament_lane_capacity");
-    return saved ? Number(saved) : 10;
-  });
+  const [laneCapacity, setLaneCapacity] = useState<number>(10);
 
-  const [teamAthletes, setTeamAthletes] = useState<Athlete[]>(() => {
-    const saved = localStorage.getItem("slingshot_team_athletes");
-    const parsed = saved ? restoreBase64Avatars(JSON.parse(saved)) : [];
-    const seen = new Set<string>();
-    return parsed.filter((a: Athlete) => {
-      if (!a || !a.id) return false;
-      const stripped = a.id.trim();
-      if (seen.has(stripped)) return false;
-      seen.add(stripped);
-      return true;
-    });
-  });
+  const [teamAthletes, setTeamAthletes] = useState<Athlete[]>([]);
 
-  const [teamInputAthletes, setTeamInputAthletes] = useState<Athlete[]>(() => {
-    const saved = localStorage.getItem("slingshot_team_input_athletes");
-    return saved ? restoreBase64Avatars(JSON.parse(saved)) : [];
-  });
+  const [teamInputAthletes, setTeamInputAthletes] = useState<Athlete[]>([]);
 
-  const [masterAthletes, setMasterAthletes] = useState<Athlete[]>(() => {
-    const savedGlobal = localStorage.getItem("slingshot_master_athletes_global");
-    const saved = savedGlobal || localStorage.getItem("slingshot_master_athletes");
-    let list: Athlete[] = [];
-    if (saved) {
-      list = restoreBase64Avatars(JSON.parse(saved));
-    } else {
-      const savedActive = localStorage.getItem("slingshot_athletes");
-      list = savedActive ? restoreBase64Avatars(JSON.parse(savedActive)) : [];
-    }
-    const seen = new Set<string>();
-    return list.filter((a: Athlete) => {
-      if (!a || !a.id) return false;
-      const stripped = a.id.trim();
-      if (seen.has(stripped)) return false;
-      seen.add(stripped);
-      return true;
-    }).map((a: Athlete) => ({
-      ...a,
-      scores: {},
-      soloHits: {},
-      soloRounds: {},
-      calledBy: "",
-    }));
-  });
+  const [masterAthletes, setMasterAthletes] = useState<Athlete[]>([]);
 
-  const [history, setHistory] = useState<MatchHistoryItem[]>(() => {
-    const saved = localStorage.getItem("slingshot_history");
-    const parsed = saved ? restoreBase64Avatars(JSON.parse(saved)) : DEFAULT_HISTORY;
-    const now = Date.now();
-    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-    return (parsed || []).filter((h: any) => {
-      if (!h || !h.matchName || !h.matchName.trim()) return false;
-      const createdTime = h.date ? new Date(h.date).getTime() : now;
-      const isExpired = (now - createdTime) > thirtyDaysMs;
-      return !isExpired;
-    });
-  });
+  const [history, setHistory] = useState<MatchHistoryItem[]>(DEFAULT_HISTORY);
 
-  const [storedAthleteLists, setStoredAthleteLists] = useState<StoredAthleteList[]>(() => {
-    const saved = localStorage.getItem("slingshot_stored_athlete_lists");
-    const parsed = saved ? restoreBase64Avatars(JSON.parse(saved)) : DEFAULT_STORED_LISTS;
-    return (parsed || []).filter((l: any) => l && l.name && l.name.trim());
-  });
+  const [storedAthleteLists, setStoredAthleteLists] = useState<StoredAthleteList[]>(DEFAULT_STORED_LISTS);
 
   const [activeHistoryId, setActiveHistoryId] = useState<string | null>(() => {
     if (typeof window !== "undefined") {
@@ -1281,17 +1077,10 @@ export default function App() {
     }
   };
 
-  const [inputAthletes, setInputAthletes] = useState<Athlete[]>(() => {
-    const saved = localStorage.getItem("slingshot_input_athletes");
-    return saved ? restoreBase64Avatars(JSON.parse(saved)) : [];
-  });
+  const [inputAthletes, setInputAthletes] = useState<Athlete[]>([]);
 
   // Clubs/Teams list state
-  const [clubs, setClubs] = useState<Club[]>(() => {
-    const saved = localStorage.getItem("slingshot_clubs");
-    if (saved) return JSON.parse(saved);
-    return [];
-  });
+  const [clubs, setClubs] = useState<Club[]>([]);
   const [isAddingAthleteToInputBoard, setIsAddingAthleteToInputBoard] = useState(false);
   const [inputBoardAddSearch, setInputBoardAddSearch] = useState("");
   const [selectedInputBoardAthleteIds, setSelectedInputBoardAthleteIds] = useState<string[]>([]);
@@ -1301,129 +1090,7 @@ export default function App() {
   const [tourAddSearch, setTourAddSearch] = useState("");
   const [selectedTourAthleteIds, setSelectedTourAthleteIds] = useState<string[]>([]);
 
-  // --- Sync to LocalStorage and DeviceStorage whenever state changes ---
-  useEffect(() => {
-    deviceStorage.set("slingshot_match_name", matchName);
-  }, [matchName]);
-
-  useEffect(() => {
-    deviceStorage.set("slingshot_start_date", startDate);
-  }, [startDate]);
-
-  useEffect(() => {
-    deviceStorage.set("slingshot_end_date", endDate);
-  }, [endDate]);
-
-  useEffect(() => {
-    deviceStorage.set("slingshot_banner_url", bannerUrl);
-  }, [bannerUrl]);
-
-  useEffect(() => {
-    deviceStorage.set("slingshot_avatar_url", avatarUrl);
-  }, [avatarUrl]);
-
-  useEffect(() => {
-    deviceStorage.set("slingshot_distances", distances);
-  }, [distances]);
-
-  useEffect(() => {
-    deviceStorage.set("slingshot_shots_count", shotsCount);
-  }, [shotsCount]);
-
-  useEffect(() => {
-    deviceStorage.set("slingshot_active_tournament_lane_capacity", laneCapacity);
-  }, [laneCapacity]);
-
-  useEffect(() => {
-    saveAvatarsFromAthletes(athletes);
-    deviceStorage.set("slingshot_athletes", stripBase64Avatars(athletes));
-  }, [athletes]);
-
-  useEffect(() => {
-    saveAvatarsFromAthletes(inputAthletes);
-    deviceStorage.set("slingshot_input_athletes", stripBase64Avatars(inputAthletes));
-  }, [inputAthletes]);
-
-  useEffect(() => {
-    deviceStorage.set("slingshot_competition_mode", competitionMode);
-  }, [competitionMode]);
-
-  useEffect(() => {
-    deviceStorage.set("slingshot_clubs", clubs);
-  }, [clubs]);
-
-  useEffect(() => {
-    deviceStorage.set("slingshot_team_distances", teamDistances);
-  }, [teamDistances]);
-
-  useEffect(() => {
-    deviceStorage.set("slingshot_team_shots_count", teamShotsCount);
-  }, [teamShotsCount]);
-
-  useEffect(() => {
-    deviceStorage.set("slingshot_direct_max_shots", directMaxShots);
-  }, [directMaxShots]);
-
-  useEffect(() => {
-    if (directMaxPoints !== undefined && directMaxPoints !== null) {
-      deviceStorage.set("slingshot_direct_max_points", directMaxPoints);
-    } else {
-      deviceStorage.set("slingshot_direct_max_points", "");
-    }
-  }, [directMaxPoints]);
-
-  useEffect(() => {
-    deviceStorage.set("slingshot_team_direct_max_shots", teamDirectMaxShots);
-  }, [teamDirectMaxShots]);
-
-  useEffect(() => {
-    if (teamDirectMaxPoints !== undefined && teamDirectMaxPoints !== null) {
-      deviceStorage.set("slingshot_team_direct_max_points", teamDirectMaxPoints);
-    } else {
-      deviceStorage.set("slingshot_team_direct_max_points", "");
-    }
-  }, [teamDirectMaxPoints]);
-
-  useEffect(() => {
-    saveAvatarsFromAthletes(teamAthletes);
-    deviceStorage.set("slingshot_team_athletes", stripBase64Avatars(teamAthletes));
-  }, [teamAthletes]);
-
-  useEffect(() => {
-    saveAvatarsFromAthletes(teamInputAthletes);
-    deviceStorage.set("slingshot_team_input_athletes", stripBase64Avatars(teamInputAthletes));
-  }, [teamInputAthletes]);
-
-  useEffect(() => {
-    saveAvatarsFromAthletes(masterAthletes);
-    deviceStorage.set("slingshot_master_athletes", stripBase64Avatars(masterAthletes));
-  }, [masterAthletes]);
-
-  useEffect(() => {
-    history.forEach((hItem) => {
-      if (hItem.athletes) {
-        saveAvatarsFromAthletes(hItem.athletes);
-      }
-    });
-    deviceStorage.set("slingshot_history", stripBase64Avatars(history));
-  }, [history]);
-
-  useEffect(() => {
-    storedAthleteLists.forEach((listItem) => {
-      if (listItem.athletes) {
-        saveAvatarsFromAthletes(listItem.athletes);
-      }
-    });
-    deviceStorage.set("slingshot_stored_athlete_lists", stripBase64Avatars(storedAthleteLists));
-  }, [storedAthleteLists]);
-
-  useEffect(() => {
-    if (activeHistoryId) {
-      deviceStorage.set("slingshot_active_history_id", activeHistoryId);
-    } else {
-      deviceStorage.remove("slingshot_active_history_id");
-    }
-  }, [activeHistoryId]);
+  // --- Sync to LocalStorage/DeviceStorage disabled to keep system purely online and synchronized with Firestore ---
 
   // Synchronize state with browser URL query parameters, document title, and meta description
   useEffect(() => {
@@ -2069,14 +1736,12 @@ export default function App() {
           if (docVal.tournamentType) {
             setTournamentType((prev) => {
               if (prev === docVal.tournamentType) return prev;
-              localStorage.setItem("slingshot_tournament_type", docVal.tournamentType);
               return docVal.tournamentType;
             });
           } else if (docVal.competitionMode) {
             const fallback = docVal.competitionMode === "team" ? "team" : "combined";
             setTournamentType((prev) => {
               if (prev === fallback) return prev;
-              localStorage.setItem("slingshot_tournament_type", fallback);
               return fallback;
             });
           }
@@ -2095,7 +1760,6 @@ export default function App() {
           if (docVal.laneCapacity !== undefined && docVal.laneCapacity !== null) {
             setLaneCapacity((prev) => {
               if (prev === docVal.laneCapacity) return prev;
-              localStorage.setItem("slingshot_active_tournament_lane_capacity", docVal.laneCapacity.toString());
               return docVal.laneCapacity;
             });
           }
@@ -2569,8 +2233,8 @@ export default function App() {
   const executeToggleScore = (athleteId: string, distanceId: string, shotIndex: number) => {
     if (competitionMode === "individual") {
       setInputAthletes((prev) => prev.filter((a) => a.id !== athleteId));
-      setAthletes((prev) =>
-        prev.map((athlete) => {
+      setAthletes((prev) => {
+        const next = prev.map((athlete) => {
           if (athlete.id !== athleteId) return athlete;
 
           const currentScores = athlete.scores[distanceId] 
@@ -2599,12 +2263,21 @@ export default function App() {
               [distanceId]: currentScores,
             },
           };
-        })
-      );
+        });
+
+        if (activeHistoryId?.startsWith("tour-")) {
+          updateOnlineTournament(activeHistoryId, {
+            athletes: next,
+            inputAthletes: stripBase64Avatars(inputAthletes.filter((a) => a.id !== athleteId))
+          }).catch(err => console.error("Immediate toggle save failed:", err));
+        }
+
+        return next;
+      });
     } else {
       setTeamInputAthletes((prev) => prev.filter((a) => a.id !== athleteId));
-      setTeamAthletes((prev) =>
-        prev.map((athlete) => {
+      setTeamAthletes((prev) => {
+        const next = prev.map((athlete) => {
           if (athlete.id !== athleteId) return athlete;
 
           const currentScores = athlete.scores[distanceId] 
@@ -2633,8 +2306,17 @@ export default function App() {
               [distanceId]: currentScores,
             },
           };
-        })
-      );
+        });
+
+        if (activeHistoryId?.startsWith("tour-")) {
+          updateOnlineTournament(activeHistoryId, {
+            teamAthletes: next,
+            teamInputAthletes: stripBase64Avatars(teamInputAthletes.filter((a) => a.id !== athleteId))
+          }).catch(err => console.error("Immediate team toggle save failed:", err));
+        }
+
+        return next;
+      });
     }
   };
 
@@ -2725,10 +2407,30 @@ export default function App() {
       return;
     }
     if (competitionMode === "individual") {
-      setAthletes((prev) => prev.filter((a) => a.id !== athleteId));
+      setAthletes((prev) => {
+        const nextAthletes = prev.filter((a) => a.id !== athleteId);
+        const nextInputAthletes = inputAthletes.filter((a) => a.id !== athleteId);
+        if (activeHistoryId?.startsWith("tour-")) {
+          updateOnlineTournament(activeHistoryId, {
+            athletes: nextAthletes,
+            inputAthletes: stripBase64Avatars(nextInputAthletes)
+          }).catch(err => console.error("Immediate delete save failed:", err));
+        }
+        return nextAthletes;
+      });
       setInputAthletes((prev) => prev.filter((a) => a.id !== athleteId));
     } else {
-      setTeamAthletes((prev) => prev.filter((a) => a.id !== athleteId));
+      setTeamAthletes((prev) => {
+        const nextTeamAthletes = prev.filter((a) => a.id !== athleteId);
+        const nextTeamInputAthletes = teamInputAthletes.filter((a) => a.id !== athleteId);
+        if (activeHistoryId?.startsWith("tour-")) {
+          updateOnlineTournament(activeHistoryId, {
+            teamAthletes: nextTeamAthletes,
+            teamInputAthletes: stripBase64Avatars(nextTeamInputAthletes)
+          }).catch(err => console.error("Immediate team delete save failed:", err));
+        }
+        return nextTeamAthletes;
+      });
       setTeamInputAthletes((prev) => prev.filter((a) => a.id !== athleteId));
     }
   };
@@ -2846,8 +2548,8 @@ export default function App() {
   const executeDirectScoreUpdate = (athleteId: string, distanceId: string, value: number | null) => {
     if (competitionMode === "individual") {
       setInputAthletes((prev) => prev.filter((a) => a.id !== athleteId));
-      setAthletes((prev) =>
-        prev.map((athlete) => {
+      setAthletes((prev) => {
+        const next = prev.map((athlete) => {
           if (athlete.id !== athleteId) return athlete;
 
           const currentScores = athlete.scores[distanceId] 
@@ -2863,12 +2565,21 @@ export default function App() {
               [distanceId]: currentScores,
             },
           };
-        })
-      );
+        });
+
+        if (activeHistoryId?.startsWith("tour-")) {
+          updateOnlineTournament(activeHistoryId, {
+            athletes: next,
+            inputAthletes: stripBase64Avatars(inputAthletes.filter((a) => a.id !== athleteId))
+          }).catch(err => console.error("Immediate direct score save failed:", err));
+        }
+
+        return next;
+      });
     } else {
       setTeamInputAthletes((prev) => prev.filter((a) => a.id !== athleteId));
-      setTeamAthletes((prev) =>
-        prev.map((athlete) => {
+      setTeamAthletes((prev) => {
+        const next = prev.map((athlete) => {
           if (athlete.id !== athleteId) return athlete;
 
           const currentScores = athlete.scores[distanceId] 
@@ -2884,8 +2595,17 @@ export default function App() {
               [distanceId]: currentScores,
             },
           };
-        })
-      );
+        });
+
+        if (activeHistoryId?.startsWith("tour-")) {
+          updateOnlineTournament(activeHistoryId, {
+            teamAthletes: next,
+            teamInputAthletes: stripBase64Avatars(teamInputAthletes.filter((a) => a.id !== athleteId))
+          }).catch(err => console.error("Immediate team direct score save failed:", err));
+        }
+
+        return next;
+      });
     }
   };
 
