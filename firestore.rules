@@ -93,16 +93,51 @@ service cloud.firestore {
                         )
                       )
                     );
+
+      match /payloads/{payloadId} {
+        allow read: if true;
+        allow write: if true;
+      }
     }
 
     // --- VSC Official System Athletes ---
-    function isValidVscSystemAthletes(data) {
-      return data.athletes is list && data.athletes.size() <= 5000;
-    }
-
     match /vsc_system_athletes/{documentId} {
       allow read: if true;
-      allow write: if isEmailVerified() && isValidId(documentId) && isValidVscSystemAthletes(incoming());
+      allow write: if isEmailVerified() && isValidId(documentId);
+    }
+
+    // --- Decoupled Tournament Data Collections ---
+    match /vsc_tournament_athletes/{tournamentId} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /vsc_tournament_team_athletes/{tournamentId} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /vsc_tournament_input_athletes/{tournamentId} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /vsc_tournament_team_input_athletes/{tournamentId} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /vsc_tournament_master_athletes/{tournamentId} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /vsc_tournament_team_master_athletes/{tournamentId} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /vsc_tournament_clubs/{tournamentId} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /vsc_tournament_audit_logs/{tournamentId} {
+      allow read: if true;
+      allow write: if true;
     }
 
     // --- VSC Official System Clubs ---

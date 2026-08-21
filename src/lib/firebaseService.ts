@@ -219,6 +219,7 @@ export async function createOnlineTournament(
     inputAthletes: Athlete[];
     teamInputAthletes: Athlete[];
     masterAthletes?: Athlete[];
+    teamMasterAthletes?: Athlete[];
     clubs?: Club[];
     avatarUrl?: string;
     bannerUrl?: string;
@@ -315,6 +316,17 @@ export async function createOnlineTournament(
   const newId = `tour-${Date.now()}`;
   const tourRef = doc(db, "tournaments", newId);
   
+  const {
+    athletes = [],
+    teamAthletes = [],
+    inputAthletes = [],
+    teamInputAthletes = [],
+    masterAthletes = [],
+    teamMasterAthletes = [],
+    clubs = [],
+    ...restConfig
+  } = config;
+
   const payload: TournamentData = {
     id: newId,
     matchName: matchName || "Giải đấu mới",
@@ -322,30 +334,53 @@ export async function createOnlineTournament(
     creatorEmail,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-    referees: config.referees || [], // Admin can add referee emails later
-    subAdmins: config.subAdmins || [], // Sub admins with full admin rights
+    referees: restConfig.referees || [], // Admin can add referee emails later
+    subAdmins: restConfig.subAdmins || [], // Sub admins with full admin rights
     isPublic: true,
-    ...config,
-    avatarUrl: config.avatarUrl || VSC_DEFAULT_LOGO,
-    bannerUrl: config.bannerUrl || VSC_DEFAULT_LOGO
+    ...restConfig,
+    avatarUrl: restConfig.avatarUrl || VSC_DEFAULT_LOGO,
+    bannerUrl: restConfig.bannerUrl || VSC_DEFAULT_LOGO,
+    athletes: [],
+    teamAthletes: [],
+    inputAthletes: [],
+    teamInputAthletes: [],
+    masterAthletes: [],
+    teamMasterAthletes: [],
+    clubs: []
   };
 
   try {
     const sanitizedPayload = sanitizeFirestoreData(payload);
     await setDoc(tourRef, sanitizedPayload);
+
+    // Save heavy sub-arrays in parallel independent root-level collections
+    const payloadWrites = [
+      setDoc(doc(db, "vsc_tournament_athletes", newId), { list: sanitizeFirestoreData(athletes) }),
+      setDoc(doc(db, "vsc_tournament_team_athletes", newId), { list: sanitizeFirestoreData(teamAthletes) }),
+      setDoc(doc(db, "vsc_tournament_input_athletes", newId), { list: sanitizeFirestoreData(inputAthletes) }),
+      setDoc(doc(db, "vsc_tournament_team_input_athletes", newId), { list: sanitizeFirestoreData(teamInputAthletes) }),
+      setDoc(doc(db, "vsc_tournament_master_athletes", newId), { list: sanitizeFirestoreData(masterAthletes) }),
+      setDoc(doc(db, "vsc_tournament_team_master_athletes", newId), { list: sanitizeFirestoreData(teamMasterAthletes || []) }),
+      setDoc(doc(db, "vsc_tournament_clubs", newId), { list: sanitizeFirestoreData(clubs) }),
+    ];
+    await Promise.all(payloadWrites);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `tournaments/${newId}`);
   }
   return newId;
 }
 
+// Global in-memory queue & debounce trackers to prevent Firestore write stream exhaustion
+const pendingTournamentUpdates: Record<string, Partial<TournamentData>> = {};
+const pendingTournamentTimeouts: Record<string, any> = {};
+const pendingTournamentPromises: Record<string, Array<{ resolve: () => void; reject: (err: any) => void }>> = {};
+
 /**
- * Updates a tournament in Firestore (e.g. updating scores, configs, referees)
+ * Helper that performs the actual physical Firestore write
  */
-export async function updateOnlineTournament(id: string, updates: Partial<TournamentData>) {
-  if (!id) return;
+async function executeActualOnlineTournamentUpdate(id: string, updates: Partial<TournamentData>) {
+  const tourRef = doc(db, "tournaments", id);
   try {
-    const tourRef = doc(db, "tournaments", id);
     const snap = await getDoc(tourRef);
     if (!snap.exists()) {
       console.warn(`[updateOnlineTournament] Tournament ${id} does not exist. Skipping update.`);
@@ -358,18 +393,117 @@ export async function updateOnlineTournament(id: string, updates: Partial<Tourna
     if (resolvedUpdates.bannerUrl === "") {
       resolvedUpdates.bannerUrl = VSC_DEFAULT_LOGO;
     }
+
+    // Extract heavy fields to write to independent root-level collections
+    const hasAthletes = "athletes" in resolvedUpdates;
+    const hasTeamAthletes = "teamAthletes" in resolvedUpdates;
+    const hasInputAthletes = "inputAthletes" in resolvedUpdates;
+    const hasTeamInputAthletes = "teamInputAthletes" in resolvedUpdates;
+    const hasMasterAthletes = "masterAthletes" in resolvedUpdates;
+    const hasTeamMasterAthletes = "teamMasterAthletes" in resolvedUpdates;
+    const hasClubs = "clubs" in resolvedUpdates;
+    const hasAuditLog = "auditLog" in resolvedUpdates;
+
+    const subWrites: Promise<void>[] = [];
+    
+    if (hasAthletes) {
+      subWrites.push(setDoc(doc(db, "vsc_tournament_athletes", id), { list: sanitizeFirestoreData(resolvedUpdates.athletes || []) }));
+      delete resolvedUpdates.athletes;
+    }
+    if (hasTeamAthletes) {
+      subWrites.push(setDoc(doc(db, "vsc_tournament_team_athletes", id), { list: sanitizeFirestoreData(resolvedUpdates.teamAthletes || []) }));
+      delete resolvedUpdates.teamAthletes;
+    }
+    if (hasInputAthletes) {
+      subWrites.push(setDoc(doc(db, "vsc_tournament_input_athletes", id), { list: sanitizeFirestoreData(resolvedUpdates.inputAthletes || []) }));
+      delete resolvedUpdates.inputAthletes;
+    }
+    if (hasTeamInputAthletes) {
+      subWrites.push(setDoc(doc(db, "vsc_tournament_team_input_athletes", id), { list: sanitizeFirestoreData(resolvedUpdates.teamInputAthletes || []) }));
+      delete resolvedUpdates.teamInputAthletes;
+    }
+    if (hasMasterAthletes) {
+      subWrites.push(setDoc(doc(db, "vsc_tournament_master_athletes", id), { list: sanitizeFirestoreData(resolvedUpdates.masterAthletes || []) }));
+      delete resolvedUpdates.masterAthletes;
+    }
+    if (hasTeamMasterAthletes) {
+      subWrites.push(setDoc(doc(db, "vsc_tournament_team_master_athletes", id), { list: sanitizeFirestoreData(resolvedUpdates.teamMasterAthletes || []) }));
+      delete resolvedUpdates.teamMasterAthletes;
+    }
+    if (hasClubs) {
+      subWrites.push(setDoc(doc(db, "vsc_tournament_clubs", id), { list: sanitizeFirestoreData(resolvedUpdates.clubs || []) }));
+      delete resolvedUpdates.clubs;
+    }
+    if (hasAuditLog) {
+      subWrites.push(setDoc(doc(db, "vsc_tournament_audit_logs", id), { auditLog: resolvedUpdates.auditLog || "" }));
+      delete resolvedUpdates.auditLog;
+    }
+
     const sanitizedUpdates = sanitizeFirestoreData(resolvedUpdates);
-    await updateDoc(tourRef, {
-      ...sanitizedUpdates,
-      updatedAt: serverTimestamp()
-    });
+    
+    // Only update main tournament doc if there are other keys left
+    if (Object.keys(sanitizedUpdates).length > 0) {
+      await updateDoc(tourRef, {
+        ...sanitizedUpdates,
+        updatedAt: serverTimestamp()
+      });
+    }
+    
+    if (subWrites.length > 0) {
+      await Promise.all(subWrites);
+    }
   } catch (error: any) {
     if (error?.code === "not-found" || error?.message?.includes("No document to update")) {
       console.warn(`[updateOnlineTournament] Tournament ${id} not found for update.`);
       return;
     }
     handleFirestoreError(error, OperationType.UPDATE, `tournaments/${id}`);
+    throw error;
   }
+}
+
+/**
+ * Updates a tournament in Firestore (e.g. updating scores, configs, referees)
+ * Fully debounced to aggregate rapid user events (e.g. fast score hits) and avoid write stream exhaustion!
+ */
+export function updateOnlineTournament(id: string, updates: Partial<TournamentData>): Promise<void> {
+  if (!id) return Promise.resolve();
+
+  // Merge the new updates into the queued updates for this tournament
+  pendingTournamentUpdates[id] = {
+    ...(pendingTournamentUpdates[id] || {}),
+    ...updates
+  };
+
+  if (!pendingTournamentPromises[id]) {
+    pendingTournamentPromises[id] = [];
+  }
+
+  const promise = new Promise<void>((resolve, reject) => {
+    pendingTournamentPromises[id].push({ resolve, reject });
+  });
+
+  if (pendingTournamentTimeouts[id]) {
+    clearTimeout(pendingTournamentTimeouts[id]);
+  }
+
+  pendingTournamentTimeouts[id] = setTimeout(async () => {
+    const finalUpdates = pendingTournamentUpdates[id];
+    const promisesToResolve = pendingTournamentPromises[id];
+
+    delete pendingTournamentUpdates[id];
+    delete pendingTournamentTimeouts[id];
+    delete pendingTournamentPromises[id];
+
+    try {
+      await executeActualOnlineTournamentUpdate(id, finalUpdates);
+      promisesToResolve.forEach((p) => p.resolve());
+    } catch (err) {
+      promisesToResolve.forEach((p) => p.reject(err));
+    }
+  }, 1000); // 1000ms debounce window completely throttles rapid scoring events
+
+  return promise;
 }
 
 /**
@@ -385,7 +519,8 @@ export async function deleteOnlineTournament(id: string) {
 }
 
 /**
- * Subscribes to real-time list of tournaments sorted by latest createdAt
+ * Subscribes to real-time list of tournaments sorted by latest createdAt.
+ * Extremely optimized to load only tournament configurations without massive arrays!
  */
 export function subscribeToTournamentsList(callback: (tournaments: TournamentData[]) => void) {
   const collectionRef = collection(db, "tournaments");
@@ -399,7 +534,19 @@ export function subscribeToTournamentsList(callback: (tournaments: TournamentDat
       const id = data.id || docSnap.id;
       if (id && !seen.has(id)) {
         seen.add(id);
-        list.push({ ...data, id });
+        // Exclude massive lists from the directory list view to save memory and CPU
+        const trimmedData = {
+          ...data,
+          id,
+          athletes: data.athletes || [],
+          teamAthletes: data.teamAthletes || [],
+          inputAthletes: data.inputAthletes || [],
+          teamInputAthletes: data.teamInputAthletes || [],
+          masterAthletes: data.masterAthletes || [],
+          teamMasterAthletes: data.teamMasterAthletes || [],
+          clubs: data.clubs || []
+        };
+        list.push(trimmedData);
       }
     });
     callback(list);
@@ -409,20 +556,139 @@ export function subscribeToTournamentsList(callback: (tournaments: TournamentDat
 }
 
 /**
- * Subscribes to a single tournament documents in real-time
+ * Subscribes to a single tournament documents in real-time.
+ * Robust reactive merge across subcollections that supports both new decoupled format and old unified format.
  */
 export function subscribeToTournamentDoc(id: string, callback: (tournament: TournamentData | null, hasPendingWrites: boolean) => void) {
-  const docRef = doc(db, "tournaments", id);
-  return onSnapshot(docRef, (docSnap) => {
-    const hasPendingWrites = docSnap.metadata.hasPendingWrites;
+  const mainRef = doc(db, "tournaments", id);
+  
+  let unsubMain: (() => void) | null = null;
+  const subUnsubs: Record<string, () => void> = {};
+  
+  let mainData: TournamentData | null = null;
+  let mainPending = false;
+  
+  const payloadData: Record<string, any> = {
+    athletes: [],
+    teamAthletes: [],
+    inputAthletes: [],
+    teamInputAthletes: [],
+    masterAthletes: [],
+    teamMasterAthletes: [],
+    clubs: [],
+    auditLog: "",
+  };
+  
+  const fireMergedCallback = () => {
+    if (!mainData) return;
+    
+    // Merge only if mainData doesn't already contain inline lists (backwards compatibility check)
+    const merged = { ...mainData };
+    
+    if (!merged.athletes || merged.athletes.length === 0) {
+      merged.athletes = payloadData.athletes || [];
+    }
+    if (!merged.teamAthletes || merged.teamAthletes.length === 0) {
+      merged.teamAthletes = payloadData.teamAthletes || [];
+    }
+    if (!merged.inputAthletes || merged.inputAthletes.length === 0) {
+      merged.inputAthletes = payloadData.inputAthletes || [];
+    }
+    if (!merged.teamInputAthletes || merged.teamInputAthletes.length === 0) {
+      merged.teamInputAthletes = payloadData.teamInputAthletes || [];
+    }
+    if (!merged.masterAthletes || merged.masterAthletes.length === 0) {
+      merged.masterAthletes = payloadData.masterAthletes || [];
+    }
+    if (!merged.teamMasterAthletes || merged.teamMasterAthletes.length === 0) {
+      merged.teamMasterAthletes = payloadData.teamMasterAthletes || [];
+    }
+    if (!merged.clubs || merged.clubs.length === 0) {
+      merged.clubs = payloadData.clubs || [];
+    }
+    if (!merged.auditLog) {
+      merged.auditLog = payloadData.auditLog || "";
+    }
+    
+    callback(merged, mainPending);
+  };
+
+  const setupPayloadListeners = () => {
+    const payloadConfigs = [
+      { key: "athletes", rootColl: "vsc_tournament_athletes", legacyField: "athletes" },
+      { key: "teamAthletes", rootColl: "vsc_tournament_team_athletes", legacyField: "teamAthletes" },
+      { key: "inputAthletes", rootColl: "vsc_tournament_input_athletes", legacyField: "inputAthletes" },
+      { key: "teamInputAthletes", rootColl: "vsc_tournament_team_input_athletes", legacyField: "teamInputAthletes" },
+      { key: "masterAthletes", rootColl: "vsc_tournament_master_athletes", legacyField: "masterAthletes" },
+      { key: "teamMasterAthletes", rootColl: "vsc_tournament_team_master_athletes", legacyField: "teamMasterAthletes" },
+      { key: "clubs", rootColl: "vsc_tournament_clubs", legacyField: "clubs" },
+      { key: "auditLog", rootColl: "vsc_tournament_audit_logs", legacyField: "auditLog" },
+    ];
+
+    payloadConfigs.forEach(({ key, rootColl, legacyField }) => {
+      if (subUnsubs[key]) return; // already listening
+      
+      const rootDocRef = doc(db, rootColl, id);
+      subUnsubs[key] = onSnapshot(rootDocRef, (snap) => {
+        if (snap.exists()) {
+          if (key === "auditLog") {
+            payloadData[key] = snap.data()?.auditLog || "";
+          } else {
+            payloadData[key] = snap.data()?.list || [];
+          }
+          fireMergedCallback();
+        } else {
+          // Fallback to legacy payloads subcollection inside tournaments/{id}/payloads/
+          const subDocRef = doc(db, "tournaments", id, "payloads", legacyField);
+          getDoc(subDocRef).then((legacySnap) => {
+            if (legacySnap.exists()) {
+              if (key === "auditLog") {
+                payloadData[key] = legacySnap.data()?.auditLog || "";
+              } else {
+                payloadData[key] = legacySnap.data()?.list || [];
+              }
+            } else {
+              payloadData[key] = key === "auditLog" ? "" : [];
+            }
+            fireMergedCallback();
+          }).catch(() => {
+            payloadData[key] = key === "auditLog" ? "" : [];
+            fireMergedCallback();
+          });
+        }
+      }, (err) => {
+        // Fallback quietly on permission/access issue
+        payloadData[key] = key === "auditLog" ? "" : [];
+        fireMergedCallback();
+      });
+    });
+  };
+
+  unsubMain = onSnapshot(mainRef, (docSnap) => {
+    mainPending = docSnap.metadata.hasPendingWrites;
     if (docSnap.exists()) {
-      callback(docSnap.data() as TournamentData, hasPendingWrites);
+      mainData = docSnap.data() as TournamentData;
+      
+      // If the tournament document is using the old unified style, we don't need independent collections
+      const isUnified = (mainData.athletes && mainData.athletes.length > 0) || 
+                        (mainData.teamAthletes && mainData.teamAthletes.length > 0);
+                        
+      if (!isUnified) {
+        setupPayloadListeners();
+      }
+      
+      fireMergedCallback();
     } else {
-      callback(null, hasPendingWrites);
+      callback(null, mainPending);
     }
   }, (error) => {
     handleFirestoreError(error, OperationType.GET, `tournaments/${id}`);
   });
+
+  return () => {
+    if (unsubMain) unsubMain();
+    Object.values(subUnsubs).forEach((unsub) => unsub());
+  };
 }
 
 /**
@@ -474,29 +740,70 @@ export async function getUserProfileByEmail(email: string) {
 
 /**
  * Saves VSC System Athletes to Cloud Firestore
+ * Decoupled into individual documents where the document ID is the athlete ID!
+ * Automatically handles additions, updates, and deletions.
  */
 export async function saveVscSystemAthletes(athletes: Athlete[]) {
   try {
-    const docRef = doc(db, "vsc_system_athletes", "global");
-    await setDoc(docRef, {
-      athletes: sanitizeFirestoreData(athletes),
-      updatedAt: serverTimestamp()
+    // 1. Write/update each athlete in the array as an individual document
+    const writes = athletes.map((athlete) => {
+      if (!athlete || !athlete.id) return Promise.resolve();
+      const docRef = doc(db, "vsc_system_athletes", athlete.id);
+      return setDoc(docRef, sanitizeFirestoreData(athlete));
     });
+    await Promise.all(writes);
+
+    // 2. Perform deletion of any athlete document that is no longer in the list
+    const incomingIds = new Set(athletes.map(a => a.id.trim().toLowerCase()));
+    const colRef = collection(db, "vsc_system_athletes");
+    const snapshot = await getDocs(colRef);
+    const deletePromises: Promise<void>[] = [];
+    
+    snapshot.forEach((docSnap) => {
+      const docId = docSnap.id;
+      if (docId === "global") return; // Keep or skip global
+      if (!incomingIds.has(docId.trim().toLowerCase())) {
+        deletePromises.push(deleteDoc(doc(db, "vsc_system_athletes", docId)));
+      }
+    });
+    
+    if (deletePromises.length > 0) {
+      await Promise.all(deletePromises);
+    }
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, "vsc_system_athletes/global");
+    handleFirestoreError(error, OperationType.WRITE, "vsc_system_athletes");
   }
 }
 
 /**
  * Fetches VSC System Athletes from Cloud Firestore
+ * Reads from individual documents inside "vsc_system_athletes" with migration fallback.
  */
 export async function getVscSystemAthletes(): Promise<Athlete[]> {
   try {
-    const docRef = doc(db, "vsc_system_athletes", "global");
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      return (docSnap.data()?.athletes || []) as Athlete[];
+    const colRef = collection(db, "vsc_system_athletes");
+    const querySnapshot = await getDocs(colRef);
+    const list: Athlete[] = [];
+    querySnapshot.forEach((docSnap) => {
+      if (docSnap.id === "global") return;
+      list.push(docSnap.data() as Athlete);
+    });
+    
+    // If the collection is empty except maybe the legacy global doc, migrate it
+    if (list.length === 0) {
+      const globalSnap = await getDoc(doc(db, "vsc_system_athletes", "global"));
+      if (globalSnap.exists()) {
+        const data = globalSnap.data();
+        const legacyAthletes = (data?.athletes || []) as Athlete[];
+        if (legacyAthletes.length > 0) {
+          await saveVscSystemAthletes(legacyAthletes);
+          // Clear global doc after migration
+          await setDoc(doc(db, "vsc_system_athletes", "global"), { athletes: [], migrated: true });
+          return legacyAthletes;
+        }
+      }
     }
+    return list;
   } catch (error) {
     console.error("Error reading VSC system athletes from Firestore:", error);
   }
@@ -507,12 +814,25 @@ export async function getVscSystemAthletes(): Promise<Athlete[]> {
  * Subscribes in real-time to VSC System Athletes stored in Cloud Firestore
  */
 export function subscribeToVscSystemAthletes(callback: (athletes: Athlete[]) => void) {
-  const docRef = doc(db, "vsc_system_athletes", "global");
-  return onSnapshot(docRef, (docSnap) => {
-    if (docSnap.exists()) {
-      callback((docSnap.data()?.athletes || []) as Athlete[]);
+  const colRef = collection(db, "vsc_system_athletes");
+  return onSnapshot(colRef, (snapshot) => {
+    const list: Athlete[] = [];
+    snapshot.forEach((docSnap) => {
+      if (docSnap.id === "global") return;
+      list.push(docSnap.data() as Athlete);
+    });
+    
+    // Trigger auto-migration on empty list
+    if (list.length === 0) {
+      getVscSystemAthletes().then((migratedList) => {
+        if (migratedList && migratedList.length > 0) {
+          callback(migratedList);
+        } else {
+          callback([]);
+        }
+      });
     } else {
-      callback([]);
+      callback(list);
     }
   }, (error) => {
     console.warn("VSC system athletes subscription failed, falling back gracefully:", error);
