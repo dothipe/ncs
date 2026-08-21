@@ -3167,9 +3167,13 @@ export default function App() {
   const handleSaveInputScoresToMain = () => {
     const activeInputList = competitionMode === "individual" ? inputAthletes : teamInputAthletes;
     const myEmail = (currentUser?.email || "anonymous").toLowerCase().trim();
+    const isOnlineTour = activeHistoryId?.startsWith("tour-");
     const refereeInputList = activeInputList.filter((a) => {
-      const caller = (a.calledBy || "").toLowerCase().trim();
-      return caller === myEmail || !caller;
+      if (isOnlineTour) {
+        const caller = (a.calledBy || "").toLowerCase().trim();
+        return caller === myEmail;
+      }
+      return true;
     });
 
     if (refereeInputList.length === 0) {
@@ -3186,9 +3190,13 @@ export default function App() {
 
     const activeInputList = competitionMode === "individual" ? inputAthletes : teamInputAthletes;
     const myEmail = (currentUser?.email || "anonymous").toLowerCase().trim();
+    const isOnlineTour = activeHistoryId?.startsWith("tour-");
     const refereeInputList = activeInputList.filter((a) => {
-      const caller = (a.calledBy || "").toLowerCase().trim();
-      return caller === myEmail || !caller;
+      if (isOnlineTour) {
+        const caller = (a.calledBy || "").toLowerCase().trim();
+        return caller === myEmail;
+      }
+      return true;
     });
 
     if (refereeInputList.length === 0) {
@@ -4066,9 +4074,10 @@ export default function App() {
 
   // Filter athletes for the input board view list
   const filteredInputAthletes = inputAthletes.filter((a) => {
-    if (a.calledBy) {
+    const isOnlineTour = activeHistoryId?.startsWith("tour-");
+    if (isOnlineTour) {
       const myEmail = (currentUser?.email || "anonymous").toLowerCase().trim();
-      const calledEmail = a.calledBy.toLowerCase().trim();
+      const calledEmail = (a.calledBy || "").toLowerCase().trim();
       if (calledEmail !== myEmail) {
         return false;
       }
@@ -4089,8 +4098,12 @@ export default function App() {
   const currentInputAthletes = competitionMode === "individual" ? inputAthletes : teamInputAthletes;
   const myEmailForInput = (currentUser?.email || "anonymous").toLowerCase().trim();
   const myCalledInputAthletes = currentInputAthletes.filter((a) => {
-    const caller = (a.calledBy || "").toLowerCase().trim();
-    return caller === myEmailForInput || !caller;
+    const isOnlineTour = activeHistoryId?.startsWith("tour-");
+    if (isOnlineTour) {
+      const caller = (a.calledBy || "").toLowerCase().trim();
+      return caller === myEmailForInput;
+    }
+    return true;
   });
 
   // Filter team athletes for the scoring board view list
@@ -4106,9 +4119,10 @@ export default function App() {
 
   // Filter team athletes for the input board view list
   const filteredTeamInputAthletes = teamInputAthletes.filter((a) => {
-    if (a.calledBy) {
+    const isOnlineTour = activeHistoryId?.startsWith("tour-");
+    if (isOnlineTour) {
       const myEmail = (currentUser?.email || "anonymous").toLowerCase().trim();
-      const calledEmail = a.calledBy.toLowerCase().trim();
+      const calledEmail = (a.calledBy || "").toLowerCase().trim();
       if (calledEmail !== myEmail) {
         return false;
       }
@@ -5896,7 +5910,7 @@ export default function App() {
                     ? (currentTournamentDoc?.inputAthletes || [])
                     : (currentTournamentDoc?.teamInputAthletes || []);
                   const docActiveInputPlayer = activeInputListInDoc.find((a) => a.id === athlete.id);
-                  const isLockedByOtherReferee = (!!(athlete.calledBy && 
+                  const isLockedByOtherReferee = userRole !== "admin" && (!!(athlete.calledBy && 
                     athlete.calledBy.toLowerCase().trim() !== (currentUser?.email || "anonymous").toLowerCase().trim()) || 
                     !!(docActiveInputPlayer?.calledBy && docActiveInputPlayer.calledBy.toLowerCase().trim() !== (currentUser?.email || "anonymous").toLowerCase().trim()));
                   const lockedByRefereeEmail = athlete.calledBy || docActiveInputPlayer?.calledBy || "";
@@ -6268,7 +6282,7 @@ export default function App() {
                   const isFirst = originalIndex === 0;
                   const isLast = originalIndex === currentInputAthletes.length - 1;
                   
-                  const isLockedByOtherReferee = (!!(athlete.calledBy && 
+                  const isLockedByOtherReferee = userRole !== "admin" && (!!(athlete.calledBy && 
                     athlete.calledBy.toLowerCase().trim() !== (currentUser?.email || "anonymous").toLowerCase().trim()));
                   const lockedByRefereeEmail = athlete.calledBy || "";
 
