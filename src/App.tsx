@@ -1590,7 +1590,7 @@ export default function App() {
   ));
   const isTournamentOwner = currentUser && currentTournamentDoc && (currentTournamentDoc.creatorId === currentUser.uid || isGlobalAdmin);
   const isTournamentSubAdmin = currentUser && currentTournamentDoc && (currentTournamentDoc.subAdmins?.some((email: string) => email.toLowerCase().trim() === currentUser.email?.toLowerCase().trim()));
-  const isTournamentReferee = currentUser && currentTournamentDoc && (currentTournamentDoc.referees?.includes(currentUser.email || ""));
+  const isTournamentReferee = currentUser && currentTournamentDoc && (currentTournamentDoc.referees?.some((email: string) => email.toLowerCase().trim() === currentUser.email?.toLowerCase().trim()));
 
   const isTournamentEndedPast30Days = (endDateStr?: string, startDateStr?: string): boolean => {
     const targetDateStr = endDateStr || startDateStr;
@@ -2159,63 +2159,76 @@ export default function App() {
     if (userRole !== "admin" && userRole !== "referee") return;
     if (!isTournamentConfigLoaded || !currentTournamentDoc) return;
     // Guard against blanking data: Never overwrite a populated cloud document if local state is empty or missing data
-    if (!matchName || !matchName.trim()) return;
-    if (currentTournamentDoc.matchName && matchName.trim() !== currentTournamentDoc.matchName.trim() && !matchName.trim()) return;
-    if ((!athletes || athletes.length === 0) && currentTournamentDoc.athletes && currentTournamentDoc.athletes.length > 0) return;
-    if ((!masterAthletes || masterAthletes.length === 0) && currentTournamentDoc.masterAthletes && currentTournamentDoc.masterAthletes.length > 0) return;
-    if ((!teamAthletes || teamAthletes.length === 0) && currentTournamentDoc.teamAthletes && currentTournamentDoc.teamAthletes.length > 0) return;
-    if ((!distances || distances.length === 0) && currentTournamentDoc.distances && currentTournamentDoc.distances.length > 0) return;
+    if (userRole === "admin") {
+      if (!matchName || !matchName.trim()) return;
+      if (currentTournamentDoc.matchName && matchName.trim() !== currentTournamentDoc.matchName.trim() && !matchName.trim()) return;
+      if ((!athletes || athletes.length === 0) && currentTournamentDoc.athletes && currentTournamentDoc.athletes.length > 0) return;
+      if ((!masterAthletes || masterAthletes.length === 0) && currentTournamentDoc.masterAthletes && currentTournamentDoc.masterAthletes.length > 0) return;
+      if ((!teamAthletes || teamAthletes.length === 0) && currentTournamentDoc.teamAthletes && currentTournamentDoc.teamAthletes.length > 0) return;
+      if ((!distances || distances.length === 0) && currentTournamentDoc.distances && currentTournamentDoc.distances.length > 0) return;
+    }
 
     // Compare what we locally have with currentTournamentDoc to prevent echo updates
-    const isDifferent = (
-      !deepEqual(matchName, currentTournamentDoc?.matchName) ||
-      !deepEqual(startDate, currentTournamentDoc?.startDate) ||
-      !deepEqual(endDate, currentTournamentDoc?.endDate) ||
-      !deepEqual(distances, currentTournamentDoc?.distances) ||
-      !deepEqual(shotsCount, currentTournamentDoc?.shotsCount) ||
-      !deepEqual(athletes, currentTournamentDoc?.athletes) ||
-      !deepEqual(teamDistances, currentTournamentDoc?.teamDistances) ||
-      !deepEqual(teamShotsCount, currentTournamentDoc?.teamShotsCount) ||
-      !deepEqual(teamAthletes, currentTournamentDoc?.teamAthletes) ||
-      !deepEqual(inputAthletes, currentTournamentDoc?.inputAthletes) ||
-      !deepEqual(teamInputAthletes, currentTournamentDoc?.teamInputAthletes) ||
-      !deepEqual(directMaxPoints, currentTournamentDoc?.directMaxPoints) ||
-      !deepEqual(teamDirectMaxPoints, currentTournamentDoc?.teamDirectMaxPoints) ||
-      !deepEqual(directMaxShots, currentTournamentDoc?.directMaxShots) ||
-      !deepEqual(teamDirectMaxShots, currentTournamentDoc?.teamDirectMaxShots) ||
-      !deepEqual(masterAthletes, currentTournamentDoc?.masterAthletes) ||
-      !deepEqual(bannerUrl, currentTournamentDoc?.bannerUrl) ||
-      !deepEqual(avatarUrl, currentTournamentDoc?.avatarUrl) ||
-      !deepEqual(clubs, currentTournamentDoc?.clubs) ||
-      laneCapacity !== currentTournamentDoc?.laneCapacity
-    );
+    const isDifferent = userRole === "admin"
+      ? (
+          !deepEqual(matchName, currentTournamentDoc?.matchName) ||
+          !deepEqual(startDate, currentTournamentDoc?.startDate) ||
+          !deepEqual(endDate, currentTournamentDoc?.endDate) ||
+          !deepEqual(distances, currentTournamentDoc?.distances) ||
+          !deepEqual(shotsCount, currentTournamentDoc?.shotsCount) ||
+          !deepEqual(athletes, currentTournamentDoc?.athletes) ||
+          !deepEqual(teamDistances, currentTournamentDoc?.teamDistances) ||
+          !deepEqual(teamShotsCount, currentTournamentDoc?.teamShotsCount) ||
+          !deepEqual(teamAthletes, currentTournamentDoc?.teamAthletes) ||
+          !deepEqual(inputAthletes, currentTournamentDoc?.inputAthletes) ||
+          !deepEqual(teamInputAthletes, currentTournamentDoc?.teamInputAthletes) ||
+          !deepEqual(directMaxPoints, currentTournamentDoc?.directMaxPoints) ||
+          !deepEqual(teamDirectMaxPoints, currentTournamentDoc?.teamDirectMaxPoints) ||
+          !deepEqual(directMaxShots, currentTournamentDoc?.directMaxShots) ||
+          !deepEqual(teamDirectMaxShots, currentTournamentDoc?.teamDirectMaxShots) ||
+          !deepEqual(masterAthletes, currentTournamentDoc?.masterAthletes) ||
+          !deepEqual(bannerUrl, currentTournamentDoc?.bannerUrl) ||
+          !deepEqual(avatarUrl, currentTournamentDoc?.avatarUrl) ||
+          !deepEqual(clubs, currentTournamentDoc?.clubs) ||
+          laneCapacity !== currentTournamentDoc?.laneCapacity
+        )
+      : (
+          !deepEqual(inputAthletes, currentTournamentDoc?.inputAthletes) ||
+          !deepEqual(teamInputAthletes, currentTournamentDoc?.teamInputAthletes)
+        );
 
     if (!isDifferent) return;
 
     const timer = setTimeout(async () => {
       try {
-        await updateOnlineTournament(activeHistoryId, {
-          matchName,
-          startDate,
-          endDate,
-          distances,
-          shotsCount,
-          athletes,
-          teamDistances,
-          teamShotsCount,
-          teamAthletes,
-          inputAthletes,
-          teamInputAthletes,
-          directMaxPoints,
-          teamDirectMaxPoints,
-          directMaxShots,
-          teamDirectMaxShots,
-          masterAthletes,
-          bannerUrl,
-          avatarUrl,
-          laneCapacity,
-          clubs
-        });
+        const payload: Partial<TournamentData> = userRole === "admin"
+          ? {
+              matchName,
+              startDate,
+              endDate,
+              distances,
+              shotsCount,
+              athletes,
+              teamDistances,
+              teamShotsCount,
+              teamAthletes,
+              inputAthletes,
+              teamInputAthletes,
+              directMaxPoints,
+              teamDirectMaxPoints,
+              directMaxShots,
+              teamDirectMaxShots,
+              masterAthletes,
+              bannerUrl,
+              avatarUrl,
+              laneCapacity,
+              clubs
+            }
+          : {
+              inputAthletes,
+              teamInputAthletes
+            };
+        await updateOnlineTournament(activeHistoryId, payload);
       } catch (err) {
         console.error("Cloud synchronization failed:", err);
       }
@@ -2634,6 +2647,10 @@ export default function App() {
 
   // Modifies an athlete details safely
   const handleUpdateAthlete = (athleteId: string, name: string, team: string, customId?: string) => {
+    if (userRole !== "admin") {
+      alert(language === "en" ? "Only Admin can edit athlete details!" : "Chỉ Admin mới có quyền chỉnh sửa thông tin VĐV!");
+      return;
+    }
     const checkId = customId ? customId.trim() : athleteId;
     const isIdTaken = masterAthletes.some((a) => a.id === checkId && a.id !== athleteId);
     const finalId = isIdTaken ? athleteId : checkId;
@@ -2701,6 +2718,10 @@ export default function App() {
 
   // Delete an athlete
   const handleDeleteAthlete = (athleteId: string) => {
+    if (userRole !== "admin") {
+      alert(language === "en" ? "Only Admin can delete athletes from the main board!" : "Chỉ Admin mới có quyền xóa VĐV khỏi bảng điểm chính!");
+      return;
+    }
     if (competitionMode === "individual") {
       setAthletes((prev) => prev.filter((a) => a.id !== athleteId));
       setInputAthletes((prev) => prev.filter((a) => a.id !== athleteId));
@@ -2712,6 +2733,10 @@ export default function App() {
 
   // Move athlete position in the main scoring list
   const handleMoveAthlete = (athleteId: string, direction: "up" | "down") => {
+    if (userRole !== "admin") {
+      alert(language === "en" ? "Only Admin can reorder athletes!" : "Chỉ Admin mới có quyền thay đổi thứ tự VĐV!");
+      return;
+    }
     if (competitionMode === "individual") {
       setAthletes((prev) => {
         const idx = prev.findIndex((a) => a.id === athleteId);
@@ -5946,6 +5971,7 @@ export default function App() {
                       directMaxPoints={competitionMode === "individual" ? directMaxPoints : teamDirectMaxPoints}
                       isLockedByOtherReferee={isLockedByOtherReferee}
                       lockedByRefereeEmail={lockedByRefereeEmail}
+                      userRole={userRole}
                     />
                   );
                 })}
@@ -6323,6 +6349,7 @@ export default function App() {
                         setSingleAthleteToSave(ath);
                         setSaveStatus(null);
                       }}
+                      userRole={userRole}
                     />
                   );
                 })}

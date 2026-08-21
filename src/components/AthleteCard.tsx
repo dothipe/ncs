@@ -26,6 +26,7 @@ interface AthleteCardProps {
   isLockedByOtherReferee?: boolean;
   lockedByRefereeEmail?: string;
   onSaveSingleAthlete?: (athlete: Athlete) => void;
+  userRole?: string;
 }
 
 export const AthleteCard: React.FC<AthleteCardProps> = ({
@@ -48,6 +49,7 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
   isLockedByOtherReferee = false,
   lockedByRefereeEmail = "",
   onSaveSingleAthlete,
+  userRole = "spectator",
 }) => {
   const { language, t } = useLanguage();
   const [isEditing, setIsEditing] = useState(false);
@@ -272,7 +274,7 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
                 <X className="w-3 h-3" /> {language === "en" ? "Cancel" : "Hủy"}
               </button>
             </>
-          ) : !isLockedByOtherReferee && (isInputTab || isScoringEditAuthorized) ? (
+          ) : !isLockedByOtherReferee && (isInputTab || (isScoringEditAuthorized && userRole === "admin")) ? (
             <div className="flex items-center gap-1.5">
               <button
                 onClick={() => onMoveAthlete && onMoveAthlete(athlete.id, "up")}
