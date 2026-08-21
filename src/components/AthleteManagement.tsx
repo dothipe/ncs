@@ -433,7 +433,8 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
     setFormProvince("");
     setFormCountry("Việt Nam");
     setFormCountryCode("VN");
-    setFormAvatarUrl(PRESET_AVATARS[0]);
+    const userGoogleAvatar = currentUser?.photoURL || (currentUser as any)?.avatarUrl || "";
+    setFormAvatarUrl(userGoogleAvatar || PRESET_AVATARS[0]);
     setFormStatus("Thi đấu");
     setFormIsPrimaryTeam(false);
     setFormEmail("");
@@ -588,13 +589,21 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
         freshScores[dist.id] = Array(shotsCount).fill(null);
       });
 
+      const userGoogleAvatar = currentUser?.photoURL || (currentUser as any)?.avatarUrl || "";
+      let finalAvatar = formAvatarUrl;
+      if ((!finalAvatar || PRESET_AVATARS.includes(finalAvatar) || finalAvatar === AVATAR_MALE || finalAvatar === AVATAR_FEMALE) && userGoogleAvatar) {
+        if (isVscTab || (formEmail && currentUser?.email && formEmail.toLowerCase().trim() === currentUser.email.toLowerCase().trim())) {
+          finalAvatar = userGoogleAvatar;
+        }
+      }
+
       const newAthlete: Athlete = {
         id: formId.trim(),
         name: formName.trim(),
         team: formTeam.trim(),
         gender: formGender,
         scores: freshScores,
-        avatarUrl: formAvatarUrl,
+        avatarUrl: finalAvatar,
         idCard: formIdCard.trim(),
         dob: formDob,
         hometown: formHometown.trim(),

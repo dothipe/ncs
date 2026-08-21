@@ -4,7 +4,7 @@ import { DistanceConfig, Athlete, MatchHistoryItem, StoredAthleteList } from "..
 import { Settings, Plus, Edit2, Trash2, Calendar, FileDown, FileUp, RefreshCw, Trophy, Target, PlusCircle, Smartphone, CheckCircle, Users, Lock, Unlock, X, AlertTriangle, Shield } from "lucide-react";
 import { getHitCount } from "../utils/qualification";
 import { auth } from "../firebase";
-import { createOnlineTournament, updateOnlineTournament, getVscSystemAthletes } from "../lib/firebaseService";
+import { createOnlineTournament, updateOnlineTournament, getVscSystemAthletes, getNextTournamentSequenceId } from "../lib/firebaseService";
 import { useLanguage } from "../context/LanguageContext";
 
 interface SettingsPanelProps {
@@ -449,15 +449,29 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
   useEffect(() => {
     if (isNewTournamentModalOpen && !modalTournamentId) {
-      const todayStr = new Date().toLocaleDateString("vi-VN");
-      const currentSeqStr = localStorage.getItem("slingshot_active_tournament_seq") || "1";
-      const nextSeq = Number(currentSeqStr) + 1;
+      const today = new Date();
+      const todayStr = today.toLocaleDateString("vi-VN");
+      const todayIso = today.toISOString().split("T")[0]; // YYYY-MM-DD
+      
+      // Calculate local progressive ID first
+      const currentSeqStr = localStorage.getItem("slingshot_active_tournament_seq") || "0";
+      const nextSeq = Math.max(1, Number(currentSeqStr) + 1);
       const nextSeqStr = nextSeq.toString().padStart(4, "0");
       setModalTournamentId(`G-${nextSeqStr}`);
+
+      // Query globally across all tournaments to ensure progressive increment
+      getNextTournamentSequenceId()
+        .then((globalNextId) => {
+          if (globalNextId) {
+            setModalTournamentId(globalNextId);
+          }
+        })
+        .catch((err) => console.warn("Error getting next progressive tournament ID:", err));
+
       setModalTournamentName(matchName ? `${matchName} (${todayStr})` : `Giải đấu ${todayStr}`);
       setModalTournamentDesc(language === "en" ? "Standard competition structure." : "Áp dụng cơ cấu thi đấu chuẩn VSC.");
-      setModalStartDate("");
-      setModalEndDate("");
+      setModalStartDate(todayIso);
+      setModalEndDate(todayIso);
       setModalLaneCapacity(laneCapacity);
       setModalShotsCount(shotsCount);
       setModalTeamShotsCount(teamShotsCount);
@@ -1475,25 +1489,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   <p className="text-[10px] text-slate-405 italic">{language === "en" ? "No referees assigned yet" : "Chưa chỉ định trọng tài nào"}</p>
                 )}
               </div>
-
-              {/* AUDIT LOG DISPLAY */}
-              {activeHistoryId && activeHistoryId.startsWith("tour-") && (
-                <div className="border-t border-gray-150 dark:border-slate-800/60 pt-4 flex flex-col gap-3">
-                  <span className="text-[11px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest block flex items-center gap-1">
-                    <Smartphone className="w-4 h-4 text-amber-500" /> {language === "en" ? "SCORING AUDIT LOG" : "NHẬT KÝ THAY ĐỔI & GHI ĐIỂM"}
-                  </span>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                    {language === "en" ? "Real-time records of referee scoring and athlete calling operations." : "Nhật ký ghi lại theo thời gian thực các thao tác nhập điểm và gọi vận động viên của trọng tài."}
-                  </p>
-                  <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 max-h-60 overflow-y-auto font-mono text-[10px] text-slate-600 dark:text-slate-400 whitespace-pre-wrap leading-relaxed select-text">
-                    {auditLog && auditLog.trim() ? (
-                      auditLog
-                    ) : (
-                      <span className="italic text-slate-400">{language === "en" ? "No actions logged yet" : "Chưa có thao tác nào được ghi lại"}</span>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           ) : (
             <div className="border-t border-gray-150 dark:border-slate-800/60 pt-4 flex flex-col gap-2">
@@ -2501,6 +2496,42 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
       </div> {/* End of the main grid */}
 
+      {/* NHẬT KÝ THAY ĐỔI & GHI ĐIỂM (Full-width Scale 100%, Located Above Permissions Matrix) */}
+      <div className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm flex flex-col gap-3 font-sans text-slate-800 dark:text-slate-100 mt-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b dark:border-slate-800 pb-3 gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl">
+              <Smartphone className="w-5 h-5 text-amber-500" />
+            </div>
+            <div>
+              <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white uppercase tracking-wide flex items-center gap-2">
+                {language === "en" ? "SCORING AUDIT & CHANGE LOG" : "NHẬT KÝ THAY ĐỔI & GHI ĐIỂM"}
+              </h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                {language === "en" 
+                  ? "Real-time records of referee scoring, score adjustments, and athlete calling operations." 
+                  : "Nhật ký ghi lại theo thời gian thực các thao tác nhập điểm, cập nhật kết quả và gọi vận động viên của trọng tài."}
+              </p>
+            </div>
+          </div>
+          {activeHistoryId && (
+            <span className="text-[10px] font-mono font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-lg border border-amber-200/50 dark:border-amber-900/30 self-start sm:self-auto">
+              ID: {activeHistoryId}
+            </span>
+          )}
+        </div>
+
+        <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-4 max-h-72 overflow-y-auto font-mono text-[11px] text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed select-text shadow-2xs">
+          {auditLog && auditLog.trim() ? (
+            auditLog
+          ) : (
+            <span className="italic text-slate-400">
+              {language === "en" ? "No scoring actions or changes logged yet." : "Chưa có thao tác ghi điểm hoặc thay đổi nào được ghi lại."}
+            </span>
+          )}
+        </div>
+      </div>
+
       {/* Permissions Overview Table Card */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm flex flex-col gap-4 font-sans text-slate-800 dark:text-slate-100 mt-2">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b dark:border-slate-800 pb-3 gap-3">
@@ -2768,7 +2799,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 flex justify-between items-center">
                     <span>{language === "en" ? "Tournament ID *" : "Mã ID Giải Đấu *"}</span>
-                    <span className="text-[7px] bg-indigo-950 text-indigo-400 border border-indigo-900 px-1 py-0.2 rounded font-black font-mono">{language === "en" ? "AUTO" : "TỰ ĐỘNG"}</span>
+                    <span className="text-[7px] bg-indigo-950 text-indigo-400 border border-indigo-900 px-1 py-0.2 rounded font-black font-mono">{language === "en" ? "AUTO-INCREMENT" : "TỰ ĐỘNG TĂNG"}</span>
                   </label>
                   <input
                     type="text"
@@ -2789,22 +2820,31 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 </div>
               </div>
 
-              {/* Match Dates in Modal */}
+              {/* Match Dates in Modal (Mandatory Start Date) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-black text-gray-550 uppercase tracking-widest mb-1">
-                    {language === "en" ? "Start Date" : "Ngày Thi Đấu"}
+                  <label className="block text-[10px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest mb-1 flex items-center justify-between">
+                    <span>{language === "en" ? "Start Date *" : "Ngày Thi Đấu *"}</span>
+                    <span className="text-[7px] bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-300 dark:border-rose-900 px-1 py-0.2 rounded font-black font-mono">
+                      {language === "en" ? "MANDATORY" : "BẮT BUỘC"}
+                    </span>
                   </label>
                   <input
                     type="date"
+                    required
                     value={modalStartDate}
                     onChange={(e) => setModalStartDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-505 font-bold text-xs"
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-rose-300 dark:border-rose-900/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 font-bold text-xs"
                   />
+                  {!modalStartDate && (
+                    <span className="text-[9px] text-rose-500 font-semibold block mt-0.5">
+                      {language === "en" ? "Tournament date cannot be empty" : "Không được bỏ trống ngày thi đấu"}
+                    </span>
+                  )}
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-gray-555 uppercase tracking-widest mb-1">
-                    {language === "en" ? "End Date" : "Ngày Kết Thúc"}
+                    {language === "en" ? "End Date (Optional)" : "Ngày Kết Thúc (Tùy chọn)"}
                   </label>
                   <input
                     type="date"
@@ -3029,6 +3069,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     setTournamentError("Vui lòng nhập Tên cho giải!");
                     return;
                   }
+                  if (!modalStartDate || !modalStartDate.trim()) {
+                    setTournamentError(language === "en" ? "Tournament date is required! Please select a match date." : "Vui lòng nhập Ngày Thi Đấu! Ngày thi đấu là thông tin bắt buộc, không được để trống.");
+                    return;
+                  }
 
                   const currentUser = auth.currentUser;
                   if (!currentUser) {
@@ -3054,6 +3098,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                       currentUser.uid,
                       creatorEmail,
                       {
+                        tournamentId: modalTournamentId.trim(),
+                        tournamentCode: modalTournamentId.trim(),
+                        tournamentSeq: Number(modalTournamentId.replace(/\D/g, "")) || undefined,
+                        startDate: modalStartDate.trim(),
+                        endDate: modalEndDate.trim() || modalStartDate.trim(),
                         competitionMode: modalTournamentType === "team" ? "team" : "individual",
                         tournamentType: modalTournamentType,
                         shotsCount: modalShotsCount,

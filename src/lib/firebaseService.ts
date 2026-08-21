@@ -24,6 +24,9 @@ import { Athlete, DistanceConfig, MatchHistoryItem, Club, VSC_DEFAULT_LOGO, Syst
 
 export interface TournamentData {
   id: string;
+  tournamentId?: string;
+  tournamentCode?: string;
+  tournamentSeq?: number;
   matchName: string;
   creatorId: string;
   creatorEmail: string;
@@ -196,6 +199,49 @@ export async function getUserProfile(uid: string) {
 // ---------------- TOURNAMENT HELPERS ----------------
 
 /**
+ * Calculates the next progressive tournament sequence ID based on all Firestore tournaments,
+ * local history, and active state.
+ */
+export async function getNextTournamentSequenceId(): Promise<string> {
+  let maxSeq = 0;
+
+  // 1. Check local sequence from localStorage
+  try {
+    const localSeq = Number(localStorage.getItem("slingshot_active_tournament_seq")) || 0;
+    if (localSeq > maxSeq) maxSeq = localSeq;
+
+    const activeTourId = localStorage.getItem("slingshot_active_tournament_id") || "";
+    const match = activeTourId.match(/G-(\d+)/i);
+    if (match && Number(match[1])) {
+      maxSeq = Math.max(maxSeq, Number(match[1]));
+    }
+  } catch (e) {
+    console.warn("Error reading local tournament sequence:", e);
+  }
+
+  // 2. Query tournaments collection from Firestore
+  try {
+    const snap = await getDocs(collection(db, "tournaments"));
+    snap.forEach((docSnap) => {
+      const data = docSnap.data();
+      const tId = data.tournamentId || data.tournamentCode || data.id || docSnap.id || "";
+      const m1 = String(tId).match(/G-(\d+)/i);
+      if (m1 && Number(m1[1])) {
+        maxSeq = Math.max(maxSeq, Number(m1[1]));
+      }
+      if (typeof data.tournamentSeq === "number") {
+        maxSeq = Math.max(maxSeq, data.tournamentSeq);
+      }
+    });
+  } catch (err) {
+    console.warn("Could not query tournaments for sequence id:", err);
+  }
+
+  const nextSeq = maxSeq + 1;
+  return `G-${nextSeq.toString().padStart(4, "0")}`;
+}
+
+/**
  * Creates a new tournament in Firestore
  */
 export async function createOnlineTournament(
@@ -203,6 +249,9 @@ export async function createOnlineTournament(
   creatorId: string,
   creatorEmail: string,
   config: {
+    tournamentId?: string;
+    tournamentCode?: string;
+    tournamentSeq?: number;
     competitionMode: "individual" | "team";
     tournamentType?: "individual" | "team" | "combined";
     shotsCount: number;
@@ -520,39 +569,119 @@ export async function deleteOnlineTournament(id: string) {
 
 /**
  * Subscribes to real-time list of tournaments sorted by latest createdAt.
- * Extremely optimized to load only tournament configurations without massive arrays!
+ * Automatically and reactively merges decoupled athlete, master athlete, and team collections!
  */
 export function subscribeToTournamentsList(callback: (tournaments: TournamentData[]) => void) {
   const collectionRef = collection(db, "tournaments");
   const q = query(collectionRef, orderBy("createdAt", "desc"));
   
-  return onSnapshot(q, (snapshot) => {
-    const list: TournamentData[] = [];
-    const seen = new Set<string>();
-    snapshot.forEach((docSnap) => {
-      const data = docSnap.data() as TournamentData;
-      const id = data.id || docSnap.id;
-      if (id && !seen.has(id)) {
-        seen.add(id);
-        // Exclude massive lists from the directory list view to save memory and CPU
-        const trimmedData = {
-          ...data,
-          id,
-          athletes: data.athletes || [],
-          teamAthletes: data.teamAthletes || [],
-          inputAthletes: data.inputAthletes || [],
-          teamInputAthletes: data.teamInputAthletes || [],
-          masterAthletes: data.masterAthletes || [],
-          teamMasterAthletes: data.teamMasterAthletes || [],
-          clubs: data.clubs || []
-        };
-        list.push(trimmedData);
-      }
+  let rawTournaments: TournamentData[] = [];
+  const decoupledData: {
+    athletes: Record<string, any[]>;
+    teamAthletes: Record<string, any[]>;
+    inputAthletes: Record<string, any[]>;
+    teamInputAthletes: Record<string, any[]>;
+    masterAthletes: Record<string, any[]>;
+    teamMasterAthletes: Record<string, any[]>;
+    clubs: Record<string, any[]>;
+  } = {
+    athletes: {},
+    teamAthletes: {},
+    inputAthletes: {},
+    teamInputAthletes: {},
+    masterAthletes: {},
+    teamMasterAthletes: {},
+    clubs: {},
+  };
+
+  const emit = () => {
+    const list: TournamentData[] = rawTournaments.map(t => {
+      const id = t.id;
+      return {
+        ...t,
+        athletes: (t.athletes && t.athletes.length > 0) ? t.athletes : (decoupledData.athletes[id] || []),
+        teamAthletes: (t.teamAthletes && t.teamAthletes.length > 0) ? t.teamAthletes : (decoupledData.teamAthletes[id] || []),
+        inputAthletes: (t.inputAthletes && t.inputAthletes.length > 0) ? t.inputAthletes : (decoupledData.inputAthletes[id] || []),
+        teamInputAthletes: (t.teamInputAthletes && t.teamInputAthletes.length > 0) ? t.teamInputAthletes : (decoupledData.teamInputAthletes[id] || []),
+        masterAthletes: (t.masterAthletes && t.masterAthletes.length > 0) ? t.masterAthletes : (decoupledData.masterAthletes[id] || []),
+        teamMasterAthletes: (t.teamMasterAthletes && t.teamMasterAthletes.length > 0) ? t.teamMasterAthletes : (decoupledData.teamMasterAthletes[id] || []),
+        clubs: (t.clubs && t.clubs.length > 0) ? t.clubs : (decoupledData.clubs[id] || []),
+      };
     });
     callback(list);
-  }, (error) => {
-    handleFirestoreError(error, OperationType.LIST, "tournaments");
+  };
+
+  const unsubs: (() => void)[] = [];
+
+  // 1. Listen to main tournaments
+  unsubs.push(
+    onSnapshot(q, (snapshot) => {
+      const list: TournamentData[] = [];
+      const seen = new Set<string>();
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as TournamentData;
+        const id = data.id || docSnap.id;
+        if (id && !seen.has(id)) {
+          seen.add(id);
+          list.push({
+            ...data,
+            id,
+            athletes: data.athletes || [],
+            teamAthletes: data.teamAthletes || [],
+            inputAthletes: data.inputAthletes || [],
+            teamInputAthletes: data.teamInputAthletes || [],
+            masterAthletes: data.masterAthletes || [],
+            teamMasterAthletes: data.teamMasterAthletes || [],
+            clubs: data.clubs || []
+          });
+        }
+      });
+      rawTournaments = list;
+      emit();
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, "tournaments");
+    })
+  );
+
+  // 2. Listen to decoupled payloads collections
+  const payloadCollections: { key: keyof typeof decoupledData; coll: string }[] = [
+    { key: "masterAthletes", coll: "vsc_tournament_master_athletes" },
+    { key: "athletes", coll: "vsc_tournament_athletes" },
+    { key: "teamAthletes", coll: "vsc_tournament_team_athletes" },
+    { key: "teamMasterAthletes", coll: "vsc_tournament_team_master_athletes" },
+    { key: "inputAthletes", coll: "vsc_tournament_input_athletes" },
+    { key: "teamInputAthletes", coll: "vsc_tournament_team_input_athletes" },
+    { key: "clubs", coll: "vsc_tournament_clubs" },
+  ];
+
+  payloadCollections.forEach(({ key, coll }) => {
+    try {
+      unsubs.push(
+        onSnapshot(collection(db, coll), (snap) => {
+          const map: Record<string, any[]> = {};
+          snap.forEach(docSnap => {
+            map[docSnap.id] = docSnap.data()?.list || [];
+          });
+          decoupledData[key] = map;
+          emit();
+        }, (err) => {
+          console.warn(`Could not subscribe to collection ${coll}:`, err);
+        })
+      );
+    } catch (e) {
+      console.warn(`Failed to attach snapshot listener for ${coll}:`, e);
+    }
   });
+
+  return () => {
+    unsubs.forEach(unsub => {
+      try {
+        unsub();
+      } catch (e) {
+        // ignore
+      }
+    });
+  };
 }
 
 /**

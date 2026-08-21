@@ -34,6 +34,7 @@ import {
   Info
 } from "lucide-react";
 import { AVATAR_MALE, AVATAR_FEMALE } from "./AthleteManagement";
+import { getHitCount } from "../utils/qualification";
 
 const compressImage = (base64Str: string, maxWidth = 180, maxHeight = 180): Promise<string> => {
   return new Promise((resolve) => {
@@ -261,7 +262,8 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
     setFormDob("");
     setFormHometown("");
     setFormProvince("");
-    setFormAvatarUrl(AVATAR_MALE);
+    const userGoogleAvatar = currentUser?.photoURL || (currentUser as any)?.avatarUrl || "";
+    setFormAvatarUrl(userGoogleAvatar || AVATAR_MALE);
     setFormEmail(currentUser?.email || "");
     setTargetAthleteId(null);
     setIsFormOpen(true);
@@ -279,7 +281,13 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
     setFormDob(athlete.dob || "");
     setFormHometown(athlete.hometown || "");
     setFormProvince(athlete.province || "");
-    setFormAvatarUrl(athlete.avatarUrl || AVATAR_MALE);
+    const userGoogleAvatar = (currentUser?.email && athlete.email && currentUser.email.trim().toLowerCase() === athlete.email.trim().toLowerCase()) 
+      ? (currentUser?.photoURL || (currentUser as any)?.avatarUrl || "")
+      : "";
+    const effectiveAvatar = athlete.avatarUrl && athlete.avatarUrl !== AVATAR_MALE && athlete.avatarUrl !== AVATAR_FEMALE
+      ? athlete.avatarUrl
+      : (userGoogleAvatar || athlete.avatarUrl || (athlete.gender === "Nữ" ? AVATAR_FEMALE : AVATAR_MALE));
+    setFormAvatarUrl(effectiveAvatar);
     setFormEmail(athlete.email || "");
     setTargetAthleteId(athlete.id);
     setIsFormOpen(true);
@@ -367,8 +375,14 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
       }
     }
 
-    // Ensure avatar image is compressed before saving to avoid payload limit
+    // Default to Google photoURL if user has not provided a custom avatar
     let finalAvatarUrl = formAvatarUrl;
+    const userGoogleAvatar = currentUser?.photoURL || (currentUser as any)?.avatarUrl || "";
+    if ((!finalAvatarUrl || finalAvatarUrl === AVATAR_MALE || finalAvatarUrl === AVATAR_FEMALE) && userGoogleAvatar) {
+      finalAvatarUrl = userGoogleAvatar;
+    }
+
+    // Ensure avatar image is compressed before saving to avoid payload limit
     if (finalAvatarUrl && finalAvatarUrl.startsWith("data:image")) {
       try {
         finalAvatarUrl = await compressImage(finalAvatarUrl, 180, 180);
@@ -460,11 +474,20 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
   // Calculate detailed historical tournament statistics for an athlete
   const athleteStats = useMemo(() => {
     if (!selectedAthlete) return null;
-    const athleteIdLower = selectedAthlete.id.trim().toLowerCase();
-    const athleteNameLower = selectedAthlete.name.trim().toLowerCase();
-    const athleteEmailLower = selectedAthlete.email?.trim().toLowerCase() || "";
+    const athleteIdLower = selectedAthlete.id ? selectedAthlete.id.trim().toLowerCase() : "";
+    const athleteNameLower = selectedAthlete.name ? selectedAthlete.name.trim().toLowerCase() : "";
+    const athleteEmailLower = selectedAthlete.email ? selectedAthlete.email.trim().toLowerCase() : "";
 
-    // Gather all matching participations across online tournaments
+    const normalizeId = (idStr: string) => {
+      if (!idStr) return "";
+      const cleaned = idStr.trim().toLowerCase().replace(/^vsc-0*/, "").replace(/^0+/, "");
+      return cleaned || idStr.trim().toLowerCase();
+    };
+    const athleteNormId = normalizeId(selectedAthlete.id);
+    const normalizeName = (s: string) => (s ? s.trim().toLowerCase().replace(/\s+/g, " ") : "");
+    const athleteNormName = normalizeName(selectedAthlete.name);
+
+    // Gather all matching participations across online tournaments and history
     const participations: {
       matchName: string;
       date: string;
@@ -495,77 +518,147 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
     };
 
     const seenMatchKeys = new Set<string>();
-    const allMatches = onlineTournaments || [];
+    const allMatches = [
+      ...(onlineTournaments || []),
+      ...(history || [])
+    ];
 
     allMatches.forEach((match) => {
       if (!match) return;
       const matchDateStr = getTournamentDateString(match, language || "vi");
-      const compositeKey = `${match.id || ""}-${match.matchName || ""}-${matchDateStr}`.trim().toLowerCase();
+      const matchTitle = match.matchName || match.name || (language === "en" ? "Tournament Match" : "Trận đấu giải");
+      const compositeKey = `${match.id || ""}-${matchTitle}-${matchDateStr}`.trim().toLowerCase();
       if (seenMatchKeys.has(compositeKey)) return;
       seenMatchKeys.add(compositeKey);
 
-      const soloList = match.athletes || [];
-      const teamList = match.teamAthletes || [];
-      const masterSoloList = match.masterAthletes || [];
-      const masterTeamList = match.teamMasterAthletes || [];
+      const rawCandidates = [
+        ...(match.masterAthletes || []),
+        ...(match.inputAthletes || []),
+        ...(match.athletes || []),
+        ...(match.teamInputAthletes || []),
+        ...(match.teamAthletes || []),
+        ...(match.teamMasterAthletes || []),
+        ...(match.indAthletes || [])
+      ];
 
-      const findAthlete = (list: any[]) => {
-        return list.find((a: any) => {
-          const idMatch = a.id && a.id.trim().toLowerCase() === athleteIdLower;
-          const emailMatch = athleteEmailLower && a.email && a.email.trim().toLowerCase() === athleteEmailLower;
-          return idMatch || emailMatch;
-        });
+      const uniqueAthletesMap = new Map<string, any>();
+      rawCandidates.forEach((ath) => {
+        if (!ath) return;
+        const idKey = ath.id ? ath.id.trim().toLowerCase() : "";
+        const emailKey = ath.email ? ath.email.trim().toLowerCase() : "";
+        const nameKey = ath.name ? ath.name.trim().toLowerCase() : "";
+        const key = idKey || emailKey || nameKey;
+        if (!key) return;
+
+        const existing = uniqueAthletesMap.get(key);
+        if (!existing) {
+          uniqueAthletesMap.set(key, ath);
+        } else {
+          const existingScoreCount = existing.scores ? Object.keys(existing.scores).length : 0;
+          const currentScoreCount = ath.scores ? Object.keys(ath.scores).length : 0;
+          if (currentScoreCount >= existingScoreCount) {
+            uniqueAthletesMap.set(key, ath);
+          }
+        }
+      });
+
+      const allTournamentAthletes = Array.from(uniqueAthletesMap.values());
+
+      const isTargetAthlete = (ath: any) => {
+        if (!ath) return false;
+        const athId = ath.id ? ath.id.trim().toLowerCase() : "";
+        const athEmail = ath.email ? ath.email.trim().toLowerCase() : "";
+        const athName = ath.name ? ath.name.trim().toLowerCase() : "";
+        const athNormId = normalizeId(ath.id);
+        const athNormName = normalizeName(ath.name);
+
+        if (athleteEmailLower && athEmail && athleteEmailLower === athEmail) return true;
+        if (athleteIdLower && athId && athleteIdLower === athId) return true;
+        if (athleteNormId && athNormId && athleteNormId === athNormId) return true;
+        if (athleteNameLower && athName && athleteNameLower === athName) return true;
+        if (athleteNormName && athNormName && athleteNormName === athNormName) return true;
+        return false;
       };
 
-      const foundSolo = findAthlete(soloList);
-      const foundTeam = findAthlete(teamList);
-      const foundMasterSolo = findAthlete(masterSoloList);
-      const foundMasterTeam = findAthlete(masterTeamList);
-
-      const targetAthleteData = foundSolo || foundTeam || foundMasterSolo || foundMasterTeam;
+      const targetAthleteData = allTournamentAthletes.find(isTargetAthlete);
 
       if (targetAthleteData) {
-        // Calculate shots and hits in this tournament
         let matchShots = 0;
         let matchHits = 0;
 
-        // Count scores
         if (targetAthleteData.scores) {
-          Object.values(targetAthleteData.scores).forEach((scoreArr) => {
+          Object.values(targetAthleteData.scores).forEach((scoreArr: any) => {
             if (Array.isArray(scoreArr)) {
-              matchShots += scoreArr.length;
-              matchHits += scoreArr.filter((h) => h === true).length;
+              if (scoreArr.length > 1) {
+                matchShots += scoreArr.length;
+                matchHits += getHitCount(scoreArr);
+              } else if (scoreArr.length === 1) {
+                const hc = getHitCount(scoreArr);
+                matchHits += hc;
+                matchShots += (match.directMaxShots || match.shotsCount || 10);
+              }
             }
           });
         }
 
-        // Only count as participated if there are actual shots fired/recorded
-        if (matchShots > 0) {
-          // Calculate rank in this tournament
-          let rank = 1;
-          let rankPool: any[] = [];
-          if (foundSolo) rankPool = soloList;
-          else if (foundTeam) rankPool = teamList;
-          else if (foundMasterSolo) rankPool = masterSoloList;
-          else if (foundMasterTeam) rankPool = masterTeamList;
+        if (targetAthleteData.soloHits) {
+          Object.values(targetAthleteData.soloHits).forEach((h: any) => {
+            if (typeof h === "number" && h > 0) {
+              matchHits += h;
+              matchShots += (match.shotsCount || 10);
+            }
+          });
+        }
 
-          const sortedScores = rankPool
+        if (matchShots > 0 || matchHits > 0) {
+          if (matchShots === 0 && matchHits > 0) {
+            matchShots = matchHits;
+          }
+
+          let rank = 1;
+          const distances = match.distances || [];
+          
+          const sortedScores = allTournamentAthletes
+            .filter(a => a.status !== "Bỏ thi")
             .map((ath: any) => {
-              let hits = 0;
-              if (ath.scores) {
-                Object.values(ath.scores).forEach((arr: any) => {
-                  if (Array.isArray(arr)) {
-                    hits += arr.filter((h) => h === true).length;
+              let totalScore = 0;
+              let totalAthleteHits = 0;
+
+              if (distances.length > 0) {
+                distances.forEach((dist: any) => {
+                  const hits = ath.scores?.[dist.id] || [];
+                  const hitCount = getHitCount(hits);
+                  totalScore += hitCount * (dist.multiplier || 1);
+                  totalAthleteHits += hitCount;
+                });
+              } else if (ath.scores) {
+                Object.values(ath.scores).forEach((scoreArr: any) => {
+                  if (Array.isArray(scoreArr)) {
+                    const hitCount = getHitCount(scoreArr);
+                    totalScore += hitCount;
+                    totalAthleteHits += hitCount;
                   }
                 });
               }
-              return { id: ath.id, name: ath.name, hits };
-            })
-            .sort((a: any, b: any) => b.hits - a.hits);
 
-          const matchRankIdx = sortedScores.findIndex(
-            (x: any) => x.id.trim().toLowerCase() === targetAthleteData.id.trim().toLowerCase()
-          );
+              if (ath.soloHits) {
+                Object.values(ath.soloHits).forEach((h: any) => {
+                  if (typeof h === "number") {
+                    totalScore += h;
+                    totalAthleteHits += h;
+                  }
+                });
+              }
+
+              return {
+                athlete: ath,
+                score: totalScore,
+                hits: totalAthleteHits
+              };
+            })
+            .sort((a, b) => b.score - a.score || b.hits - a.hits);
+
+          const matchRankIdx = sortedScores.findIndex(item => isTargetAthlete(item.athlete));
           if (matchRankIdx !== -1) {
             rank = matchRankIdx + 1;
           }
@@ -578,7 +671,7 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
           totalMatchHits += matchHits;
 
           participations.push({
-            matchName: match.matchName,
+            matchName: matchTitle,
             date: matchDateStr,
             totalShots: matchShots,
             totalHits: matchHits,
@@ -599,7 +692,7 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
       overallHitRate,
       highestRank: highestRank === 9999 ? null : highestRank
     };
-  }, [selectedAthlete, onlineTournaments, language]);
+  }, [selectedAthlete, onlineTournaments, history, language]);
 
   // Image upload handling with compression (prevents Firestore payload size limit errors)
   const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1117,7 +1210,14 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
                       <label className="block text-[10px] font-extrabold uppercase text-slate-450 mb-1">Giới tính</label>
                       <select
                         value={formGender}
-                        onChange={(e) => setFormGender(e.target.value)}
+                        onChange={(e) => {
+                          const newGender = e.target.value;
+                          setFormGender(newGender);
+                          if (!formAvatarUrl || formAvatarUrl === AVATAR_MALE || formAvatarUrl === AVATAR_FEMALE) {
+                            const userGoogleAvatar = currentUser?.photoURL || (currentUser as any)?.avatarUrl;
+                            setFormAvatarUrl(userGoogleAvatar || (newGender === "Nữ" ? AVATAR_FEMALE : AVATAR_MALE));
+                          }
+                        }}
                         className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#9c0c13]/30 focus:border-[#9c0c13]"
                       >
                         <option value="Nam">Nam</option>

@@ -110,33 +110,60 @@ const getDetailedClubStats = (club: SystemClub, tournamentsList: any[]) => {
   let totalHits = 0;
   let podiums = 0;
 
+  const normalizeId = (idStr: string) => {
+    if (!idStr) return "";
+    const cleaned = idStr.trim().toLowerCase().replace(/^vsc-0*/, "").replace(/^0+/, "");
+    return cleaned || idStr.trim().toLowerCase();
+  };
+  const normalizeName = (s: string) => (s ? s.trim().toLowerCase().replace(/\s+/g, " ") : "");
+
   const memberEmails = new Set(club.members?.map(m => m.email?.toLowerCase().trim()).filter(Boolean) || []);
   const memberAthleteIds = new Set(club.members?.map(m => m.athleteId?.toLowerCase().trim()).filter(Boolean) || []);
+  const memberNormIds = new Set(club.members?.map(m => normalizeId(m.athleteId)).filter(Boolean) || []);
+  const memberNames = new Set(club.members?.map(m => m.name?.toLowerCase().trim()).filter(Boolean) || []);
+  const memberNormNames = new Set(club.members?.map(m => normalizeName(m.name)).filter(Boolean) || []);
+  const clubNameLower = club.name ? club.name.trim().toLowerCase() : "";
 
   // Track member contributions
   const memberContributions: Record<string, { shots: number; hits: number; accuracy: number }> = {};
   club.members?.forEach(m => {
-    memberContributions[m.userId] = { shots: 0, hits: 0, accuracy: 0 };
+    const defaultObj = { shots: 0, hits: 0, accuracy: 0 };
+    if (m.userId) memberContributions[m.userId] = { ...defaultObj };
+    if (m.athleteId) memberContributions[m.athleteId] = { ...defaultObj };
+    if (m.email) memberContributions[m.email.toLowerCase().trim()] = { ...defaultObj };
+    if (m.name) memberContributions[m.name.toLowerCase().trim()] = { ...defaultObj };
   });
 
+  const seenMatchKeys = new Set<string>();
+
   tournamentsList.forEach(tour => {
-    // To avoid double counting the same athlete (e.g. if present in both tour.athletes and tour.masterAthletes)
-    const uniqueAthletesMap = new Map<string, any>();
-    
-    // We process masterAthletes first, then overwrite/prefer inputAthletes and athletes which are the active ones with scores
+    if (!tour) return;
+    const tourTitle = tour.matchName || tour.name || "Giải đấu";
+    const tourDate = tour.date || tour.startDate || (tour.createdAt?.seconds ? new Date(tour.createdAt.seconds * 1000).toISOString() : "");
+    const compositeKey = `${tour.id || ""}-${tourTitle}-${tourDate}`.trim().toLowerCase();
+    if (seenMatchKeys.has(compositeKey)) return;
+    seenMatchKeys.add(compositeKey);
+
+    // Collect all candidate athlete pools from the tournament
     const candidateAthletes = [
       ...(tour.masterAthletes || []),
       ...(tour.inputAthletes || []),
-      ...(tour.athletes || [])
+      ...(tour.athletes || []),
+      ...(tour.teamInputAthletes || []),
+      ...(tour.teamAthletes || []),
+      ...(tour.teamMasterAthletes || []),
+      ...(tour.indAthletes || [])
     ];
-    
+
+    const uniqueAthletesMap = new Map<string, any>();
     candidateAthletes.forEach(ath => {
       if (!ath) return;
       const idKey = ath.id ? ath.id.trim().toLowerCase() : "";
       const emailKey = ath.email ? ath.email.trim().toLowerCase() : "";
-      const key = idKey || emailKey || (ath.name ? ath.name.trim().toLowerCase() : "");
+      const nameKey = ath.name ? ath.name.trim().toLowerCase() : "";
+      const key = idKey || emailKey || nameKey;
       if (!key) return;
-      
+
       const existing = uniqueAthletesMap.get(key);
       if (!existing) {
         uniqueAthletesMap.set(key, ath);
@@ -148,69 +175,159 @@ const getDetailedClubStats = (club: SystemClub, tournamentsList: any[]) => {
         }
       }
     });
-    
+
     const allAthletes = Array.from(uniqueAthletesMap.values());
 
-    const tournamentMembers = allAthletes.filter(ath => {
-      const emailMatch = ath.email && memberEmails.has(ath.email.toLowerCase().trim());
-      const idMatch = ath.id && memberAthleteIds.has(ath.id.toLowerCase().trim());
-      return emailMatch || idMatch;
-    });
+    const isClubMemberOrTeam = (ath: any) => {
+      if (!ath) return false;
+      const athEmail = ath.email ? ath.email.toLowerCase().trim() : "";
+      const athId = ath.id ? ath.id.toLowerCase().trim() : "";
+      const athNormId = normalizeId(ath.id);
+      const athName = ath.name ? ath.name.toLowerCase().trim() : "";
+      const athNormName = normalizeName(ath.name);
+      const athTeam = ath.team ? ath.team.toLowerCase().trim() : "";
+
+      if (athEmail && memberEmails.has(athEmail)) return true;
+      if (athId && memberAthleteIds.has(athId)) return true;
+      if (athNormId && memberNormIds.has(athNormId)) return true;
+      if (athName && memberNames.has(athName)) return true;
+      if (athNormName && memberNormNames.has(athNormName)) return true;
+      if (clubNameLower && athTeam && (athTeam === clubNameLower || athTeam.includes(clubNameLower))) return true;
+      return false;
+    };
+
+    const tournamentMembers = allAthletes.filter(isClubMemberOrTeam);
 
     tournamentMembers.forEach(ath => {
       let memberShots = 0;
       let memberHits = 0;
 
       if (ath.scores) {
-        Object.values(ath.scores).forEach((scoreArr) => {
+        Object.values(ath.scores).forEach((scoreArr: any) => {
           if (Array.isArray(scoreArr)) {
-            memberShots += scoreArr.length;
-            memberHits += scoreArr.filter((h) => h === true).length;
+            if (scoreArr.length > 1) {
+              memberShots += scoreArr.length;
+              memberHits += getHitCount(scoreArr);
+            } else if (scoreArr.length === 1) {
+              const hc = getHitCount(scoreArr);
+              memberHits += hc;
+              memberShots += (tour.directMaxShots || tour.shotsCount || 10);
+            }
           }
         });
+      }
+
+      if (ath.soloHits) {
+        Object.values(ath.soloHits).forEach((h: any) => {
+          if (typeof h === "number" && h > 0) {
+            memberHits += h;
+            memberShots += (tour.shotsCount || 10);
+          }
+        });
+      }
+
+      if (memberShots === 0 && memberHits > 0) {
+        memberShots = memberHits;
       }
 
       totalShots += memberShots;
       totalHits += memberHits;
 
       // Find the actual club member reference to add contributions
-      const matchedMember = club.members?.find(m => 
-        (ath.email && m.email?.toLowerCase().trim() === ath.email.toLowerCase().trim()) || 
-        (ath.id && m.athleteId?.toLowerCase().trim() === ath.id.toLowerCase().trim())
-      );
+      const matchedMember = club.members?.find(m => {
+        const mEmail = m.email ? m.email.toLowerCase().trim() : "";
+        const mId = m.athleteId ? m.athleteId.toLowerCase().trim() : "";
+        const mNormId = normalizeId(m.athleteId);
+        const mName = m.name ? m.name.toLowerCase().trim() : "";
+        const mNormName = normalizeName(m.name);
+        const mUserId = m.userId ? m.userId.toLowerCase().trim() : "";
+
+        const athEmail = ath.email ? ath.email.toLowerCase().trim() : "";
+        const athId = ath.id ? ath.id.toLowerCase().trim() : "";
+        const athNormId = normalizeId(ath.id);
+        const athName = ath.name ? ath.name.toLowerCase().trim() : "";
+        const athNormName = normalizeName(ath.name);
+        const athUserId = ath.userId ? ath.userId.toLowerCase().trim() : "";
+
+        if (mUserId && athUserId && mUserId === athUserId) return true;
+        if (mEmail && athEmail && mEmail === athEmail) return true;
+        if (mId && athId && mId === athId) return true;
+        if (mNormId && athNormId && mNormId === athNormId) return true;
+        if (mName && athName && mName === athName) return true;
+        if (mNormName && athNormName && mNormName === athNormName) return true;
+        return false;
+      });
 
       if (matchedMember) {
-        const current = memberContributions[matchedMember.userId] || { shots: 0, hits: 0, accuracy: 0 };
+        const memberKey = matchedMember.userId || matchedMember.athleteId || matchedMember.email || matchedMember.name;
+        const current = (matchedMember.userId && memberContributions[matchedMember.userId]) ||
+                        (matchedMember.athleteId && memberContributions[matchedMember.athleteId]) ||
+                        (matchedMember.email && memberContributions[matchedMember.email.toLowerCase().trim()]) ||
+                        (matchedMember.name && memberContributions[matchedMember.name.toLowerCase().trim()]) ||
+                        (memberKey && memberContributions[memberKey]) ||
+                        { shots: 0, hits: 0, accuracy: 0 };
+
         current.shots += memberShots;
         current.hits += memberHits;
-        memberContributions[matchedMember.userId] = current;
+        current.accuracy = current.shots > 0 ? (current.hits / current.shots) * 100 : 0;
+
+        if (matchedMember.userId) memberContributions[matchedMember.userId] = current;
+        if (matchedMember.athleteId) memberContributions[matchedMember.athleteId] = current;
+        if (matchedMember.email) memberContributions[matchedMember.email.toLowerCase().trim()] = current;
+        if (matchedMember.name) memberContributions[matchedMember.name.toLowerCase().trim()] = current;
       }
     });
 
-    // Count Individual Podiums
-    if (tour.distances && tour.distances.length > 0) {
-      const activeAthletes = allAthletes.filter(a => a.status !== "Bỏ thi");
+    // Count Individual Podiums (Top 3)
+    const activeAthletes = allAthletes.filter(a => a.status !== "Bỏ thi");
+    if (activeAthletes.length > 0) {
+      const distances = tour.distances || [];
       const standings = activeAthletes.map(athlete => {
         let totalScore = 0;
-        tour.distances.forEach((dist: any) => {
-          const hits = athlete.scores?.[dist.id] || [];
-          const hitCount = getHitCount(hits);
-          totalScore += hitCount * dist.multiplier;
-        });
-        return { ...athlete, totalScore };
-      }).sort((a, b) => b.totalScore - a.totalScore);
+        let totalAthleteHits = 0;
+
+        if (distances.length > 0) {
+          distances.forEach((dist: any) => {
+            const hits = athlete.scores?.[dist.id] || [];
+            const hitCount = getHitCount(hits);
+            totalScore += hitCount * (dist.multiplier || 1);
+            totalAthleteHits += hitCount;
+          });
+        } else if (athlete.scores) {
+          Object.values(athlete.scores).forEach((scoreArr: any) => {
+            if (Array.isArray(scoreArr)) {
+              const hitCount = getHitCount(scoreArr);
+              totalScore += hitCount;
+              totalAthleteHits += hitCount;
+            }
+          });
+        }
+
+        if (athlete.soloHits) {
+          Object.values(athlete.soloHits).forEach((h: any) => {
+            if (typeof h === "number") {
+              totalScore += h;
+              totalAthleteHits += h;
+            }
+          });
+        }
+
+        return { ...athlete, totalScore, totalAthleteHits };
+      }).sort((a, b) => b.totalScore - a.totalScore || b.totalAthleteHits - a.totalAthleteHits);
 
       standings.slice(0, Math.min(3, standings.length)).forEach(ath => {
-        const isMember = (ath.email && memberEmails.has(ath.email.toLowerCase().trim())) ||
-                         (ath.id && memberAthleteIds.has(ath.id.toLowerCase().trim()));
-        if (isMember) {
+        if (isClubMemberOrTeam(ath) && (ath.totalScore > 0 || ath.totalAthleteHits > 0)) {
           podiums++;
         }
       });
     }
 
     // Count Team Podiums
-    const teamsList = tour.teamAthletes || [];
+    const teamsList = [
+      ...(tour.teamAthletes || []),
+      ...(tour.teamInputAthletes || []),
+      ...(tour.teamMasterAthletes || [])
+    ];
     if (teamsList.length > 0) {
       const teamStandings = [...teamsList].sort((a, b) => {
         const scoreA = typeof a.score === "number" ? a.score : 0;
@@ -219,7 +336,8 @@ const getDetailedClubStats = (club: SystemClub, tournamentsList: any[]) => {
       });
 
       teamStandings.slice(0, Math.min(3, teamStandings.length)).forEach(team => {
-        if (team.name && team.name.toLowerCase().trim() === club.name.toLowerCase().trim()) {
+        const tName = team.name ? team.name.toLowerCase().trim() : "";
+        if (tName && clubNameLower && (tName === clubNameLower || tName.includes(clubNameLower))) {
           podiums++;
         }
       });
@@ -518,14 +636,22 @@ export const VscSystemClubsDirectory: React.FC<VscSystemClubsDirectoryProps> = (
     }
   }, [clubs, selectedClub]);
 
+  // Combined tournament sources for comprehensive metrics
+  const allTournamentSources = useMemo(() => {
+    return [
+      ...(onlineTournaments || []),
+      ...(history || [])
+    ];
+  }, [onlineTournaments, history]);
+
   // Calculate detailed stats for each club
   const clubStatsMap = useMemo(() => {
     const map: Record<string, ReturnType<typeof getDetailedClubStats>> = {};
     clubs.forEach(c => {
-      map[c.id] = getDetailedClubStats(c, onlineTournaments);
+      map[c.id] = getDetailedClubStats(c, allTournamentSources);
     });
     return map;
-  }, [clubs, onlineTournaments]);
+  }, [clubs, allTournamentSources]);
 
   // Handle clicking a member to view their complete Athlete Profile
   const handleMemberClick = (m: any) => {
@@ -820,7 +946,11 @@ export const VscSystemClubsDirectory: React.FC<VscSystemClubsDirectoryProps> = (
     const contributions = stats?.memberContributions || {};
 
     return [...(selectedClub.members || [])].map(m => {
-      const contrib = contributions[m.userId] || { shots: 0, hits: 0, accuracy: 0 };
+      const contrib = (m.userId && contributions[m.userId]) ||
+                      (m.athleteId && contributions[m.athleteId]) ||
+                      (m.email && contributions[m.email.toLowerCase().trim()]) ||
+                      (m.name && contributions[m.name.toLowerCase().trim()]) ||
+                      { shots: 0, hits: 0, accuracy: 0 };
       return {
         ...m,
         shots: contrib.shots,
