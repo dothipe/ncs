@@ -3166,8 +3166,14 @@ export default function App() {
   // Save/Transfer scores from input board to Ghi Điểm page
   const handleSaveInputScoresToMain = () => {
     const activeInputList = competitionMode === "individual" ? inputAthletes : teamInputAthletes;
-    if (activeInputList.length === 0) {
-      alert(language === "en" ? "There are no athletes in the scoring grid!" : "Không có vận động viên nào trong bảng Nhập Điểm!");
+    const myEmail = (currentUser?.email || "anonymous").toLowerCase().trim();
+    const refereeInputList = activeInputList.filter((a) => {
+      const caller = (a.calledBy || "").toLowerCase().trim();
+      return caller === myEmail || !caller;
+    });
+
+    if (refereeInputList.length === 0) {
+      alert(language === "en" ? "There are no athletes called by you in the scoring grid!" : "Không có vận động viên nào do bạn gọi trong bảng Nhập Điểm!");
       return;
     }
     setSaveStatus(null);
@@ -3179,10 +3185,16 @@ export default function App() {
     setSaveStatus(null);
 
     const activeInputList = competitionMode === "individual" ? inputAthletes : teamInputAthletes;
-    if (activeInputList.length === 0) {
+    const myEmail = (currentUser?.email || "anonymous").toLowerCase().trim();
+    const refereeInputList = activeInputList.filter((a) => {
+      const caller = (a.calledBy || "").toLowerCase().trim();
+      return caller === myEmail || !caller;
+    });
+
+    if (refereeInputList.length === 0) {
       setSaveStatus({ 
         success: false, 
-        message: language === "en" ? "There are no athletes in the scoring grid!" : "Không có vận động viên nào trong bảng Nhập Điểm!" 
+        message: language === "en" ? "There are no athletes called by you in the scoring grid!" : "Không có vận động viên nào do bạn gọi trong bảng Nhập Điểm!" 
       });
       setIsSavingScores(false);
       return;
@@ -3195,7 +3207,7 @@ export default function App() {
 
     if (competitionMode === "individual") {
       const mergedAthletes = [...athletes];
-      activeInputList.forEach((ia) => {
+      refereeInputList.forEach((ia) => {
         const existingIdx = mergedAthletes.findIndex((a) => a.id === ia.id);
         if (existingIdx !== -1) {
           mergedAthletes[existingIdx] = {
@@ -3218,10 +3230,12 @@ export default function App() {
         }
       });
       nextAthletes = mergedAthletes;
-      nextInputAthletes = [];
+      nextInputAthletes = inputAthletes.filter((ia) => {
+        return !refereeInputList.some((r) => r.id === ia.id);
+      });
     } else {
       const mergedAthletes = [...teamAthletes];
-      activeInputList.forEach((ia) => {
+      refereeInputList.forEach((ia) => {
         const existingIdx = mergedAthletes.findIndex((a) => a.id === ia.id);
         if (existingIdx !== -1) {
           mergedAthletes[existingIdx] = {
@@ -3244,10 +3258,12 @@ export default function App() {
         }
       });
       nextTeamAthletes = mergedAthletes;
-      nextTeamInputAthletes = [];
+      nextTeamInputAthletes = teamInputAthletes.filter((ia) => {
+        return !refereeInputList.some((r) => r.id === ia.id);
+      });
     }
 
-    const firstImported = activeInputList[0];
+    const firstImported = refereeInputList[0];
     if (firstImported) {
       setPendingScrollAthleteId(firstImported.id);
     }
@@ -3290,7 +3306,7 @@ export default function App() {
 
     // Asynchronously perform background Firestore update
     if (activeHistoryId && activeHistoryId.startsWith("tour-")) {
-      const athleteNames = activeInputList.map((a) => `${a.name} (Mã: ${a.id})`).join(", ");
+      const athleteNames = refereeInputList.map((a) => `${a.name} (Mã: ${a.id})`).join(", ");
       handleAddAuditLog(language === "en"
         ? `Saved scores for athletes: ${athleteNames}`
         : `Đã lưu và đồng bộ điểm cho các VĐV: ${athleteNames}`
@@ -4071,6 +4087,11 @@ export default function App() {
   const currentShotsCount = competitionMode === "individual" ? shotsCount : teamShotsCount;
   const currentAthletes = competitionMode === "individual" ? athletes : teamAthletes;
   const currentInputAthletes = competitionMode === "individual" ? inputAthletes : teamInputAthletes;
+  const myEmailForInput = (currentUser?.email || "anonymous").toLowerCase().trim();
+  const myCalledInputAthletes = currentInputAthletes.filter((a) => {
+    const caller = (a.calledBy || "").toLowerCase().trim();
+    return caller === myEmailForInput || !caller;
+  });
 
   // Filter team athletes for the scoring board view list
   const filteredTeamAthletesScoring = teamAthletes.filter((a) => {
@@ -4296,7 +4317,7 @@ export default function App() {
                   ? (currentTournamentDoc?.inputAthletes || [])
                   : (currentTournamentDoc?.teamInputAthletes || []);
                 const documentActivePlayer = activeListInDoc.find((a) => a.id === m.id);
-                const otherRefereeEmail = !isGlobalAdmin && documentActivePlayer?.calledBy && 
+                const otherRefereeEmail = documentActivePlayer?.calledBy && 
                   documentActivePlayer.calledBy.toLowerCase().trim() !== (currentUser?.email || "anonymous").toLowerCase().trim()
                   ? documentActivePlayer.calledBy
                   : null;
@@ -4448,7 +4469,7 @@ export default function App() {
                     const documentActivePlayer = activeListInDoc.find((a) => a.id === m.id);
                     const caller = documentActivePlayer?.calledBy ? documentActivePlayer.calledBy.toLowerCase().trim() : "";
                     const myEmail = currentUser?.email ? currentUser.email.toLowerCase().trim() : "anonymous";
-                    const otherRefereeEmail = !isGlobalAdmin && caller && caller !== "anonymous" && caller !== myEmail
+                    const otherRefereeEmail = caller && caller !== "anonymous" && caller !== myEmail
                       ? documentActivePlayer.calledBy
                       : null;
                     if (otherRefereeEmail) {
@@ -5875,7 +5896,7 @@ export default function App() {
                     ? (currentTournamentDoc?.inputAthletes || [])
                     : (currentTournamentDoc?.teamInputAthletes || []);
                   const docActiveInputPlayer = activeInputListInDoc.find((a) => a.id === athlete.id);
-                  const isLockedByOtherReferee = !isGlobalAdmin && (!!(athlete.calledBy && 
+                  const isLockedByOtherReferee = (!!(athlete.calledBy && 
                     athlete.calledBy.toLowerCase().trim() !== (currentUser?.email || "anonymous").toLowerCase().trim()) || 
                     !!(docActiveInputPlayer?.calledBy && docActiveInputPlayer.calledBy.toLowerCase().trim() !== (currentUser?.email || "anonymous").toLowerCase().trim()));
                   const lockedByRefereeEmail = athlete.calledBy || docActiveInputPlayer?.calledBy || "";
@@ -6247,7 +6268,7 @@ export default function App() {
                   const isFirst = originalIndex === 0;
                   const isLast = originalIndex === currentInputAthletes.length - 1;
                   
-                  const isLockedByOtherReferee = !isGlobalAdmin && (!!(athlete.calledBy && 
+                  const isLockedByOtherReferee = (!!(athlete.calledBy && 
                     athlete.calledBy.toLowerCase().trim() !== (currentUser?.email || "anonymous").toLowerCase().trim()));
                   const lockedByRefereeEmail = athlete.calledBy || "";
 
@@ -6293,14 +6314,14 @@ export default function App() {
                   <Plus className="w-8 h-8 stroke-[3]" />
                 </button>
 
-                {currentInputAthletes.length > 0 && (
+                {myCalledInputAthletes.length > 0 && (
                   <button
                     onClick={handleSaveInputScoresToMain}
                     className="h-14 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl flex items-center justify-center gap-2 shadow-md hover:shadow-lg hover:scale-105 transition-all duration-150 cursor-pointer border border-emerald-700 text-sm uppercase tracking-wider"
                     title="Lưu điểm và tự động chuyển sang bảng Ghi Điểm"
                     id="save-input-scores-btn"
                   >
-                    <Save className="w-5 h-5 stroke-[2.5]" /> Lưu Điểm ({currentInputAthletes.length})
+                    <Save className="w-5 h-5 stroke-[2.5]" /> Lưu Điểm ({myCalledInputAthletes.length})
                   </button>
                 )}
               </div>
