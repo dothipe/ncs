@@ -272,7 +272,7 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
                 <X className="w-3 h-3" /> {language === "en" ? "Cancel" : "Hủy"}
               </button>
             </>
-          ) : !isLockedByOtherReferee ? (
+          ) : !isLockedByOtherReferee && (isInputTab || isScoringEditAuthorized) ? (
             <div className="flex items-center gap-1.5">
               <button
                 onClick={() => onMoveAthlete && onMoveAthlete(athlete.id, "up")}

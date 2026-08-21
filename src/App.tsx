@@ -2703,8 +2703,10 @@ export default function App() {
   const handleDeleteAthlete = (athleteId: string) => {
     if (competitionMode === "individual") {
       setAthletes((prev) => prev.filter((a) => a.id !== athleteId));
+      setInputAthletes((prev) => prev.filter((a) => a.id !== athleteId));
     } else {
       setTeamAthletes((prev) => prev.filter((a) => a.id !== athleteId));
+      setTeamInputAthletes((prev) => prev.filter((a) => a.id !== athleteId));
     }
   };
 
@@ -3481,6 +3483,10 @@ export default function App() {
 
   // Instantly triggers adding athlete view (when clicking the giant '+' button at bottom)
   const handleAddBlankAthlete = () => {
+    if (userRole !== "admin") {
+      alert(language === "en" ? "Only Admin can add or call athletes from this page!" : "Chỉ Admin mới có quyền gọi VĐV vào giải đấu từ phần GHI ĐIỂM này!");
+      return;
+    }
     if (!isScoringEditAuthorized) {
       setPendingAddAthlete(true);
       setShowUnlockScoreModal(true);
@@ -6193,16 +6199,18 @@ export default function App() {
               )}
 
               {/* The giant Centered button below cards list as described by User */}
-              <div className="flex justify-center items-center py-6">
-                <button
-                  onClick={handleAddBlankAthlete}
-                  className="w-14 h-14 bg-white hover:bg-rose-50 border-2 border-rose-500 text-rose-500 rounded-xl flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 transition-all duration-150 cursor-pointer"
-                  title="Thêm vận động viên mới"
-                  id="add-athlete-giant-btn"
-                >
-                  <Plus className="w-8 h-8 stroke-[3]" />
-                </button>
-              </div>
+              {userRole === "admin" && (
+                <div className="flex justify-center items-center py-6">
+                  <button
+                    onClick={handleAddBlankAthlete}
+                    className="w-14 h-14 bg-white hover:bg-rose-50 border-2 border-rose-500 text-rose-500 rounded-xl flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 transition-all duration-150 cursor-pointer"
+                    title="Thêm vận động viên mới"
+                    id="add-athlete-giant-btn"
+                  >
+                    <Plus className="w-8 h-8 stroke-[3]" />
+                  </button>
+                </div>
+              )}
 
             </div>
           )}
