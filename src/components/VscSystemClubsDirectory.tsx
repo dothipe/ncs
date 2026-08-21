@@ -158,42 +158,33 @@ const getDetailedClubStats = (club: SystemClub, tournamentsList: any[]) => {
     });
 
     tournamentMembers.forEach(ath => {
-      const distances = tour.distances || [];
-      distances.forEach((dist: any) => {
-        const hits = ath.scores?.[dist.id] || [];
-        const wasShot = Array.isArray(hits) && hits.length > 0 && hits.some(v => v !== null && v !== undefined);
-        
-        if (wasShot) {
-          const hitCount = getHitCount(hits);
-          const shotsCount = tour.shotsCount || 10;
-          const isPointMode = shotsCount === 1 && tour.directMaxPoints !== undefined && tour.directMaxPoints > 0;
-          
-          let distShots = shotsCount;
-          let distHits = hitCount;
-          
-          if (isPointMode) {
-            const mult = dist.multiplier || 1;
-            distShots = (tour.directMaxPoints || 1) * mult;
-            distHits = hitCount * mult;
-          }
-          
-          totalShots += distShots;
-          totalHits += distHits;
+      let memberShots = 0;
+      let memberHits = 0;
 
-          // Find the actual club member reference to add contributions
-          const matchedMember = club.members?.find(m => 
-            (ath.email && m.email?.toLowerCase().trim() === ath.email.toLowerCase().trim()) || 
-            (ath.id && m.athleteId?.toLowerCase().trim() === ath.id.toLowerCase().trim())
-          );
-
-          if (matchedMember) {
-            const current = memberContributions[matchedMember.userId] || { shots: 0, hits: 0, accuracy: 0 };
-            current.shots += distShots;
-            current.hits += distHits;
-            memberContributions[matchedMember.userId] = current;
+      if (ath.scores) {
+        Object.values(ath.scores).forEach((scoreArr) => {
+          if (Array.isArray(scoreArr)) {
+            memberShots += scoreArr.length;
+            memberHits += scoreArr.filter((h) => h === true).length;
           }
-        }
-      });
+        });
+      }
+
+      totalShots += memberShots;
+      totalHits += memberHits;
+
+      // Find the actual club member reference to add contributions
+      const matchedMember = club.members?.find(m => 
+        (ath.email && m.email?.toLowerCase().trim() === ath.email.toLowerCase().trim()) || 
+        (ath.id && m.athleteId?.toLowerCase().trim() === ath.id.toLowerCase().trim())
+      );
+
+      if (matchedMember) {
+        const current = memberContributions[matchedMember.userId] || { shots: 0, hits: 0, accuracy: 0 };
+        current.shots += memberShots;
+        current.hits += memberHits;
+        memberContributions[matchedMember.userId] = current;
+      }
     });
 
     // Count Individual Podiums

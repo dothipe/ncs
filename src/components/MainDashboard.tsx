@@ -1997,11 +1997,13 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
     const badgeSize = place === 1 ? "w-5 h-5" : "w-4 h-4";
     const Icon = place === 1 ? Trophy : place === 2 ? Medal : Award;
 
-    if (club && club.avatarUrl) {
+    const clubLogoUrl = club ? ((club as any).logoUrl || club.avatarUrl) : null;
+
+    if (club && clubLogoUrl) {
       return (
         <div className="relative flex justify-center items-center mb-1">
           <img 
-            src={club.avatarUrl} 
+            src={clubLogoUrl} 
             alt={teamName} 
             className={`${size} rounded-full object-cover border-2 ${borderColor} shadow-md`}
             referrerPolicy="no-referrer"

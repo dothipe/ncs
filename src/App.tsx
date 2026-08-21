@@ -6174,6 +6174,7 @@ export default function App() {
                   teamDirectMaxShots={teamDirectMaxShots}
                   directMaxPoints={directMaxPoints}
                   teamDirectMaxPoints={teamDirectMaxPoints}
+                  clubs={clubs}
                 />
               )}
             </div>

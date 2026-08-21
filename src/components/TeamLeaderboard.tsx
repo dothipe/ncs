@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Athlete, DistanceConfig } from "../types";
+import { Athlete, DistanceConfig, Club } from "../types";
 import { Users, Award, Shield, Trophy, Medal } from "lucide-react";
 import { calculateRounds, getHitCount } from "../utils/qualification";
 
@@ -13,6 +13,7 @@ interface TeamLeaderboardProps {
   directMaxPoints?: number;
   teamDirectMaxPoints?: number;
   language?: "vi" | "en";
+  clubs?: Club[];
 }
 
 interface TeamMemberData {
@@ -45,6 +46,7 @@ export const TeamLeaderboard: React.FC<TeamLeaderboardProps> = ({
   directMaxPoints,
   teamDirectMaxPoints,
   language = "vi",
+  clubs = [],
 }) => {
   const [activeTab, setActiveTab] = useState<"survival" | "allRound">("survival");
 
@@ -1160,14 +1162,40 @@ export const TeamLeaderboard: React.FC<TeamLeaderboardProps> = ({
                     </div>
 
                     <div className="mt-4">
-                      <h3 className="text-base font-extrabold text-slate-800 dark:text-white line-clamp-2 flex items-center gap-1.5" title={team.teamName}>
-                        {team.teamName}
-                        {isIndividualTeam && (
-                          <span className="text-[9px] text-gray-500 dark:text-gray-400 font-normal italic px-1 bg-gray-150 dark:bg-slate-800 rounded shrink-0">
-                            {language === "en" ? "Free" : "Tự Do"}
-                          </span>
-                        )}
-                      </h3>
+                      <div className="flex items-center gap-2.5">
+                        {(() => {
+                          const matchedClub = clubs?.find(
+                            (c) =>
+                              c.name.trim().toLowerCase() === team.teamName.trim().toLowerCase() ||
+                              c.id.trim().toLowerCase() === team.teamName.trim().toLowerCase()
+                          );
+                          const clubLogoUrl = matchedClub ? ((matchedClub as any).logoUrl || matchedClub.avatarUrl) : null;
+                          if (clubLogoUrl) {
+                            return (
+                              <img 
+                                src={clubLogoUrl} 
+                                alt={team.teamName} 
+                                className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-slate-750 bg-white shrink-0 shadow-xs"
+                                referrerPolicy="no-referrer"
+                              />
+                            );
+                          }
+                          const initials = team.teamName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase() || "?";
+                          return (
+                            <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 shrink-0 font-bold text-xs uppercase shadow-xs">
+                              {initials}
+                            </div>
+                          );
+                        })()}
+                        <h3 className="text-base font-extrabold text-slate-800 dark:text-white line-clamp-2 flex items-center gap-1.5" title={team.teamName}>
+                          {team.teamName}
+                          {isIndividualTeam && (
+                            <span className="text-[9px] text-gray-500 dark:text-gray-400 font-normal italic px-1 bg-gray-150 dark:bg-slate-800 rounded shrink-0">
+                              {language === "en" ? "Free" : "Tự Do"}
+                            </span>
+                          )}
+                        </h3>
+                      </div>
 
                       {activeTab === "survival" && competitionMode === "team" && (
                         <div className="mt-2.5">

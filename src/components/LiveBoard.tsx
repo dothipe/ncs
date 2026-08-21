@@ -945,11 +945,13 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
     const badgeSize = place === 1 ? "w-4 h-4" : "w-3.5 h-3.5";
     const Icon = place === 1 ? Trophy : place === 2 ? Medal : Award;
 
-    if (club && club.avatarUrl) {
+    const logoUrl = club ? ((club as any).logoUrl || club.avatarUrl) : null;
+
+    if (club && logoUrl) {
       return (
         <div className="relative flex justify-center items-center mb-2">
           <img 
-            src={club.avatarUrl} 
+            src={logoUrl} 
             alt={teamName} 
             className={`${size} rounded-full object-cover border ${borderColor} shadow-md`}
             referrerPolicy="no-referrer"
