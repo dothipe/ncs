@@ -5835,17 +5835,17 @@ export default function App() {
 
               {/* Protection Indicator Banner */}
               <div className={`p-4 rounded-2xl border-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 transition-all ${
-                isScoringEditAuthorized 
+                userRole === "admin" && isScoringEditAuthorized 
                   ? "bg-emerald-50/70 border-emerald-300 dark:bg-emerald-950/20 dark:border-emerald-900/60" 
                   : "bg-amber-50/75 border-amber-300 dark:bg-amber-950/20 dark:border-amber-900/60"
               }`}>
                 <div className="flex gap-3 items-center">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    isScoringEditAuthorized 
+                    userRole === "admin" && isScoringEditAuthorized 
                       ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400" 
                       : "bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400"
                   }`}>
-                    {isScoringEditAuthorized ? (
+                    {userRole === "admin" && isScoringEditAuthorized ? (
                       <Unlock className="w-5 h-5 animate-pulse" />
                     ) : (
                       <Lock className="w-5 h-5" />
@@ -5853,33 +5853,39 @@ export default function App() {
                   </div>
                   <div>
                     <span className="font-bold block text-sm text-slate-800 dark:text-slate-200">
-                      {isScoringEditAuthorized ? "Chế độ: ĐANG GHI ĐIỂM (Chỉnh Sửa Live)" : "Chế độ: ĐANG XEM (Đóng băng bảng điểm)"}
+                      {userRole === "admin" 
+                        ? (isScoringEditAuthorized ? "Chế độ: ĐANG GHI ĐIỂM (Chỉnh Sửa Live)" : "Chế độ: ĐANG XEM (Đóng băng bảng điểm)")
+                        : "Chế độ: XEM ĐIỂM (Đóng băng bảng điểm)"}
                     </span>
                     <p className="text-[11px] text-gray-500 dark:text-slate-400 leading-tight">
-                      {isScoringEditAuthorized 
-                        ? "Bảng điểm đã được mở khóa. Bạn có thể ghi điểm trực tiếp." 
-                        : "Nhấp vào bất kỳ phát bắn nào sẽ hiển thị cảnh báo mở khóa để tránh click nhầm."}
+                      {userRole === "admin"
+                        ? (isScoringEditAuthorized 
+                          ? "Bảng điểm đã được mở khóa. Bạn có thể ghi điểm trực tiếp." 
+                          : "Nhấp vào bất kỳ phát bắn nào sẽ hiển thị cảnh báo mở khóa để tránh click nhầm.")
+                        : "Chỉ Ban tổ chức / Admin mới có quyền sửa điểm trực tiếp tại đây. Trọng tài chỉ có quyền xem."}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex gap-2 self-end sm:self-auto shrink-0">
-                  {isScoringEditAuthorized ? (
-                    <button
-                      onClick={() => setIsScoringEditAuthorized(false)}
-                      className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Lock className="w-3.5 h-3.5" /> {language === "en" ? "Lock: View Only" : "Lock: Chuyển Chế độ Xem"}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setIsScoringEditAuthorized(true)}
-                      className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-extrabold rounded-lg shadow-md transition-all flex items-center gap-1.5 cursor-pointer focus:ring-2 focus:ring-indigo-300"
-                    >
-                      <Unlock className="w-3.5 h-3.5 animate-bounce" /> {language === "en" ? "Unlock: Edit Scores" : "Unlock: Ghi Điểm"}
-                    </button>
-                  )}
-                </div>
+                {userRole === "admin" && (
+                  <div className="flex gap-2 self-end sm:self-auto shrink-0">
+                    {isScoringEditAuthorized ? (
+                      <button
+                        onClick={() => setIsScoringEditAuthorized(false)}
+                        className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Lock className="w-3.5 h-3.5" /> {language === "en" ? "Lock: View Only" : "Lock: Chuyển Chế độ Xem"}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setIsScoringEditAuthorized(true)}
+                        className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-extrabold rounded-lg shadow-md transition-all flex items-center gap-1.5 cursor-pointer focus:ring-2 focus:ring-indigo-300"
+                      >
+                        <Unlock className="w-3.5 h-3.5 animate-bounce" /> {language === "en" ? "Unlock: Edit Scores" : "Unlock: Ghi Điểm"}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Informative tips box if athletes is zero */}
@@ -5928,7 +5934,7 @@ export default function App() {
                       isFirst={isFirst}
                       isLast={isLast}
                       onUpdateSoloHits={handleUpdateSoloHits}
-                      isScoringEditAuthorized={isScoringEditAuthorized}
+                      isScoringEditAuthorized={userRole === "admin" && isScoringEditAuthorized}
                       onTriggerUnlockModal={() => setShowUnlockScoreModal(true)}
                       onUpdateDirectScore={handleUpdateDirectScore}
                       directMaxPoints={competitionMode === "individual" ? directMaxPoints : teamDirectMaxPoints}
@@ -6258,8 +6264,8 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Informative tips box if currentInputAthletes is zero */}
-              {currentInputAthletes.length === 0 && (
+              {/* Informative tips box if activeFilteredInputAthletes is zero */}
+              {activeFilteredInputAthletes.length === 0 && (
                 <div className="text-center p-12 border-2 border-dashed border-gray-300 dark:border-slate-800 rounded-3xl bg-white dark:bg-slate-900 shadow-sm">
                   <ClipboardCheck className="w-12 h-12 text-gray-400 dark:text-slate-600 mx-auto mb-3" />
                   <h3 className="text-lg font-bold text-gray-700 dark:text-slate-300">

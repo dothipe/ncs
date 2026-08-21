@@ -242,7 +242,7 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
                       ⚠️ {language === "en" ? "WITHDRAWN" : "BỎ THI"}
                     </span>
                   )}
-                  {isLockedByOtherReferee && (
+                  {isInputTab && isLockedByOtherReferee && (
                     <span className="text-[11px] text-amber-700 dark:text-amber-350 bg-amber-50 dark:bg-amber-950/30 px-2.5 py-1 rounded-full font-extrabold border border-amber-200 dark:border-amber-900/40 shrink-0 self-start sm:self-auto flex items-center gap-1.5 leading-none shadow-sm animate-pulse">
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                       🔒 {language === "en" ? "SCORING IN PROGRESS BY REFEREE" : "ĐANG GHI ĐIỂM BỞI TRỌNG TÀI"}: {lockedByRefereeEmail}
