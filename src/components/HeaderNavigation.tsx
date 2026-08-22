@@ -836,7 +836,7 @@ export function HeaderNavigation({
                       }`}
                     >
                       <Users className="w-4 h-4 shrink-0 text-amber-500" />
-                      <span>{language === "en" ? "System Athletes" : "VĐV Hệ Thống VSC"}</span>
+                      <span>{language === "en" ? "System Athletes" : "VĐV Hệ Thống"}</span>
                     </button>
 
                     {/* VSC System Clubs */}
