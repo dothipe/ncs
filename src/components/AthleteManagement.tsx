@@ -2289,32 +2289,36 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
                   <button
                     type="button"
                     onClick={async () => {
-                      // Deeply search for linked email and avatar on Firestore
+                      if (!formEmail || !formEmail.trim()) {
+                        alert(language === "en" 
+                          ? "Please enter/provide the athlete's Email first!" 
+                          : "Vui lòng nhập Email của hồ sơ vận động viên trước để đồng bộ ảnh đại diện!"
+                        );
+                        return;
+                      }
+                      const emailTrimmed = formEmail.trim().toLowerCase();
+
                       try {
-                        const result = await findLinkedEmailAndAvatarForAthlete(formId, formName, formEmail);
+                        const result = await findLinkedEmailAndAvatarForAthlete(formId, formName, emailTrimmed);
                         if (result && result.avatarUrl) {
                           setFormAvatarUrl(result.avatarUrl);
-                          if (result.email && (!formEmail || !formEmail.trim())) {
-                            setFormEmail(result.email);
-                          }
                           alert(language === "en" 
-                            ? `Successfully synced Google avatar for athlete "${formName}"!` 
-                            : `Đã đồng bộ thành công ảnh đại diện từ Google cho vận động viên "${formName}"!`
+                            ? `Successfully synced Google avatar for email "${emailTrimmed}"!` 
+                            : `Đã đồng bộ thành công ảnh đại diện Google từ email "${emailTrimmed}"!`
                           );
                         } else {
-                          // Fallback to active user session if profile database query is empty but emails match
-                          const emailTrimmed = formEmail.trim().toLowerCase();
+                          // Fallback to active user session if emails match and user has photoURL
                           if (currentUser?.email && emailTrimmed === currentUser.email.toLowerCase() && currentUser.photoURL) {
                             setFormAvatarUrl(currentUser.photoURL);
                             alert(language === "en" 
                               ? `Successfully synced Google avatar from your active session!` 
-                              : `Đã đồng bộ thành công ảnh đại diện Google từ phiên hoạt động của bạn!`
+                              : `Đã đồng bộ thành công ảnh đại diện Google từ phiên đăng nhập hiện tại của bạn!`
                             );
                             return;
                           }
                           alert(language === "en" 
-                            ? `Could not find any Google account or avatar linked with "${formName}" (${formEmail || "No Email"}).` 
-                            : `Không tìm thấy tài khoản Google hoặc ảnh đại diện nào liên kết với "${formName}" (${formEmail || "Chưa nhập Email"}).`
+                            ? `Could not find any Google account or avatar linked with email "${emailTrimmed}".` 
+                            : `Không tìm thấy tài khoản Google hoặc ảnh đại diện nào khớp với email "${emailTrimmed}".`
                           );
                         }
                       } catch (e) {

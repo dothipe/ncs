@@ -888,66 +888,24 @@ export async function getUserProfileByEmail(email: string) {
 }
 
 /**
- * Searches the database deeply to find the linked email and Google avatar of an athlete.
- * Checks: 1) direct email search, 2) club members list for athleteId matching, 3) users by name.
+ * Searches the database to find the linked Google avatar of an athlete strictly by their email.
+ * This is 100% focused on the email and does not match by name, ID or any other data.
  */
 export async function findLinkedEmailAndAvatarForAthlete(
   athleteId: string,
   athleteName: string,
   athleteEmail?: string
 ): Promise<{ email: string; avatarUrl: string } | null> {
-  // 1. Try direct search using the provided email
-  if (athleteEmail && athleteEmail.trim()) {
-    const profile = await getUserProfileByEmail(athleteEmail.trim());
-    if (profile && (profile.avatarUrl || profile.photoURL)) {
-      return {
-        email: athleteEmail.trim(),
-        avatarUrl: profile.avatarUrl || profile.photoURL
-      };
-    }
-  }
+  const cleanEmail = athleteEmail ? athleteEmail.trim().toLowerCase() : "";
+  if (!cleanEmail) return null;
 
-  // 2. Search club members across all clubs for a matching athleteId
-  try {
-    const clubsSnap = await getDocs(collection(db, "vsc_system_clubs"));
-    for (const docSnap of clubsSnap.docs) {
-      const club = docSnap.data();
-      const members = club.members || [];
-      const matchedMember = members.find((m: any) => m.athleteId && m.athleteId.trim().toLowerCase() === athleteId.trim().toLowerCase());
-      if (matchedMember && matchedMember.email) {
-        const profile = await getUserProfileByEmail(matchedMember.email);
-        if (profile && (profile.avatarUrl || profile.photoURL)) {
-          return {
-            email: matchedMember.email,
-            avatarUrl: profile.avatarUrl || profile.photoURL
-          };
-        }
-      }
-    }
-  } catch (err) {
-    console.error("Error searching clubs for athlete linked email:", err);
+  const profile = await getUserProfileByEmail(cleanEmail);
+  if (profile && (profile.avatarUrl || profile.photoURL)) {
+    return {
+      email: cleanEmail,
+      avatarUrl: profile.avatarUrl || profile.photoURL
+    };
   }
-
-  // 3. Search all registered users by displayName matching the athlete's name
-  try {
-    const usersSnap = await getDocs(collection(db, "users"));
-    const matchedUser = usersSnap.docs.find(docSnap => {
-      const data = docSnap.data();
-      return data.displayName && data.displayName.trim().toLowerCase() === athleteName.trim().toLowerCase();
-    });
-    if (matchedUser) {
-      const data = matchedUser.data();
-      if (data.email && (data.avatarUrl || data.photoURL)) {
-        return {
-          email: data.email,
-          avatarUrl: data.avatarUrl || data.photoURL
-        };
-      }
-    }
-  } catch (err) {
-    console.error("Error searching users collection for matching displayName:", err);
-  }
-
   return null;
 }
 
