@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useLanguage } from "../context/LanguageContext";
 import { MatchHistoryItem } from "../types";
@@ -20,6 +20,8 @@ interface HistoryPanelProps {
   startDate?: string;
   endDate?: string;
   onUpdateHistory?: React.Dispatch<React.SetStateAction<MatchHistoryItem[]>>;
+  activeHistoryId?: string | null;
+  onlineTournaments?: any[];
 }
 
 export const HistoryPanel: React.FC<HistoryPanelProps> = ({
@@ -37,6 +39,8 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
   startDate = "",
   endDate = "",
   onUpdateHistory,
+  activeHistoryId,
+  onlineTournaments = [],
 }) => {
   const { language } = useLanguage();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -60,6 +64,44 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
   const fileInputRefFull = useRef<HTMLInputElement>(null);
   const fileInputRefRestore = useRef<HTMLInputElement>(null);
   const multiFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Combine local history and online tournaments for backup selection
+  const combinedHistoryList = useMemo(() => {
+    const list: MatchHistoryItem[] = [...history];
+
+    if (onlineTournaments) {
+      onlineTournaments.forEach((t) => {
+        if (!list.some((item) => item.id === t.id)) {
+          // Convert online tournament to MatchHistoryItem format
+          const mappedItem: MatchHistoryItem = {
+            id: t.id,
+            date: t.createdAt 
+              ? (typeof t.createdAt.toDate === "function" 
+                  ? t.createdAt.toDate().toISOString() 
+                  : (t.createdAt.seconds 
+                      ? new Date(t.createdAt.seconds * 1000).toISOString() 
+                      : new Date(t.createdAt).toISOString()))
+              : new Date().toISOString(),
+            matchName: t.matchName,
+            shotCount: t.shotsCount || 10,
+            distances: t.distances || [],
+            athletes: t.athletes || [],
+            masterCount: t.masterAthletes ? t.masterAthletes.length : (t.teamMasterAthletes ? t.teamMasterAthletes.length : 0),
+            masterAthletes: t.masterAthletes || t.teamMasterAthletes || [],
+            teamDistances: t.teamDistances || [],
+            teamShotCount: t.teamShotsCount || 10,
+            teamAthletes: t.teamAthletes || [],
+            startDate: t.startDate || "",
+            endDate: t.endDate || "",
+            clubs: t.clubs || []
+          };
+          list.push(mappedItem);
+        }
+      });
+    }
+
+    return list;
+  }, [history, onlineTournaments]);
 
   const [deviceBackups, setDeviceBackups] = useState<{ id: string; timestamp: number; matchName: string; isTimeline: boolean }[]>([]);
 
@@ -147,13 +189,13 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
 
   // Open download selector modal with all checked by default
   const handleOpenExportModal = () => {
-    setSelectedExportIds(history.map(h => h.id));
+    setSelectedExportIds(combinedHistoryList.map(h => h.id));
     setIsExportModalOpen(true);
   };
 
   // Download selected backups under a common JSON container
   const handleDownloadSelectedBackups = () => {
-    const selectedTournaments = history.filter(h => selectedExportIds.includes(h.id));
+    const selectedTournaments = combinedHistoryList.filter(h => selectedExportIds.includes(h.id));
     if (selectedTournaments.length === 0) return;
 
     const backupData = {
@@ -344,167 +386,171 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
         </span>
       )}
 
-      {/* MANUAL HISTORY SAVE CARD */}
-      {(userRole === "admin" || userRole === "subAdmin") && onSaveCurrentSessionToHistory && (
-        <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-4.5 rounded-2xl shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="text-left">
-            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-              <Award className="w-4.5 h-4.5 text-emerald-600 animate-pulse" />
-              {language === "en" ? "Record Current Tournament (Manual Backup)" : "Ghi Lịch Sử Giải Hiện Tại (Manual Backup)"}
-            </h3>
-            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 max-w-xl">
-              {language === "en" 
-                ? "Manually archive the current state of scores into local storage history." 
-                : "Lưu trữ thủ công toàn bộ trạng thái điểm số hiện tại của giải đấu vào kho lịch sử thiết bị hiện tại."}
-            </p>
-          </div>
-
-          <div className="flex gap-2 w-full sm:w-auto items-center shrink-0">
-            <input
-              type="text"
-              placeholder={matchName || (language === "en" ? "e.g. Qualification..." : "e.g. Vòng Sơ Loại...")}
-              value={sessionSaveName}
-              onChange={(e) => setSessionSaveName(e.target.value)}
-              className="px-3 py-2 text-xs bg-slate-50 dark:bg-slate-950 border dark:border-slate-800 border-gray-300 rounded-xl focus:outline-none w-full sm:w-56 font-bold text-slate-800 dark:text-slate-100"
-            />
-            <button
-              onClick={() => {
-                onSaveCurrentSessionToHistory(sessionSaveName || matchName);
-                setSessionSaveName("");
-              }}
-              className="py-2 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl cursor-pointer whitespace-nowrap transition-colors shadow-sm"
-            >
-              {language === "en" ? "Save Match" : "Ghi Lại Giải"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ADMIN & SUB-ADMIN AUTO-BACKUP HỘP ĐEN DASHBOARD */}
-      {(userRole === "admin" || userRole === "subAdmin") && currentStatus === "active" && (
-        <div className="bg-slate-900 border border-slate-800 text-white p-5 rounded-2xl shadow-lg relative overflow-hidden">
-          {/* Subtle decoration */}
-          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-24 h-24 bg-rose-500/5 rounded-full blur-xl pointer-events-none" />
-
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 border-b border-slate-800 pb-3 mb-4">
-            <div className="flex items-center gap-2.5">
-              <div className="bg-indigo-500/10 p-2 rounded-xl text-indigo-400 border border-indigo-500/20 shrink-0">
-                <Database className="w-5 h-5 animate-pulse" />
-              </div>
-              <div>
-                <h3 className="text-sm sm:text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
-                  {language === "en" ? "BLACKBOX INTERNAL DEVICE BACKUPS" : "HỘP ĐEN SAO LƯU NỘI BỘ (DEVICE BACKUPS)"}
-                  <span className="bg-rose-500 text-white text-[9px] font-black tracking-widest px-1.5 py-0.5 rounded-full uppercase shrink-0 animate-pulse">
-                    ADMIN & SUB-ADMIN
-                  </span>
+      {activeHistoryId ? (
+        <>
+          {/* MANUAL HISTORY SAVE CARD */}
+          {(userRole === "admin" || userRole === "subAdmin") && onSaveCurrentSessionToHistory && (
+            <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-4.5 rounded-2xl shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div className="text-left">
+                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                  <Award className="w-4.5 h-4.5 text-emerald-600 animate-pulse" />
+                  {language === "en" ? "Record Current Tournament (Manual Backup)" : "Ghi Lịch Sử Giải Hiện Tại (Manual Backup)"}
                 </h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 max-w-xl">
                   {language === "en" 
-                    ? "Autosave state to Organizer's device (Overwrite every 5 min, timeline point every 15 min - saves 5 recent copies)." 
-                    : "Tự động lưu trạng thái xuống thiết bị của Ban Tổ Chức (Ghi đè mỗi 5 phút, tạo dòng thời gian mỗi 15 phút - lưu 5 bản gần nhất)."}
+                    ? "Manually archive the current state of scores into local storage history." 
+                    : "Lưu trữ thủ công toàn bộ trạng thái điểm số hiện tại của giải đấu vào kho lịch sử thiết bị hiện tại."}
                 </p>
               </div>
-            </div>
-          </div>
 
-          {deviceBackups.length === 0 ? (
-            <div className="bg-slate-950/40 p-5 rounded-xl border border-slate-800 text-center text-xs text-slate-400 font-medium">
-              <Clock className="w-8 h-8 text-slate-600 mx-auto mb-2 animate-spin" />
-              {language === "en" ? "No automatic backups recorded from Admin's current scoring session yet." : "Chưa ghi nhận bản sao lưu tự động nào từ phiên chấm điểm hiện tại của Admin."}<br />
-              <span className="text-[10px] text-slate-500">
-                {language === "en" ? "Scheduled periodic sweep will overwrite and activate after 5 minutes of activity." : "Tiến trình tự động quét định kỳ sẽ ghi đè và kích hoạt sau 5 phút làm việc."}
-              </span>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-              {deviceBackups.map((b) => (
-                <div 
-                  key={b.id} 
-                  className={`bg-slate-950/50 p-3.5 rounded-xl border ${
-                    b.isTimeline 
-                      ? "border-cyan-500/10 bg-gradient-to-br from-cyan-950/10 to-slate-950" 
-                      : "border-amber-500/10 bg-gradient-to-br from-amber-950/10 to-slate-950"
-                  } flex flex-col justify-between gap-3 text-xs`}
+              <div className="flex gap-2 w-full sm:w-auto items-center shrink-0">
+                <input
+                  type="text"
+                  placeholder={matchName || (language === "en" ? "e.g. Qualification..." : "e.g. Vòng Sơ Loại...")}
+                  value={sessionSaveName}
+                  onChange={(e) => setSessionSaveName(e.target.value)}
+                  className="px-3 py-2 text-xs bg-slate-50 dark:bg-slate-950 border dark:border-slate-800 border-gray-300 rounded-xl focus:outline-none w-full sm:w-56 font-bold text-slate-800 dark:text-slate-100"
+                />
+                <button
+                  onClick={() => {
+                    onSaveCurrentSessionToHistory(sessionSaveName || matchName);
+                    setSessionSaveName("");
+                  }}
+                  className="py-2 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl cursor-pointer whitespace-nowrap transition-colors shadow-sm"
                 >
-                  <div className="flex justify-between items-start gap-2">
-                    <div>
-                      <span className={`inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full mb-1.5 ${
-                        b.isTimeline 
-                          ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20" 
-                          : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                      }`}>
-                        <Clock className="w-3 h-3" />
-                        {b.isTimeline 
-                          ? (language === "en" ? "15 Min (Timeline)" : "15 Phút (Dòng thời gian)") 
-                          : (language === "en" ? "5 Min (Overwrite)" : "5 Phút (Ghi đè liên tục)")}
-                      </span>
-                      <h4 className="text-sm font-black text-slate-100 line-clamp-1">
-                        {b.matchName}
-                      </h4>
-                      <p className="text-[10px] text-slate-450 mt-0.5 font-mono">
-                        {language === "en" ? "Saved: " : "Đã lưu: "}{formatTimeAgo(b.timestamp)} ({formatDate(new Date(b.timestamp).toISOString())})
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2 border-t border-slate-800/80 pt-2.5 mt-1">
-                    {deviceBackupRestoreId === b.id ? (
-                      <div className="w-full bg-amber-950/30 border border-amber-500/30 p-2 rounded-lg flex flex-col gap-1.5 text-[11px] text-amber-300 animate-fadeIn font-extrabold items-center">
-                        <span className="uppercase text-[9px] text-amber-400 tracking-wider flex items-center gap-1.5 text-center">
-                          <ShieldAlert className="w-4 h-4 shrink-0 text-amber-500 animate-pulse" />
-                          {language === "en" ? "Overwrite current match on device?" : "Ghi đè giải hiện tại trên thiết bị?"}
-                        </span>
-                        <div className="flex gap-2 w-full">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onRestoreDeviceBackup?.(b.id);
-                              setDeviceBackupRestoreId(null);
-                            }}
-                            className="flex-1 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded font-black cursor-pointer text-xs"
-                          >
-                            {language === "en" ? "Confirm Load" : "Xác nhận nạp"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeviceBackupRestoreId(null)}
-                            className="py-1 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded font-medium cursor-pointer text-xs"
-                          >
-                            {language === "en" ? "Cancel" : "Hủy"}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setDeviceBackupRestoreId(b.id)}
-                          className="flex-1 py-1 px-3 bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-300 rounded-lg font-black transition-colors flex items-center justify-center gap-1 cursor-pointer text-[11px]"
-                        >
-                          <RotateCcw className="w-3.5 h-3.5" /> {language === "en" ? "Restore Match" : "Khôi phục giải"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (confirm(language === "en" ? `Are you sure you want to delete the internal backup of date ${formatDate(new Date(b.timestamp).toISOString())}?` : `Bạn chắc chắn muốn xóa bản sao lưu nội bộ ngày ${formatDate(new Date(b.timestamp).toISOString())}?`)) {
-                              onDeleteDeviceBackup?.(b.id);
-                            }
-                          }}
-                          className="py-1 px-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all cursor-pointer border border-transparent hover:border-rose-500/20"
-                          title={language === "en" ? "Delete backup" : "Xóa bản sao lưu"}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
+                  {language === "en" ? "Save Match" : "Ghi Lại Giải"}
+                </button>
+              </div>
             </div>
           )}
-        </div>
-      )}
+
+          {/* ADMIN & SUB-ADMIN AUTO-BACKUP HỘP ĐEN DASHBOARD */}
+          {(userRole === "admin" || userRole === "subAdmin") && currentStatus === "active" && (
+            <div className="bg-slate-900 border border-slate-800 text-white p-5 rounded-2xl shadow-lg relative overflow-hidden">
+              {/* Subtle decoration */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+              <div className="absolute bottom-0 left-0 w-24 h-24 bg-rose-500/5 rounded-full blur-xl pointer-events-none" />
+
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 border-b border-slate-800 pb-3 mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="bg-indigo-500/10 p-2 rounded-xl text-indigo-400 border border-indigo-500/20 shrink-0">
+                    <Database className="w-5 h-5 animate-pulse" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
+                      {language === "en" ? "BLACKBOX INTERNAL DEVICE BACKUPS" : "HỘP ĐEN SAO LƯU NỘI BỘ (DEVICE BACKUPS)"}
+                      <span className="bg-rose-500 text-white text-[9px] font-black tracking-widest px-1.5 py-0.5 rounded-full uppercase shrink-0 animate-pulse">
+                        ADMIN & SUB-ADMIN
+                      </span>
+                    </h3>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      {language === "en" 
+                        ? "Autosave state to Organizer's device (Overwrite every 5 min, timeline point every 15 min - saves 5 recent copies)." 
+                        : "Tự động lưu trạng thái xuống thiết bị của Ban Tổ Chức (Ghi đè mỗi 5 phút, tạo dòng thời gian mỗi 15 phút - lưu 5 bản gần nhất)."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {deviceBackups.length === 0 ? (
+                <div className="bg-slate-950/40 p-5 rounded-xl border border-slate-800 text-center text-xs text-slate-400 font-medium">
+                  <Clock className="w-8 h-8 text-slate-600 mx-auto mb-2 animate-spin" />
+                  {language === "en" ? "No automatic backups recorded from Admin's current scoring session yet." : "Chưa ghi nhận bản sao lưu tự động nào từ phiên chấm điểm hiện tại của Admin."}<br />
+                  <span className="text-[10px] text-slate-500">
+                    {language === "en" ? "Scheduled periodic sweep will overwrite and activate after 5 minutes of activity." : "Tiến trình tự động quét định kỳ sẽ ghi đè và kích hoạt sau 5 phút làm việc."}
+                  </span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {deviceBackups.map((b) => (
+                    <div 
+                      key={b.id} 
+                      className={`bg-slate-950/50 p-3.5 rounded-xl border ${
+                        b.isTimeline 
+                          ? "border-cyan-500/10 bg-gradient-to-br from-cyan-950/10 to-slate-950" 
+                          : "border-amber-500/10 bg-gradient-to-br from-amber-950/10 to-slate-950"
+                      } flex flex-col justify-between gap-3 text-xs`}
+                    >
+                      <div className="flex justify-between items-start gap-2">
+                        <div>
+                          <span className={`inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full mb-1.5 ${
+                            b.isTimeline 
+                              ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20" 
+                              : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                          }`}>
+                            <Clock className="w-3 h-3" />
+                            {b.isTimeline 
+                              ? (language === "en" ? "15 Min (Timeline)" : "15 Phút (Dòng thời gian)") 
+                              : (language === "en" ? "5 Min (Overwrite)" : "5 Phút (Ghi đè liên tục)")}
+                          </span>
+                          <h4 className="text-sm font-black text-slate-100 line-clamp-1">
+                            {b.matchName}
+                          </h4>
+                          <p className="text-[10px] text-slate-450 mt-0.5 font-mono">
+                            {language === "en" ? "Saved: " : "Đã lưu: "}{formatTimeAgo(b.timestamp)} ({formatDate(new Date(b.timestamp).toISOString())})
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 border-t border-slate-800/80 pt-2.5 mt-1">
+                        {deviceBackupRestoreId === b.id ? (
+                          <div className="w-full bg-amber-950/30 border border-amber-500/30 p-2 rounded-lg flex flex-col gap-1.5 text-[11px] text-amber-300 animate-fadeIn font-extrabold items-center">
+                            <span className="uppercase text-[9px] text-amber-400 tracking-wider flex items-center gap-1.5 text-center">
+                              <ShieldAlert className="w-4 h-4 shrink-0 text-amber-500 animate-pulse" />
+                              {language === "en" ? "Overwrite current match on device?" : "Ghi đè giải hiện tại trên thiết bị?"}
+                            </span>
+                            <div className="flex gap-2 w-full">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onRestoreDeviceBackup?.(b.id);
+                                  setDeviceBackupRestoreId(null);
+                                }}
+                                className="flex-1 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded font-black cursor-pointer text-xs"
+                              >
+                                {language === "en" ? "Confirm Load" : "Xác nhận nạp"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeviceBackupRestoreId(null)}
+                                className="py-1 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded font-medium cursor-pointer text-xs"
+                              >
+                                {language === "en" ? "Cancel" : "Hủy"}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setDeviceBackupRestoreId(b.id)}
+                              className="flex-1 py-1 px-3 bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-300 rounded-lg font-black transition-colors flex items-center justify-center gap-1 cursor-pointer text-[11px]"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" /> {language === "en" ? "Restore Match" : "Khôi phục giải"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm(language === "en" ? `Are you sure you want to delete the internal backup of date ${formatDate(new Date(b.timestamp).toISOString())}?` : `Bạn chắc chắn muốn xóa bản sao lưu nội bộ ngày ${formatDate(new Date(b.timestamp).toISOString())}?`)) {
+                                  onDeleteDeviceBackup?.(b.id);
+                                }
+                              }}
+                              className="py-1 px-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all cursor-pointer border border-transparent hover:border-rose-500/20"
+                              title={language === "en" ? "Delete backup" : "Xóa bản sao lưu"}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      ) : null}
 
       {/* RECORD ARCHIVES HEADER */}
       <div className="border-b dark:border-slate-800 pb-2 mt-2">
@@ -752,30 +798,30 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  if (selectedExportIds.length === history.length) {
+                  if (selectedExportIds.length === combinedHistoryList.length) {
                     setSelectedExportIds([]);
                   } else {
-                    setSelectedExportIds(history.map(h => h.id));
+                    setSelectedExportIds(combinedHistoryList.map(h => h.id));
                   }
                 }}
                 className="text-[11px] font-black uppercase text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
               >
-                {selectedExportIds.length === history.length 
+                {selectedExportIds.length === combinedHistoryList.length 
                   ? (language === "en" ? "Deselect All" : "Bỏ chọn tất cả") 
                   : (language === "en" ? "Select All" : "Chọn tất cả")}
               </button>
               <span className="text-[10px] font-mono font-bold text-slate-500">
-                {language === "en" ? `Selected ${selectedExportIds.length}/${history.length}` : `Đã chọn ${selectedExportIds.length}/${history.length}`}
+                {language === "en" ? `Selected ${selectedExportIds.length}/${combinedHistoryList.length}` : `Đã chọn ${selectedExportIds.length}/${combinedHistoryList.length}`}
               </span>
             </div>
 
             <div className="flex-1 overflow-y-auto max-h-[45vh] pr-1 flex flex-col gap-2">
-              {history.length === 0 ? (
+              {combinedHistoryList.length === 0 ? (
                 <div className="text-center py-8 text-xs text-slate-400">
                   {language === "en" ? "No historical tournaments found." : "Không có giải đấu nào trong lịch sử."}
                 </div>
               ) : (
-                history.map((h, idx) => {
+                combinedHistoryList.map((h, idx) => {
                   const isChecked = selectedExportIds.includes(h.id);
                   return (
                     <label 

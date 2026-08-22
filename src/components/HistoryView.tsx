@@ -16,6 +16,8 @@ interface HistoryViewProps {
   startDate: string;
   endDate: string;
   setHistory: (history: any[]) => void;
+  activeHistoryId: string | null;
+  onlineTournaments?: any[];
 }
 
 export const HistoryView: React.FC<HistoryViewProps> = ({
@@ -33,6 +35,8 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   startDate,
   endDate,
   setHistory,
+  activeHistoryId,
+  onlineTournaments = [],
 }) => {
   return (
     <div className="animate-fadeIn" id="history-view-container">
@@ -51,6 +55,8 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
         startDate={startDate}
         endDate={endDate}
         onUpdateHistory={setHistory}
+        activeHistoryId={activeHistoryId}
+        onlineTournaments={onlineTournaments}
       />
     </div>
   );

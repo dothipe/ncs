@@ -988,6 +988,9 @@ export default function App() {
   useEffect(() => { stateRefs.currentTournamentDoc.current = currentTournamentDoc; }, [currentTournamentDoc]);
 
   const performAutoBackup = (isTimeline: boolean) => {
+    // Only perform background auto-backups when inside a tournament (activeHistoryId is set)
+    if (!stateRefs.activeHistoryId.current) return;
+
     // Only perform background auto-backups for active admins/owners and sub-admins
     if (stateRefs.userRole.current !== "admin" && stateRefs.userRole.current !== "subAdmin") return;
 
@@ -1114,6 +1117,9 @@ export default function App() {
   };
 
   const performHistoryAutoBackup = () => {
+    // Only perform background auto-backups when inside a tournament (activeHistoryId is set)
+    if (!stateRefs.activeHistoryId.current) return;
+
     // Only perform background auto-backups for active admins/owners and sub-admins
     if (stateRefs.userRole.current !== "admin" && stateRefs.userRole.current !== "subAdmin") return;
 
@@ -3700,6 +3706,8 @@ export default function App() {
               startDate={startDate}
               endDate={endDate}
               setHistory={setHistory}
+              activeHistoryId={activeHistoryId}
+              onlineTournaments={onlineTournaments}
             />
           )}
 
