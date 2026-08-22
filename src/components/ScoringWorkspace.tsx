@@ -459,7 +459,12 @@ export function ScoringWorkspace({
                     const newAthletes: Athlete[] = toAdd.map((m) => {
                       const freshScores: Record<string, (boolean | null)[]> = {};
                       currentDistances.forEach((d) => {
-                        freshScores[d.id] = Array(currentShotsCount).fill(null);
+                        const dShots = (d.shotCount !== undefined && d.shotCount !== null)
+                          ? Number(d.shotCount)
+                          : ((d.teamShotCount !== undefined && d.teamShotCount !== null)
+                              ? Number(d.teamShotCount)
+                              : currentShotsCount);
+                        freshScores[d.id] = Array(dShots).fill(null);
                       });
                       return {
                         ...m,

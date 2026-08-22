@@ -509,7 +509,12 @@ export function InputScoresWorkspace({
                         if (scoringAthlete && scoringAthlete.scores[d.id]) {
                           freshScores[d.id] = [...scoringAthlete.scores[d.id]];
                         } else {
-                          freshScores[d.id] = Array(currentShotsCount).fill(null);
+                          const dShots = (d.shotCount !== undefined && d.shotCount !== null)
+                            ? Number(d.shotCount)
+                            : ((d.teamShotCount !== undefined && d.teamShotCount !== null)
+                                ? Number(d.teamShotCount)
+                                : currentShotsCount);
+                          freshScores[d.id] = Array(dShots).fill(null);
                         }
                       });
                       return {

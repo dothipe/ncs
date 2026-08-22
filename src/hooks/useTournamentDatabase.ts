@@ -130,6 +130,7 @@ export const useTournamentDatabase = ({
 }: UseTournamentDatabaseProps) => {
   
   const isSpectatorModeOverriddenRef = useRef(false);
+  const isFirstLoadRef = useRef(true);
 
   useEffect(() => {
     isSpectatorModeOverriddenRef.current = isSpectatorModeOverridden;
@@ -139,6 +140,7 @@ export const useTournamentDatabase = ({
   useEffect(() => {
     setCurrentTournamentDoc(null);
     setIsTournamentConfigLoaded(false);
+    isFirstLoadRef.current = true;
 
     if (!activeHistoryId || !activeHistoryId.startsWith("tour-")) {
       loadedTournamentIdRef.current = null;
@@ -273,6 +275,24 @@ export const useTournamentDatabase = ({
     if (!isTournamentConfigLoaded || !currentTournamentDoc) return;
     
     if (userRole === "admin") {
+      const isMatchingServer = 
+        deepEqual(matchName, currentTournamentDoc.matchName) &&
+        deepEqual(startDate, currentTournamentDoc.startDate || "") &&
+        deepEqual(endDate, currentTournamentDoc.endDate || "") &&
+        deepEqual(distances, currentTournamentDoc.distances) &&
+        deepEqual(shotsCount, currentTournamentDoc.shotsCount) &&
+        deepEqual(teamDistances, currentTournamentDoc.teamDistances) &&
+        deepEqual(teamShotsCount, currentTournamentDoc.teamShotsCount) &&
+        deepEqual(laneCapacity, currentTournamentDoc.laneCapacity);
+
+      if (isFirstLoadRef.current) {
+        if (isMatchingServer) {
+          isFirstLoadRef.current = false;
+        } else {
+          return;
+        }
+      }
+
       if (!matchName || !matchName.trim()) return;
       if (currentTournamentDoc.matchName && matchName.trim() !== currentTournamentDoc.matchName.trim() && !matchName.trim()) return;
       if ((!athletes || athletes.length === 0) && currentTournamentDoc.athletes && currentTournamentDoc.athletes.length > 0) return;

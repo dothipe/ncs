@@ -322,9 +322,15 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
       {/* Grid Container for the score sheets */}
       {(() => {
         const maxShots = Math.max(shotsCount, ...(distances || []).map(d => {
-          const standardShots = d.shotCount !== undefined ? d.shotCount : (d.teamShotCount !== undefined ? d.teamShotCount : shotsCount);
+          const standardShots = (d.shotCount !== undefined && d.shotCount !== null && d.shotCount !== "")
+            ? Number(d.shotCount)
+            : ((d.teamShotCount !== undefined && d.teamShotCount !== null && d.teamShotCount !== "")
+                ? Number(d.teamShotCount)
+                : shotsCount);
           const isSolo = d.isElimination && d.isSolo;
-          const soloShots = isSolo && d.soloShotCount !== undefined ? d.soloShotCount : standardShots;
+          const soloShots = isSolo && (d.soloShotCount !== undefined && d.soloShotCount !== null && d.soloShotCount !== "")
+            ? Number(d.soloShotCount)
+            : standardShots;
           return Math.max(standardShots, soloShots);
         }));
 
@@ -400,12 +406,12 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
               }, 0);
 
               return distances.map((distance, distIdx) => {
-                const distShots = distance.shotCount !== undefined 
-                  ? distance.shotCount 
-                  : (distance.teamShotCount !== undefined ? distance.teamShotCount : shotsCount);
+                const distShots = (distance.shotCount !== undefined && distance.shotCount !== null && distance.shotCount !== "") 
+                  ? Number(distance.shotCount) 
+                  : ((distance.teamShotCount !== undefined && distance.teamShotCount !== null && distance.teamShotCount !== "") ? Number(distance.teamShotCount) : shotsCount);
 
-                const soloShots = distance.soloShotCount !== undefined
-                  ? distance.soloShotCount
+                const soloShots = (distance.soloShotCount !== undefined && distance.soloShotCount !== null && distance.soloShotCount !== "")
+                  ? Number(distance.soloShotCount)
                   : distShots;
 
                 const rowScoreObj = rowScores.find((r) => r.distanceId === distance.id) || { hitCount: 0, score: 0 };

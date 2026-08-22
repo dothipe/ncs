@@ -288,7 +288,10 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
     } else {
       const freshScores: Record<string, (boolean | null)[]> = {};
       distances.forEach((dist) => {
-        freshScores[dist.id] = Array(shotsCount).fill(null);
+        const dShots = (dist.shotCount !== undefined && dist.shotCount !== null && dist.shotCount !== "")
+          ? Number(dist.shotCount)
+          : ((dist.teamShotCount !== undefined && dist.teamShotCount !== null && dist.teamShotCount !== "") ? Number(dist.teamShotCount) : shotsCount);
+        freshScores[dist.id] = Array(dShots).fill(null);
       });
 
       const copiedAthlete: Athlete = {
@@ -586,7 +589,10 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
       // Build fresh scores matching configured distances
       const freshScores: Record<string, (boolean | null)[]> = {};
       distances.forEach((dist) => {
-        freshScores[dist.id] = Array(shotsCount).fill(null);
+        const dShots = (dist.shotCount !== undefined && dist.shotCount !== null && dist.shotCount !== "")
+          ? Number(dist.shotCount)
+          : ((dist.teamShotCount !== undefined && dist.teamShotCount !== null && dist.teamShotCount !== "") ? Number(dist.teamShotCount) : shotsCount);
+        freshScores[dist.id] = Array(dShots).fill(null);
       });
 
       const userGoogleAvatar = currentUser?.photoURL || (currentUser as any)?.avatarUrl || "";
@@ -872,7 +878,10 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
         const importedAthletes: Athlete[] = jsonData.map((row: any) => {
           const freshScores: Record<string, (boolean | null)[]> = {};
           distances.forEach((dist) => {
-            freshScores[dist.id] = Array(shotsCount).fill(null);
+            const dShots = (dist.shotCount !== undefined && dist.shotCount !== null && dist.shotCount !== "")
+              ? Number(dist.shotCount)
+              : ((dist.teamShotCount !== undefined && dist.teamShotCount !== null && dist.teamShotCount !== "") ? Number(dist.teamShotCount) : shotsCount);
+            freshScores[dist.id] = Array(dShots).fill(null);
           });
 
           return {
@@ -1022,7 +1031,10 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
                 if (!imp.scores) {
                   const freshScores: Record<string, (boolean | null)[]> = {};
                   distances.forEach((dist) => {
-                    freshScores[dist.id] = Array(shotsCount).fill(null);
+                    const dShots = (dist.shotCount !== undefined && dist.shotCount !== null && dist.shotCount !== "")
+                      ? Number(dist.shotCount)
+                      : ((dist.teamShotCount !== undefined && dist.teamShotCount !== null && dist.teamShotCount !== "") ? Number(dist.teamShotCount) : shotsCount);
+                    freshScores[dist.id] = Array(dShots).fill(null);
                   });
                   imp.scores = freshScores;
                 }
@@ -1889,7 +1901,10 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
                                   const applied = item.athletes.map(a => {
                                     const freshScores: Record<string, (boolean | null)[]> = {};
                                     distances.forEach(d => {
-                                      freshScores[d.id] = Array(shotsCount).fill(null);
+                                      const dShots = (d.shotCount !== undefined && d.shotCount !== null && d.shotCount !== "")
+                                        ? Number(d.shotCount)
+                                        : ((d.teamShotCount !== undefined && d.teamShotCount !== null && d.teamShotCount !== "") ? Number(d.teamShotCount) : shotsCount);
+                                      freshScores[d.id] = Array(dShots).fill(null);
                                     });
                                     return {
                                       ...a,
@@ -3123,7 +3138,10 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
                                     const applied = item.athletes.map(a => {
                                       const freshScores: Record<string, (boolean | null)[]> = {};
                                       distances.forEach(d => {
-                                        freshScores[d.id] = Array(shotsCount).fill(null);
+                                        const dShots = (d.shotCount !== undefined && d.shotCount !== null && d.shotCount !== "")
+                                          ? Number(d.shotCount)
+                                          : ((d.teamShotCount !== undefined && d.teamShotCount !== null && d.teamShotCount !== "") ? Number(d.teamShotCount) : shotsCount);
+                                        freshScores[d.id] = Array(dShots).fill(null);
                                       });
                                       return {
                                         ...a,
