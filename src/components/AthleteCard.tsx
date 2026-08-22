@@ -822,19 +822,27 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
 
         let totalMultiplierOfShotRounds = 0;
         let countShotRounds = 0;
+        let totalPossibleShots = 0;
         distances.forEach((d) => {
           const wasShot = athlete.scores[d.id] && athlete.scores[d.id].length > 0 && athlete.scores[d.id].some(v => v !== null && v !== undefined);
           if (wasShot) {
             totalMultiplierOfShotRounds += d.multiplier;
             countShotRounds++;
+            const roundShotCount = (d.shotCount !== undefined && d.shotCount !== null && d.shotCount !== "")
+              ? Number(d.shotCount)
+              : shotsCount;
+            totalPossibleShots += roundShotCount;
           }
         });
         if (countShotRounds === 0 && distances.length > 0) {
           totalMultiplierOfShotRounds = distances[0].multiplier;
           countShotRounds = 1;
+          const firstDistShotCount = (distances[0].shotCount !== undefined && distances[0].shotCount !== null && distances[0].shotCount !== "")
+            ? Number(distances[0].shotCount)
+            : shotsCount;
+          totalPossibleShots = firstDistShotCount;
         }
 
-        const totalPossibleShots = countShotRounds * shotsCount;
         let totalValMax = totalPossibleShots;
         let actualValSum = hitCountSum;
         let unitText = language === "en" ? "shots" : "viên";

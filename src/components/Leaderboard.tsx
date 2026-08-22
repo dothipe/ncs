@@ -492,7 +492,10 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                 const totalPossPoints = effectiveDirectMaxPoints * dist.multiplier;
                 accuracy = totalPossPoints > 0 ? (score / totalPossPoints) * 100 : 0;
               } else {
-                accuracy = effectiveShotsCount > 0 ? (hitCount / effectiveShotsCount) * 100 : 0;
+                const distShotCount = (dist.shotCount !== undefined && dist.shotCount !== null && dist.shotCount !== "")
+                  ? Number(dist.shotCount)
+                  : effectiveShotsCount;
+                accuracy = distShotCount > 0 ? (hitCount / distShotCount) * 100 : 0;
               }
 
               const soloHits = dist.isSolo ? (athlete.soloHits?.[dist.id] || 0) : 0;
@@ -515,11 +518,32 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
             const totalPossPoints = effectiveDirectMaxPoints * cumulativeMultiplierSumInShotRounds;
             survivalAccuracy = totalPossPoints > 0 ? (cumulativeScoreSumInShotRounds / totalPossPoints) * 100 : 0;
           } else {
-            if (cumulativeCountInShotRounds === 0) {
-              cumulativeCountInShotRounds = 1;
+            let dynamicTotalPossShots = 0;
+            for (let r = 0; r <= lastActiveRoundIdx; r++) {
+              const isQualifiedForRound = competitionMode === "team"
+                ? (r === 0 || teamRoundResults[r]?.qualifiedTeams.includes(athlete.team.trim() === "" ? "VĐV Tự Do (Không Đội)" : athlete.team.trim()))
+                : (r === 0 || roundResults[r]?.qualifiedIds.includes(athlete.id));
+
+              if (isQualifiedForRound) {
+                const d = distances[r];
+                const rScores = athlete.scores[d.id] || [];
+                const wasShot = rScores.length > 0 && rScores.some(v => v !== null && v !== undefined);
+                if (wasShot) {
+                  const distShotCount = (d.shotCount !== undefined && d.shotCount !== null && d.shotCount !== "")
+                    ? Number(d.shotCount)
+                    : effectiveShotsCount;
+                  dynamicTotalPossShots += distShotCount;
+                }
+              }
             }
-            const totalPossShots = cumulativeCountInShotRounds * effectiveShotsCount;
-            survivalAccuracy = totalPossShots > 0 ? (cumulativeHitsSumInShotRounds / totalPossShots) * 100 : 0;
+            if (dynamicTotalPossShots === 0) {
+              const fallbackDist = distances[lastActiveRoundIdx];
+              const distShotCount = (fallbackDist && fallbackDist.shotCount !== undefined && fallbackDist.shotCount !== null && fallbackDist.shotCount !== "")
+                ? Number(fallbackDist.shotCount)
+                : effectiveShotsCount;
+              dynamicTotalPossShots = distShotCount;
+            }
+            survivalAccuracy = dynamicTotalPossShots > 0 ? (cumulativeHitsSumInShotRounds / dynamicTotalPossShots) * 100 : 0;
           }
           survivalSoloHits = maxSoloHits;
         } else {
@@ -542,19 +566,25 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
               const totalPossPoints = effectiveDirectMaxPoints * totalMultiplier;
               survivalAccuracy = totalPossPoints > 0 ? (survivalScore / totalPossPoints) * 100 : 0;
             } else {
-              let shotRoundsCount = 0;
+              let dynamicTotalPossShots = 0;
               for (let i = 0; i <= lastActiveRoundIdx; i++) {
                 const d = distances[i];
                 const wasShot = athlete.scores[d.id] && athlete.scores[d.id].length > 0 && athlete.scores[d.id].some(v => v !== null && v !== undefined);
                 if (wasShot) {
-                  shotRoundsCount++;
+                  const distShotCount = (d.shotCount !== undefined && d.shotCount !== null && d.shotCount !== "")
+                    ? Number(d.shotCount)
+                    : effectiveShotsCount;
+                  dynamicTotalPossShots += distShotCount;
                 }
               }
-              if (shotRoundsCount === 0) {
-                shotRoundsCount = 1;
+              if (dynamicTotalPossShots === 0) {
+                const fallbackDist = distances[lastActiveRoundIdx];
+                const distShotCount = (fallbackDist && fallbackDist.shotCount !== undefined && fallbackDist.shotCount !== null && fallbackDist.shotCount !== "")
+                  ? Number(fallbackDist.shotCount)
+                  : effectiveShotsCount;
+                dynamicTotalPossShots = distShotCount;
               }
-              const totalPossShots = shotRoundsCount * effectiveShotsCount;
-              survivalAccuracy = totalPossShots > 0 ? (survivalHits / totalPossShots) * 100 : 0;
+              survivalAccuracy = dynamicTotalPossShots > 0 ? (survivalHits / dynamicTotalPossShots) * 100 : 0;
             }
           }
           const lastActiveDist = distances[lastActiveRoundIdx];
@@ -618,7 +648,11 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
             distanceId: distance.id,
             multiplier: distance.multiplier,
             hitCount,
-            maxHits: isPointModeActive && effectiveDirectMaxPoints !== undefined ? effectiveDirectMaxPoints : effectiveShotsCount,
+            maxHits: isPointModeActive && effectiveDirectMaxPoints !== undefined
+              ? effectiveDirectMaxPoints
+              : ((distance.shotCount !== undefined && distance.shotCount !== null && distance.shotCount !== "")
+                ? Number(distance.shotCount)
+                : effectiveShotsCount),
             score,
             isQualified,
           };
@@ -626,22 +660,31 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
 
         let totalMultiplierOfShotRounds = 0;
         let countShotRounds = 0;
+        let dynamicTotalPossibleShots = 0;
         distances.forEach((d) => {
           const wasShot = athlete.scores[d.id] && athlete.scores[d.id].length > 0 && athlete.scores[d.id].some(v => v !== null && v !== undefined);
           if (wasShot) {
             totalMultiplierOfShotRounds += d.multiplier;
             countShotRounds++;
+            const roundShotCount = (d.shotCount !== undefined && d.shotCount !== null && d.shotCount !== "")
+              ? Number(d.shotCount)
+              : effectiveShotsCount;
+            dynamicTotalPossibleShots += roundShotCount;
           }
         });
 
         if (countShotRounds === 0 && distances.length > 0) {
           totalMultiplierOfShotRounds = distances[0].multiplier;
           countShotRounds = 1;
+          const firstDistShotCount = (distances[0].shotCount !== undefined && distances[0].shotCount !== null && distances[0].shotCount !== "")
+            ? Number(distances[0].shotCount)
+            : effectiveShotsCount;
+          dynamicTotalPossibleShots = firstDistShotCount;
         }
 
         const totalPossibleShots = isPointModeActive && effectiveDirectMaxPoints !== undefined
           ? effectiveDirectMaxPoints * totalMultiplierOfShotRounds
-          : countShotRounds * effectiveShotsCount;
+          : dynamicTotalPossibleShots;
         const calculatedAccuracy = isPointModeActive && effectiveDirectMaxPoints !== undefined
           ? (totalPossibleShots > 0 ? (totalScore / totalPossibleShots) * 100 : 0)
           : (totalPossibleShots > 0 ? (totalHits / totalPossibleShots) * 100 : 0);
@@ -721,7 +764,11 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
             distanceId: dist.id,
             multiplier: dist.multiplier,
             hitCount,
-            maxHits: isPointModeActive && effectiveDirectMaxPoints !== undefined ? effectiveDirectMaxPoints : effectiveShotsCount,
+            maxHits: isPointModeActive && effectiveDirectMaxPoints !== undefined
+              ? effectiveDirectMaxPoints
+              : ((dist.shotCount !== undefined && dist.shotCount !== null && dist.shotCount !== "")
+                ? Number(dist.shotCount)
+                : effectiveShotsCount),
             score,
             isQualified: wasQual,
           };

@@ -6,7 +6,9 @@ import {
   subscribeToVscSystemAthletes, 
   saveVscSystemAthletes,
   updateUserProfile,
-  subscribeToVscSystemClubs
+  subscribeToVscSystemClubs,
+  getUserProfileByEmail,
+  findLinkedEmailAndAvatarForAthlete
 } from "../lib/firebaseService";
 import { VIETNAM_PROVINCES } from "../utils/provinces";
 import { AthleteProfileModal } from "./AthleteProfileModal";
@@ -375,9 +377,10 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
       }
     }
 
-    // Default to Google photoURL if user has not provided a custom avatar
+    // Default to Google photoURL if user has not provided a custom avatar and editing their own profile
     let finalAvatarUrl = formAvatarUrl;
-    const userGoogleAvatar = currentUser?.photoURL || (currentUser as any)?.avatarUrl || "";
+    const isOwnProfile = currentUser?.email && formEmail && formEmail.trim().toLowerCase() === currentUser.email.trim().toLowerCase();
+    const userGoogleAvatar = isOwnProfile ? (currentUser?.photoURL || (currentUser as any)?.avatarUrl || "") : "";
     if ((!finalAvatarUrl || finalAvatarUrl === AVATAR_MALE || finalAvatarUrl === AVATAR_FEMALE) && userGoogleAvatar) {
       finalAvatarUrl = userGoogleAvatar;
     }
@@ -1214,7 +1217,8 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
                           const newGender = e.target.value;
                           setFormGender(newGender);
                           if (!formAvatarUrl || formAvatarUrl === AVATAR_MALE || formAvatarUrl === AVATAR_FEMALE) {
-                            const userGoogleAvatar = currentUser?.photoURL || (currentUser as any)?.avatarUrl;
+                            const isOwnProfile = currentUser?.email && formEmail && formEmail.trim().toLowerCase() === currentUser.email.trim().toLowerCase();
+                            const userGoogleAvatar = isOwnProfile ? (currentUser?.photoURL || (currentUser as any)?.avatarUrl || "") : "";
                             setFormAvatarUrl(userGoogleAvatar || (newGender === "Nữ" ? AVATAR_FEMALE : AVATAR_MALE));
                           }
                         }}
@@ -1328,25 +1332,68 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
                         </div>
                         
                         {/* Image Upload Input */}
-                        <label className="text-[10px] text-slate-500 dark:text-slate-400 font-extrabold bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 px-3 py-1.5 rounded-lg text-center cursor-pointer shadow-xs max-w-[170px] inline-flex items-center justify-center gap-1.5">
-                          {isCompressingAvatar ? (
-                            <>
-                              <RefreshCw className="w-3 h-3 animate-spin text-[#9c0c13]" />
-                              <span>{language === "en" ? "Compressing..." : "Đang nén..."}</span>
-                            </>
-                          ) : (
-                            <>
-                              📁 {language === "en" ? "Upload avatar..." : "Tải ảnh lên..."}
-                            </>
-                          )}
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleAvatarFileChange}
-                            disabled={isCompressingAvatar}
-                            className="hidden"
-                          />
-                        </label>
+                        <div className="flex items-center gap-1.5">
+                          <label className="text-[10px] text-slate-500 dark:text-slate-400 font-extrabold bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 px-3 py-1.5 rounded-lg text-center cursor-pointer shadow-xs max-w-[170px] inline-flex items-center justify-center gap-1.5">
+                            {isCompressingAvatar ? (
+                              <>
+                                <RefreshCw className="w-3 h-3 animate-spin text-[#9c0c13]" />
+                                <span>{language === "en" ? "Compressing..." : "Đang nén..."}</span>
+                              </>
+                            ) : (
+                              <>
+                                📁 {language === "en" ? "Upload avatar..." : "Tải ảnh lên..."}
+                              </>
+                            )}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleAvatarFileChange}
+                              disabled={isCompressingAvatar}
+                              className="hidden"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              // Deeply search for linked email and avatar on Firestore
+                              try {
+                                const result = await findLinkedEmailAndAvatarForAthlete(formId, formName, formEmail);
+                                if (result && result.avatarUrl) {
+                                  setFormAvatarUrl(result.avatarUrl);
+                                  if (result.email && (!formEmail || !formEmail.trim())) {
+                                    setFormEmail(result.email);
+                                  }
+                                  alert(language === "en" 
+                                    ? `Successfully synced Google avatar for athlete "${formName}"!` 
+                                    : `Đã đồng bộ thành công ảnh đại diện từ Google cho vận động viên "${formName}"!`
+                                  );
+                                } else {
+                                  // Fallback to active user session if profile database query is empty but emails match
+                                  const emailTrimmed = formEmail.trim().toLowerCase();
+                                  if (currentUser?.email && emailTrimmed === currentUser.email.toLowerCase() && currentUser.photoURL) {
+                                    setFormAvatarUrl(currentUser.photoURL);
+                                    alert(language === "en" 
+                                      ? `Successfully synced Google avatar from your active session!` 
+                                      : `Đã đồng bộ thành công ảnh đại diện Google từ phiên hoạt động của bạn!`
+                                    );
+                                    return;
+                                  }
+                                  alert(language === "en" 
+                                    ? `Could not find any Google account or avatar linked with "${formName}" (${formEmail || "No Email"}).` 
+                                    : `Không tìm thấy tài khoản Google hoặc ảnh đại diện nào liên kết với "${formName}" (${formEmail || "Chưa nhập Email"}).`
+                                  );
+                                }
+                              } catch (e) {
+                                console.error(e);
+                                alert(language === "en" ? "Error syncing Google avatar." : "Lỗi khi đồng bộ ảnh đại diện Google.");
+                              }
+                            }}
+                            title={language === "en" ? "Sync Google avatar" : "Đồng bộ ảnh đại diện từ Google"}
+                            className="p-1.5 rounded-lg border border-slate-250 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-650 dark:text-slate-350 active:scale-95 transition-all flex items-center justify-center"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>

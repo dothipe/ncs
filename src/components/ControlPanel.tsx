@@ -17,7 +17,8 @@ import {
   kickClubMember,
   addClubMemberDirectly,
   transferClubLeadership,
-  updateClubProfile
+  updateClubProfile,
+  getUserProfileByEmail
 } from "../lib/firebaseService";
 import { auth } from "../firebase";
 import { VIETNAM_PROVINCES } from "../utils/provinces";
@@ -1141,10 +1142,39 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                                 <User className="w-12 h-12 text-slate-300" />
                               )}
                             </div>
-                            <label className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 hover:bg-indigo-100 dark:bg-slate-950 dark:hover:bg-slate-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 px-3 py-1.5 rounded-lg cursor-pointer flex items-center gap-1 transition-all active:scale-95">
-                              <ImageIcon className="w-3.5 h-3.5" /> Thay ảnh
-                              <input type="file" accept="image/*" onChange={handleAvatarFile} className="hidden" />
-                            </label>
+                            <div className="flex items-center gap-1.5">
+                              <label className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 hover:bg-indigo-100 dark:bg-slate-950 dark:hover:bg-slate-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 px-3 py-1.5 rounded-lg cursor-pointer flex items-center gap-1 transition-all active:scale-95">
+                                <ImageIcon className="w-3.5 h-3.5" /> Thay ảnh
+                                <input type="file" accept="image/*" onChange={handleAvatarFile} className="hidden" />
+                              </label>
+                              {(currentUser?.photoURL || currentUser?.email) && (
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    if (currentUser?.photoURL) {
+                                      setAvatarUrl(currentUser.photoURL);
+                                      return;
+                                    }
+                                    if (currentUser?.email) {
+                                      try {
+                                        const pr = await getUserProfileByEmail(currentUser.email);
+                                        if (pr && (pr.avatarUrl || pr.photoURL)) {
+                                          setAvatarUrl(pr.avatarUrl || pr.photoURL);
+                                        } else {
+                                          alert(language === "en" ? "No Google avatar found on Cloud." : "Không tìm thấy ảnh đại diện Google nào trên Cloud.");
+                                        }
+                                      } catch (e) {
+                                        console.error(e);
+                                      }
+                                    }
+                                  }}
+                                  title={language === "en" ? "Sync Google avatar" : "Đồng bộ ảnh đại diện từ Google"}
+                                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-indigo-50 dark:bg-slate-950 hover:bg-indigo-100 dark:hover:bg-slate-800 text-indigo-700 dark:text-indigo-300 active:scale-95 transition-all flex items-center justify-center"
+                                >
+                                  <RefreshCw className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                           </div>
 
                           <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 gap-4">

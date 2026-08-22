@@ -203,25 +203,35 @@ const getDetailedClubStats = (club: SystemClub, tournamentsList: any[]) => {
       let memberHits = 0;
 
       if (ath.scores) {
-        Object.values(ath.scores).forEach((scoreArr: any) => {
+        Object.entries(ath.scores).forEach(([distId, scoreArr]: [string, any]) => {
           if (Array.isArray(scoreArr)) {
+            const distConfig = tour.distances?.find((d: any) => d.id === distId);
+            const roundShotCount = (distConfig?.shotCount !== undefined && distConfig?.shotCount !== null && distConfig?.shotCount !== "")
+              ? Number(distConfig.shotCount)
+              : (tour.shotsCount || 10);
+
             if (scoreArr.length > 1) {
               memberShots += scoreArr.length;
               memberHits += getHitCount(scoreArr);
             } else if (scoreArr.length === 1) {
               const hc = getHitCount(scoreArr);
               memberHits += hc;
-              memberShots += (tour.directMaxShots || tour.shotsCount || 10);
+              memberShots += roundShotCount;
             }
           }
         });
       }
 
       if (ath.soloHits) {
-        Object.values(ath.soloHits).forEach((h: any) => {
+        Object.entries(ath.soloHits).forEach(([distId, h]: [string, any]) => {
           if (typeof h === "number" && h > 0) {
+            const distConfig = tour.distances?.find((d: any) => d.id === distId);
+            const roundShotCount = (distConfig?.shotCount !== undefined && distConfig?.shotCount !== null && distConfig?.shotCount !== "")
+              ? Number(distConfig.shotCount)
+              : (tour.shotsCount || 10);
+
             memberHits += h;
-            memberShots += (tour.shotsCount || 10);
+            memberShots += roundShotCount;
           }
         });
       }

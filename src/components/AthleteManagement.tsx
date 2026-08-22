@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useLanguage } from "../context/LanguageContext";
 import { Athlete, DistanceConfig, StoredAthleteList, Club, VSC_DEFAULT_LOGO } from "../types";
-import { getUserProfileByEmail, saveVscSystemAthletes, subscribeToVscSystemAthletes, saveVscSystemClub, deleteVscSystemClub } from "../lib/firebaseService";
+import { getUserProfileByEmail, saveVscSystemAthletes, subscribeToVscSystemAthletes, saveVscSystemClub, deleteVscSystemClub, findLinkedEmailAndAvatarForAthlete } from "../lib/firebaseService";
 import { VIETNAM_PROVINCES } from "../utils/provinces";
 import * as XLSX from "xlsx";
 import { 
@@ -436,8 +436,7 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
     setFormProvince("");
     setFormCountry("Việt Nam");
     setFormCountryCode("VN");
-    const userGoogleAvatar = currentUser?.photoURL || (currentUser as any)?.avatarUrl || "";
-    setFormAvatarUrl(userGoogleAvatar || PRESET_AVATARS[0]);
+    setFormAvatarUrl(PRESET_AVATARS[0]);
     setFormStatus("Thi đấu");
     setFormIsPrimaryTeam(false);
     setFormEmail("");
@@ -595,12 +594,11 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
         freshScores[dist.id] = Array(dShots).fill(null);
       });
 
-      const userGoogleAvatar = currentUser?.photoURL || (currentUser as any)?.avatarUrl || "";
+      const isOwnProfile = currentUser?.email && formEmail && formEmail.trim().toLowerCase() === currentUser.email.trim().toLowerCase();
+      const userGoogleAvatar = isOwnProfile ? (currentUser?.photoURL || (currentUser as any)?.avatarUrl || "") : "";
       let finalAvatar = formAvatarUrl;
       if ((!finalAvatar || PRESET_AVATARS.includes(finalAvatar) || finalAvatar === AVATAR_MALE || finalAvatar === AVATAR_FEMALE) && userGoogleAvatar) {
-        if (isVscTab || (formEmail && currentUser?.email && formEmail.toLowerCase().trim() === currentUser.email.toLowerCase().trim())) {
-          finalAvatar = userGoogleAvatar;
-        }
+        finalAvatar = userGoogleAvatar;
       }
 
       const newAthlete: Athlete = {
@@ -2264,7 +2262,7 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
                   </label>
                 </div>
 
-                <div className="w-full">
+                <div className="w-full flex items-center justify-center gap-1.5">
                   <label className="cursor-pointer inline-flex items-center gap-1.5 text-[11px] text-blue-600 hover:text-blue-800 font-bold bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded transition-colors">
                     <Camera className="w-3.5 h-3.5" />
                     <span>Chọn ảnh từ thiết bị</span>
@@ -2288,6 +2286,47 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
                       }}
                     />
                   </label>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      // Deeply search for linked email and avatar on Firestore
+                      try {
+                        const result = await findLinkedEmailAndAvatarForAthlete(formId, formName, formEmail);
+                        if (result && result.avatarUrl) {
+                          setFormAvatarUrl(result.avatarUrl);
+                          if (result.email && (!formEmail || !formEmail.trim())) {
+                            setFormEmail(result.email);
+                          }
+                          alert(language === "en" 
+                            ? `Successfully synced Google avatar for athlete "${formName}"!` 
+                            : `Đã đồng bộ thành công ảnh đại diện từ Google cho vận động viên "${formName}"!`
+                          );
+                        } else {
+                          // Fallback to active user session if profile database query is empty but emails match
+                          const emailTrimmed = formEmail.trim().toLowerCase();
+                          if (currentUser?.email && emailTrimmed === currentUser.email.toLowerCase() && currentUser.photoURL) {
+                            setFormAvatarUrl(currentUser.photoURL);
+                            alert(language === "en" 
+                              ? `Successfully synced Google avatar from your active session!` 
+                              : `Đã đồng bộ thành công ảnh đại diện Google từ phiên hoạt động của bạn!`
+                            );
+                            return;
+                          }
+                          alert(language === "en" 
+                            ? `Could not find any Google account or avatar linked with "${formName}" (${formEmail || "No Email"}).` 
+                            : `Không tìm thấy tài khoản Google hoặc ảnh đại diện nào liên kết với "${formName}" (${formEmail || "Chưa nhập Email"}).`
+                          );
+                        }
+                      } catch (e) {
+                        console.error(e);
+                        alert(language === "en" ? "Error syncing Google avatar." : "Lỗi khi đồng bộ ảnh đại diện Google.");
+                      }
+                    }}
+                    title={language === "en" ? "Sync Google avatar" : "Đồng bộ ảnh đại diện từ Google"}
+                    className="p-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-600 transition-colors flex items-center justify-center active:scale-95 transition-all"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </button>
                 </div>
 
                 <div className="w-full mt-1">
@@ -2656,79 +2695,83 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
                 </div>
 
                 {/* ----------------- Trang bị & Kỹ thuật ----------------- */}
-                <div className="col-span-1 sm:col-span-2 border-t border-slate-100 pt-4 mt-2">
-                  <h5 className="text-[11px] font-black uppercase text-indigo-600 tracking-wider mb-2">🎯 Cấu hình Trang bị & Kỹ thuật (Gear & Tech)</h5>
-                </div>
+                {!isCreating && (
+                  <>
+                    <div className="col-span-1 sm:col-span-2 border-t border-slate-100 pt-4 mt-2">
+                      <h5 className="text-[11px] font-black uppercase text-indigo-600 tracking-wider mb-2">🎯 Cấu hình Trang bị & Kỹ thuật (Gear & Tech)</h5>
+                    </div>
 
-                {/* Tên loại ná */}
-                <div>
-                  <label className="block text-[11px] font-semibold text-gray-500 uppercase mb-1">
-                    Tên loại ná:
-                  </label>
-                  <input
-                    type="text"
-                    value={formGearSlingName}
-                    onChange={(e) => setFormGearSlingName(e.target.value)}
-                    placeholder="Vô cực, VIP, Hổ, CNC..."
-                    className="w-full px-3 py-1.5 text-sm bg-slate-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-800"
-                  />
-                </div>
+                    {/* Tên loại ná */}
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-500 uppercase mb-1">
+                        Tên loại ná:
+                      </label>
+                      <input
+                        type="text"
+                        value={formGearSlingName}
+                        onChange={(e) => setFormGearSlingName(e.target.value)}
+                        placeholder="Vô cực, VIP, Hổ, CNC..."
+                        className="w-full px-3 py-1.5 text-sm bg-slate-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-800"
+                      />
+                    </div>
 
-                {/* Độ rộng chạc */}
-                <div>
-                  <label className="block text-[11px] font-semibold text-gray-500 uppercase mb-1">
-                    Độ rộng chạc:
-                  </label>
-                  <input
-                    type="text"
-                    value={formGearForkWidth}
-                    onChange={(e) => setFormGearForkWidth(e.target.value)}
-                    placeholder="7, 7.5, 8... (cm)"
-                    className="w-full px-3 py-1.5 text-sm bg-slate-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-800"
-                  />
-                </div>
+                    {/* Độ rộng chạc */}
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-500 uppercase mb-1">
+                        Độ rộng chạc:
+                      </label>
+                      <input
+                        type="text"
+                        value={formGearForkWidth}
+                        onChange={(e) => setFormGearForkWidth(e.target.value)}
+                        placeholder="7, 7.5, 8... (cm)"
+                        className="w-full px-3 py-1.5 text-sm bg-slate-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-800"
+                      />
+                    </div>
 
-                {/* Khổ thun sử dụng */}
-                <div>
-                  <label className="block text-[11px] font-semibold text-gray-500 uppercase mb-1">
-                    Khổ thun sử dụng:
-                  </label>
-                  <input
-                    type="text"
-                    value={formGearBandSpec}
-                    onChange={(e) => setFormGearBandSpec(e.target.value)}
-                    placeholder="10-20-150 dày 0.55mm..."
-                    className="w-full px-3 py-1.5 text-sm bg-slate-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-800"
-                  />
-                </div>
+                    {/* Khổ thun sử dụng */}
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-500 uppercase mb-1">
+                        Khổ thun sử dụng:
+                      </label>
+                      <input
+                        type="text"
+                        value={formGearBandSpec}
+                        onChange={(e) => setFormGearBandSpec(e.target.value)}
+                        placeholder="10-20-150 dày 0.55mm..."
+                        className="w-full px-3 py-1.5 text-sm bg-slate-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-800"
+                      />
+                    </div>
 
-                {/* Bi sử dụng */}
-                <div>
-                  <label className="block text-[11px] font-semibold text-gray-500 uppercase mb-1">
-                    Bi sử dụng (Kích cỡ):
-                  </label>
-                  <input
-                    type="text"
-                    value={formGearAmmoSize}
-                    onChange={(e) => setFormGearAmmoSize(e.target.value)}
-                    placeholder="7, 8, 9... (mm)"
-                    className="w-full px-3 py-1.5 text-sm bg-slate-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-800"
-                  />
-                </div>
+                    {/* Bi sử dụng */}
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-500 uppercase mb-1">
+                        Bi sử dụng (Kích cỡ):
+                      </label>
+                      <input
+                        type="text"
+                        value={formGearAmmoSize}
+                        onChange={(e) => setFormGearAmmoSize(e.target.value)}
+                        placeholder="7, 8, 9... (mm)"
+                        className="w-full px-3 py-1.5 text-sm bg-slate-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-800"
+                      />
+                    </div>
 
-                {/* Tư thế bắn */}
-                <div>
-                  <label className="block text-[11px] font-semibold text-gray-500 uppercase mb-1">
-                    Tư thế bắn:
-                  </label>
-                  <input
-                    type="text"
-                    value={formGearStance}
-                    onChange={(e) => setFormGearStance(e.target.value)}
-                    placeholder="Tới má, Semi-butterfly, Full..."
-                    className="w-full px-3 py-1.5 text-sm bg-slate-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-800"
-                  />
-                </div>
+                    {/* Tư thế bắn */}
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-500 uppercase mb-1">
+                        Tư thế bắn:
+                      </label>
+                      <input
+                        type="text"
+                        value={formGearStance}
+                        onChange={(e) => setFormGearStance(e.target.value)}
+                        placeholder="Tới má, Semi-butterfly, Full..."
+                        className="w-full px-3 py-1.5 text-sm bg-slate-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-800"
+                      />
+                    </div>
+                  </>
+                )}
 
               </div>
 
