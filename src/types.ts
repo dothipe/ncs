@@ -141,9 +141,17 @@ export interface PKChallenge {
   opponentName?: string;
   opponentAvatar?: string;
   opponentMembers?: { athleteId: string; name: string }[];
+  distance?: string;
+  shotsPerSet?: number;
+  setsCount?: number;
+  winMechanism?: "by_sets" | "by_total_points" | "by_target_shots";
+  targetType?: "bia_muc_tieu" | "bia_giay_tinh_diem";
+  targetTouchShots?: number;
   scores?: {
     challengerScores?: number[];
     opponentScores?: number[];
+    challengerShots?: (boolean | null)[][] | string;
+    opponentShots?: (boolean | null)[][] | string;
     winnerUid?: string;
     challengerConfirm?: boolean;
     opponentConfirm?: boolean;

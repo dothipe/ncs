@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Trophy, 
@@ -21,7 +22,9 @@ import {
   CheckCircle,
   HelpCircle,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  Target,
+  Trash2
 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import { PKChallenge, Athlete, SystemClub } from "../types";
@@ -62,13 +65,107 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
   const [formTitle, setFormTitle] = useState("");
   const [formType, setFormType] = useState<"solo_1v1" | "team_vs_team">("solo_1v1");
   const [formTeamSize, setFormTeamSize] = useState<number>(3);
-  const [formRules, setFormRules] = useState("Best of 3 (Thắng 2/3 hiệp)");
+  const [formRules, setFormRules] = useState("Tính theo Hiệp đấu (So sánh số hiệp thắng)");
   const [formDateTime, setFormDateTime] = useState("");
-  const [formLocation, setFormLocation] = useState("");
+  const [formLocation, setFormLocation] = useState("VSC ONLINE");
   const [formDescription, setFormDescription] = useState("");
   const [formRefereeEmail, setFormRefereeEmail] = useState("");
   const [selectedAthleteId, setSelectedAthleteId] = useState("");
   const [selectedClubId, setSelectedClubId] = useState("");
+
+  // New challenge settings fields
+  const [formDistance, setFormDistance] = useState("10m");
+  const [formShotsPerSet, setFormShotsPerSet] = useState<number>(10);
+  const [formSetsCountOption, setFormSetsCountOption] = useState<string>("3");
+  const [formSetsCountCustom, setFormSetsCountCustom] = useState<string>("3");
+  const [formWinMechanism, setFormWinMechanism] = useState<"by_sets" | "by_total_points" | "by_target_shots">("by_sets");
+  const [formTargetType, setFormTargetType] = useState<"bia_muc_tieu" | "bia_giay_tinh_diem">("bia_muc_tieu");
+  const [formTargetTouchShots, setFormTargetTouchShots] = useState<number>(30);
+
+  // Edit Challenge Modal state
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingChallenge, setEditingChallenge] = useState<PKChallenge | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editRules, setEditRules] = useState("");
+  const [editLocation, setEditLocation] = useState("");
+  const [editDateTime, setEditDateTime] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editRefereeEmail, setEditRefereeEmail] = useState("");
+  const [editDistance, setEditDistance] = useState("10m");
+  const [editShotsPerSet, setEditShotsPerSet] = useState<number>(10);
+  const [editSetsCountOption, setEditSetsCountOption] = useState("3");
+  const [editSetsCountCustom, setEditSetsCountCustom] = useState("3");
+  const [editWinMechanism, setEditWinMechanism] = useState<"by_sets" | "by_total_points" | "by_target_shots">("by_sets");
+  const [editTargetType, setEditTargetType] = useState<"bia_muc_tieu" | "bia_giay_tinh_diem">("bia_muc_tieu");
+  const [editTargetTouchShots, setEditTargetTouchShots] = useState<number>(30);
+
+  const handleWinMechanismChange = (val: "by_sets" | "by_total_points" | "by_target_shots", currentTouchShots = formTargetTouchShots) => {
+    setFormWinMechanism(val);
+    if (val === "by_target_shots") {
+      setFormSetsCountOption("1");
+      setFormSetsCountCustom("1");
+      setFormShotsPerSet(50);
+      setFormRules(language === "en" ? `Target Shots (First to reach ${currentTouchShots} hits wins)` : `Bắn chạm ${currentTouchShots} viên`);
+    } else {
+      // Revert to default 10 shots, 3 sets
+      setFormSetsCountOption("3");
+      setFormSetsCountCustom("3");
+      setFormShotsPerSet(10);
+      if (val === "by_sets") {
+        setFormRules(language === "en" ? "Set-by-Set (Compare won rounds)" : "Tính theo Hiệp đấu (So sánh số hiệp thắng)");
+      } else if (val === "by_total_points") {
+        setFormRules(language === "en" ? "Cumulative Points (Sum of all sets)" : "Cộng tổng điểm (Cộng dồn tất cả các hiệp)");
+      }
+    }
+  };
+
+  const handleEditWinMechanismChange = (val: "by_sets" | "by_total_points" | "by_target_shots", currentTouchShots = editTargetTouchShots) => {
+    setEditWinMechanism(val);
+    if (val === "by_target_shots") {
+      setEditSetsCountOption("1");
+      setEditSetsCountCustom("1");
+      setEditShotsPerSet(50);
+      setEditRules(language === "en" ? `Target Shots (First to reach ${currentTouchShots} hits wins)` : `Bắn chạm ${currentTouchShots} viên`);
+    } else {
+      // Revert to default 10 shots, 3 sets
+      setEditSetsCountOption("3");
+      setEditSetsCountCustom("3");
+      setEditShotsPerSet(10);
+      if (val === "by_sets") {
+        setEditRules(language === "en" ? "Set-by-Set (Compare won rounds)" : "Tính theo Hiệp đấu (So sánh số hiệp thắng)");
+      } else if (val === "by_total_points") {
+        setEditRules(language === "en" ? "Cumulative Points (Sum of all sets)" : "Cộng tổng điểm (Cộng dồn tất cả các hiệp)");
+      }
+    }
+  };
+
+  const handleFormTargetTouchShotsChange = (val: number) => {
+    setFormTargetTouchShots(val);
+    if (formWinMechanism === "by_target_shots") {
+      setFormRules(language === "en" ? `Target Shots (First to reach ${val} hits wins)` : `Bắn chạm ${val} viên`);
+    }
+  };
+
+  const handleEditTargetTouchShotsChange = (val: number) => {
+    setEditTargetTouchShots(val);
+    if (editWinMechanism === "by_target_shots") {
+      setEditRules(language === "en" ? `Target Shots (First to reach ${val} hits wins)` : `Bắn chạm ${val} viên`);
+    }
+  };
+
+  // Selected completed challenge for detail pop-up modal
+  const [selectedDetailChallenge, setSelectedDetailChallenge] = useState<PKChallenge | null>(null);
+
+  // Delete challenge confirmation state (Two-Step validation)
+  const [deleteChallengeId, setDeleteChallengeId] = useState<string | null>(null);
+  const [deleteConfirmStep, setDeleteConfirmStep] = useState<number>(0); // 0 = closed, 1 = first check, 2 = final check
+
+  // Delete individual set confirmation state
+  const [deleteSetConfirmStep, setDeleteSetConfirmStep] = useState<number>(0); // 0 = closed, 1 = first warning, 2 = final warning
+  const [deletingSetIndex, setDeletingSetIndex] = useState<number | null>(null);
+
+  // Refs for tracking active challenge to prevent snapshot overwrite loop
+  const activeArenaChallengeRef = React.useRef<PKChallenge | null>(null);
 
   // Arena state (active match detail view)
   const [activeArenaChallenge, setActiveArenaChallenge] = useState<PKChallenge | null>(null);
@@ -76,6 +173,64 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
   // Score editing inside Arena
   const [challengerScoresInput, setChallengerScoresInput] = useState<number[]>([0, 0, 0]);
   const [opponentScoresInput, setOpponentScoresInput] = useState<number[]>([0, 0, 0]);
+
+  // Shot tracking (true for hit, false for miss, null for unshot)
+  const [challengerShotsInput, setChallengerShotsInput] = useState<(boolean | null)[][]>([]);
+  const [opponentShotsInput, setOpponentShotsInput] = useState<(boolean | null)[][]>([]);
+
+  // State for Touch Shots viewport-centered announcement modal
+  const [touchAnnouncement, setTouchAnnouncement] = useState<{ name: string; target: number } | null>(null);
+  const [hasShownTouchAnnouncement, setHasShownTouchAnnouncement] = useState(false);
+
+  // Reset announcement tracking when active match changes
+  useEffect(() => {
+    setHasShownTouchAnnouncement(false);
+    setTouchAnnouncement(null);
+  }, [activeArenaChallenge?.id]);
+
+  useEffect(() => {
+    if (!activeArenaChallenge || activeArenaChallenge.winMechanism !== "by_target_shots" || hasShownTouchAnnouncement) {
+      return;
+    }
+    const target = activeArenaChallenge.targetTouchShots;
+    if (!target) return;
+
+    // Check first round score
+    const chScore = challengerScoresInput[0] || 0;
+    const opScore = opponentScoresInput[0] || 0;
+
+    if (chScore >= target) {
+      setTouchAnnouncement({
+        name: activeArenaChallenge.challengerName,
+        target: target
+      });
+      setHasShownTouchAnnouncement(true);
+    } else if (opScore >= target) {
+      setTouchAnnouncement({
+        name: activeArenaChallenge.opponentName || (language === "en" ? "Opponent" : "Đối thủ"),
+        target: target
+      });
+      setHasShownTouchAnnouncement(true);
+    }
+  }, [challengerScoresInput, opponentScoresInput, activeArenaChallenge, hasShownTouchAnnouncement, language]);
+
+  // Sync ref with state
+  useEffect(() => {
+    activeArenaChallengeRef.current = activeArenaChallenge;
+  }, [activeArenaChallenge]);
+
+  // Lock scroll when any modal is open
+  useEffect(() => {
+    const isAnyModalOpen = isCreateModalOpen || isEditModalOpen || (deleteConfirmStep > 0) || (deleteSetConfirmStep > 0) || (selectedDetailChallenge !== null) || (touchAnnouncement !== null);
+    if (isAnyModalOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isCreateModalOpen, isEditModalOpen, deleteConfirmStep, deleteSetConfirmStep, selectedDetailChallenge, touchAnnouncement]);
 
   // Loading indicator / Toast message
   const [actionLoading, setActionLoading] = useState(false);
@@ -92,10 +247,14 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
       setLoading(false);
 
       // If user is currently in the arena, keep their arena challenge updated in real-time
-      if (activeArenaChallenge) {
-        const updated = list.find((c) => c.id === activeArenaChallenge.id);
+      const activeChallenge = activeArenaChallengeRef.current;
+      if (activeChallenge) {
+        const updated = list.find((c) => c.id === activeChallenge.id);
         if (updated) {
-          setActiveArenaChallenge(updated);
+          // Only update active challenge state if database contents actually differ
+          if (JSON.stringify(updated) !== JSON.stringify(activeChallenge)) {
+            setActiveArenaChallenge(updated);
+          }
         }
       }
     }, (error) => {
@@ -104,7 +263,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
     });
 
     return () => unsubscribe();
-  }, [activeArenaChallenge]);
+  }, []);
 
   // Subscribe to System Athletes to link profiles
   useEffect(() => {
@@ -164,10 +323,46 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
   useEffect(() => {
     if (activeArenaChallenge) {
       const scores = activeArenaChallenge.scores;
-      setChallengerScoresInput(scores?.challengerScores || [0, 0, 0]);
-      setOpponentScoresInput(scores?.opponentScores || [0, 0, 0]);
+      const finalSetsCount = scores?.challengerScores?.length || activeArenaChallenge.setsCount || 3;
+      const finalShotsPerSet = activeArenaChallenge.shotsPerSet || 5;
+
+      const initialChScores = scores?.challengerScores || Array(finalSetsCount).fill(0);
+      const initialOpScores = scores?.opponentScores || Array(finalSetsCount).fill(0);
+      setChallengerScoresInput(initialChScores);
+      setOpponentScoresInput(initialOpScores);
+
+      // Load shots array details from firebase if saved, otherwise initialize as empty grids
+      let initialChShots: boolean[][] = [];
+      let initialOpShots: boolean[][] = [];
+
+      if (typeof scores?.challengerShots === "string") {
+        try {
+          initialChShots = JSON.parse(scores.challengerShots);
+        } catch (e) {
+          initialChShots = Array(finalSetsCount).fill(null).map(() => Array(finalShotsPerSet).fill(null));
+        }
+      } else if (Array.isArray(scores?.challengerShots)) {
+        initialChShots = scores.challengerShots as boolean[][];
+      } else {
+        initialChShots = Array(finalSetsCount).fill(null).map(() => Array(finalShotsPerSet).fill(null));
+      }
+
+      if (typeof scores?.opponentShots === "string") {
+        try {
+          initialOpShots = JSON.parse(scores.opponentShots);
+        } catch (e) {
+          initialOpShots = Array(finalSetsCount).fill(null).map(() => Array(finalShotsPerSet).fill(null));
+        }
+      } else if (Array.isArray(scores?.opponentShots)) {
+        initialOpShots = scores.opponentShots as boolean[][];
+      } else {
+        initialOpShots = Array(finalSetsCount).fill(null).map(() => Array(finalShotsPerSet).fill(null));
+      }
+
+      setChallengerShotsInput(initialChShots);
+      setOpponentShotsInput(initialOpShots);
     }
-  }, [activeArenaChallenge]);
+  }, [activeArenaChallenge?.id]);
 
   // Calculate stats dynamically for PK Leaderboard
   const pkLeaderboard = useMemo(() => {
@@ -298,6 +493,10 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
         }
       }
 
+      const finalSetsCount = formSetsCountOption === "custom" 
+        ? (Number(formSetsCountCustom) || 3) 
+        : (Number(formSetsCountOption) || 3);
+
       const challengeData: any = {
         type: formType,
         title: formTitle.trim(),
@@ -310,6 +509,12 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
         challengerName: creatorName,
         challengerAvatar: creatorAvatar,
         createdAt: new Date().toISOString(),
+        distance: formDistance.trim() || "10m",
+        shotsPerSet: Number(formShotsPerSet) || 5,
+        setsCount: finalSetsCount,
+        winMechanism: formWinMechanism,
+        targetType: formTargetType,
+        targetTouchShots: Number(formTargetTouchShots) || 30,
       };
 
       if (formType === "team_vs_team") {
@@ -324,7 +529,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
       // Reset Form and close modal
       setFormTitle("");
       setFormDescription("");
-      setFormLocation("");
+      setFormLocation("VSC ONLINE");
       setFormRefereeEmail("");
       setIsCreateModalOpen(false);
 
@@ -382,6 +587,9 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
         }
       }
 
+      const finalSetsCount = challenge.setsCount || 3;
+      const finalShotsPerSet = challenge.shotsPerSet || 5;
+
       const challengeRef = doc(db, "vsc_pk_challenges", challenge.id);
       await updateDoc(challengeRef, {
         opponentUid: currentUser.uid,
@@ -389,8 +597,10 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
         opponentAvatar: opponentAvatar,
         status: "accepted",
         scores: {
-          challengerScores: [0, 0, 0],
-          opponentScores: [0, 0, 0],
+          challengerScores: Array(finalSetsCount).fill(0),
+          opponentScores: Array(finalSetsCount).fill(0),
+          challengerShots: JSON.stringify(Array(finalSetsCount).fill(null).map(() => Array(finalShotsPerSet).fill(null))),
+          opponentShots: JSON.stringify(Array(finalSetsCount).fill(null).map(() => Array(finalShotsPerSet).fill(null))),
           challengerConfirm: false,
           opponentConfirm: false
         }
@@ -408,19 +618,157 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
     }
   };
 
-  // Handle Deleting an open Challenge
-  const handleDeleteChallenge = async (challengeId: string) => {
-    const confirmDelete = window.confirm(
-      language === "en" ? "Are you sure you want to delete this challenge?" : "Bạn có chắc chắn muốn hủy kèo đấu này không?"
-    );
-    if (!confirmDelete) return;
+  // Open Edit settings modal with prepopulated values
+  const openEditModal = (challenge: PKChallenge) => {
+    setEditingChallenge(challenge);
+    setEditTitle(challenge.title);
+    setEditRules(challenge.rules);
+    setEditLocation(challenge.location);
+    setEditDateTime(challenge.dateTime);
+    setEditDescription(challenge.description || "");
+    setEditRefereeEmail(challenge.refereeEmail || "");
+    setEditDistance(challenge.distance || "10m");
+    setEditShotsPerSet(challenge.shotsPerSet || 10);
+    setEditWinMechanism(challenge.winMechanism || "by_sets");
+    setEditTargetType(challenge.targetType || "bia_muc_tieu");
+    setEditTargetTouchShots(challenge.targetTouchShots || 30);
 
-    try {
-      await deleteDoc(doc(db, "vsc_pk_challenges", challengeId));
-      alert(language === "en" ? "Challenge cancelled successfully." : "Hủy kèo thành công.");
-    } catch (err) {
-      console.error("Error cancelling challenge:", err);
+    const sets = challenge.setsCount || 3;
+    if ([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(sets)) {
+      setEditSetsCountOption(String(sets));
+      setEditSetsCountCustom(String(sets));
+    } else {
+      setEditSetsCountOption("custom");
+      setEditSetsCountCustom(String(sets));
     }
+
+    setIsEditModalOpen(true);
+  };
+
+  // Submit challenge settings changes
+  const handleUpdateChallengeSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser || !editingChallenge) return;
+
+    setActionLoading(true);
+    try {
+      const challengeRef = doc(db, "vsc_pk_challenges", editingChallenge.id);
+      const finalSetsCount = editSetsCountOption === "custom" 
+        ? (Number(editSetsCountCustom) || 3) 
+        : (Number(editSetsCountOption) || 3);
+      
+      const updates: any = {
+        title: editTitle.trim(),
+        rules: editRules.trim(),
+        location: editLocation.trim(),
+        dateTime: editDateTime,
+        description: editDescription.trim(),
+        refereeEmail: editRefereeEmail.trim().toLowerCase() || "",
+        distance: editDistance.trim() || "10m",
+        shotsPerSet: Number(editShotsPerSet) || 10,
+        setsCount: finalSetsCount,
+        winMechanism: editWinMechanism,
+        targetType: editTargetType,
+        targetTouchShots: Number(editTargetTouchShots) || 30,
+      };
+
+      // Recalculate score matrix dimensions if scores already exist
+      if (editingChallenge.scores) {
+        const currentCh = editingChallenge.scores.challengerScores || [];
+        const currentOp = editingChallenge.scores.opponentScores || [];
+        
+        let currentChShots: boolean[][] = [];
+        let currentOpShots: boolean[][] = [];
+
+        if (typeof editingChallenge.scores.challengerShots === "string") {
+          try {
+            currentChShots = JSON.parse(editingChallenge.scores.challengerShots);
+          } catch (e) {
+            currentChShots = [];
+          }
+        } else if (Array.isArray(editingChallenge.scores.challengerShots)) {
+          currentChShots = editingChallenge.scores.challengerShots as boolean[][];
+        }
+
+        if (typeof editingChallenge.scores.opponentShots === "string") {
+          try {
+            currentOpShots = JSON.parse(editingChallenge.scores.opponentShots);
+          } catch (e) {
+            currentOpShots = [];
+          }
+        } else if (Array.isArray(editingChallenge.scores.opponentShots)) {
+          currentOpShots = editingChallenge.scores.opponentShots as boolean[][];
+        }
+
+        let newCh = [...currentCh];
+        let newOp = [...currentOp];
+        let newChShots = [...currentChShots];
+        let newOpShots = [...currentOpShots];
+
+        if (newCh.length < finalSetsCount) {
+          while (newCh.length < finalSetsCount) {
+            newCh.push(0);
+            newOp.push(0);
+            newChShots.push(Array(updates.shotsPerSet).fill(null));
+            newOpShots.push(Array(updates.shotsPerSet).fill(null));
+          }
+        } else if (newCh.length > finalSetsCount) {
+          newCh = newCh.slice(0, finalSetsCount);
+          newOp = newOp.slice(0, finalSetsCount);
+          newChShots = newChShots.slice(0, finalSetsCount);
+          newOpShots = newOpShots.slice(0, finalSetsCount);
+        }
+
+        updates.scores = {
+          ...editingChallenge.scores,
+          challengerScores: newCh,
+          opponentScores: newOp,
+          challengerShots: JSON.stringify(newChShots),
+          opponentShots: JSON.stringify(newOpShots),
+        };
+      }
+
+      await updateDoc(challengeRef, updates);
+      setIsEditModalOpen(false);
+      setEditingChallenge(null);
+      alert(language === "en" ? "Challenge settings updated successfully!" : "Cập nhật cài đặt kèo đấu thành công!");
+    } catch (err) {
+      console.error("Error updating challenge settings:", err);
+      alert("Lỗi khi cập nhật cài đặt: " + (err as Error).message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Open 2-Step delete confirmation modal
+  const openDeleteConfirmation = (challengeId: string) => {
+    setDeleteChallengeId(challengeId);
+    setDeleteConfirmStep(1);
+  };
+
+  const handleConfirmDeleteStep1 = () => {
+    setDeleteConfirmStep(2);
+  };
+
+  const handleConfirmDeleteFinal = async () => {
+    if (!deleteChallengeId) return;
+    setActionLoading(true);
+    try {
+      await deleteDoc(doc(db, "vsc_pk_challenges", deleteChallengeId));
+      setDeleteChallengeId(null);
+      setDeleteConfirmStep(0);
+      alert(language === "en" ? "Challenge deleted permanently!" : "Xóa kèo đấu vĩnh viễn thành công!");
+    } catch (err) {
+      console.error("Error deleting challenge:", err);
+      alert("Lỗi khi xóa kèo: " + (err as Error).message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handle Deleting an open Challenge (fallback function maintained)
+  const handleDeleteChallenge = async (challengeId: string) => {
+    openDeleteConfirmation(challengeId);
   };
 
   // Check if current user is referee/admin for the arena match
@@ -438,6 +786,148 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
     return false;
   }, [currentUser, activeArenaChallenge]);
 
+  // Dynamically add a new round (set) to the active arena challenge
+  const handleAddRound = async () => {
+    if (!currentUser || !activeArenaChallenge) return;
+    const currentSetsCount = activeArenaChallenge.setsCount || 3;
+    const newSetsCount = currentSetsCount + 1;
+    const shotsPerSet = activeArenaChallenge.shotsPerSet || 5;
+
+    try {
+      setActionLoading(true);
+      const challengeRef = doc(db, "vsc_pk_challenges", activeArenaChallenge.id);
+
+      // Expand local state arrays
+      const nextChScores = [...challengerScoresInput];
+      const nextOpScores = [...opponentScoresInput];
+      while (nextChScores.length < newSetsCount) {
+        nextChScores.push(0);
+      }
+      while (nextOpScores.length < newSetsCount) {
+        nextOpScores.push(0);
+      }
+
+      // Expand local shot matrices
+      const nextChShots = [...challengerShotsInput];
+      const nextOpShots = [...opponentShotsInput];
+      while (nextChShots.length < newSetsCount) {
+        nextChShots.push(Array(shotsPerSet).fill(null));
+      }
+      while (nextOpShots.length < newSetsCount) {
+        nextOpShots.push(Array(shotsPerSet).fill(null));
+      }
+
+      // Update local state first to prevent flashing
+      setChallengerScoresInput(nextChScores);
+      setOpponentScoresInput(nextOpScores);
+      setChallengerShotsInput(nextChShots);
+      setOpponentShotsInput(nextOpShots);
+
+      // Save to Firestore
+      await updateDoc(challengeRef, {
+        setsCount: newSetsCount,
+        "scores.challengerScores": nextChScores,
+        "scores.opponentScores": nextOpScores,
+        "scores.challengerShots": JSON.stringify(nextChShots),
+        "scores.opponentShots": JSON.stringify(nextOpShots),
+      });
+
+      // Update the active object in real time
+      setActiveArenaChallenge((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          setsCount: newSetsCount,
+          scores: {
+            ...prev.scores,
+            challengerScores: nextChScores,
+            opponentScores: nextOpScores,
+            challengerShots: JSON.stringify(nextChShots),
+            opponentShots: JSON.stringify(nextOpShots),
+          }
+        };
+      });
+
+      alert(language === "en" ? `Added Round ${newSetsCount}!` : `Đã thêm Hiệp ${newSetsCount}!`);
+    } catch (err) {
+      console.error("Error adding round:", err);
+      alert("Lỗi thêm hiệp đấu: " + (err as Error).message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Open delete set confirmation modal
+  const handleOpenDeleteSetConfirm = (setIdx: number) => {
+    setDeletingSetIndex(setIdx);
+    setDeleteSetConfirmStep(1);
+  };
+
+  // Confirm and delete individual set from match
+  const handleConfirmDeleteSet = async () => {
+    if (deletingSetIndex === null || !activeArenaChallenge) return;
+    try {
+      setActionLoading(true);
+      const setIdx = deletingSetIndex;
+      const challengeRef = doc(db, "vsc_pk_challenges", activeArenaChallenge.id);
+
+      const currentSetsCount = activeArenaChallenge.setsCount || 3;
+      if (currentSetsCount <= 1) {
+        alert(language === "en" ? "Cannot delete the last remaining round!" : "Không thể xóa hiệp đấu cuối cùng còn lại!");
+        setDeleteSetConfirmStep(0);
+        setDeletingSetIndex(null);
+        return;
+      }
+      const newSetsCount = currentSetsCount - 1;
+
+      // Filter out deleted set index from inputs
+      const nextChScores = challengerScoresInput.filter((_, idx) => idx !== setIdx);
+      const nextOpScores = opponentScoresInput.filter((_, idx) => idx !== setIdx);
+      const nextChShots = challengerShotsInput.filter((_, idx) => idx !== setIdx);
+      const nextOpShots = opponentShotsInput.filter((_, idx) => idx !== setIdx);
+
+      // Update local states
+      setChallengerScoresInput(nextChScores);
+      setOpponentScoresInput(nextOpScores);
+      setChallengerShotsInput(nextChShots);
+      setOpponentShotsInput(nextOpShots);
+
+      // Save to Firestore
+      await updateDoc(challengeRef, {
+        setsCount: newSetsCount,
+        "scores.challengerScores": nextChScores,
+        "scores.opponentScores": nextOpScores,
+        "scores.challengerShots": JSON.stringify(nextChShots),
+        "scores.opponentShots": JSON.stringify(nextOpShots),
+      });
+
+      // Update activeArenaChallenge state to trigger re-renders
+      setActiveArenaChallenge((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          setsCount: newSetsCount,
+          scores: {
+            ...prev.scores,
+            challengerScores: nextChScores,
+            opponentScores: nextOpScores,
+            challengerShots: JSON.stringify(nextChShots),
+            opponentShots: JSON.stringify(nextOpShots),
+          }
+        };
+      });
+
+      setDeleteSetConfirmStep(0);
+      setDeletingSetIndex(null);
+      alert(language === "en" ? "Round deleted successfully!" : "Đã xóa hiệp đấu thành công!");
+    } catch (err) {
+      console.error("Error deleting round:", err);
+      alert("Lỗi khi xóa hiệp: " + (err as Error).message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Submit/Update Scores in the Arena
   const handleUpdateScores = async (isConfirmStep = false) => {
     if (!currentUser || !activeArenaChallenge) return;
@@ -448,6 +938,8 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
       const updatedScores = {
         challengerScores: challengerScoresInput,
         opponentScores: opponentScoresInput,
+        challengerShots: JSON.stringify(challengerShotsInput),
+        opponentShots: JSON.stringify(opponentShotsInput),
         challengerConfirm: isConfirmStep && currentUser.uid === activeArenaChallenge.challengerUid 
           ? true 
           : activeArenaChallenge.scores?.challengerConfirm || false,
@@ -778,80 +1270,266 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
               </h4>
 
               {/* Multi-set inputs */}
-              <div className="max-w-xl mx-auto space-y-4 mb-8">
-                {[0, 1, 2].map((setIndex) => (
-                  <div key={setIndex} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between gap-4">
-                    <span className="font-bold text-gray-500 text-xs uppercase tracking-wider">
+              <div className="max-w-xl mx-auto space-y-4 mb-6">
+                {Array.from({ length: activeArenaChallenge.setsCount || 3 }).map((_, setIndex) => (
+                  <div key={setIndex} className="relative bg-white p-4 pr-10 pt-6 sm:pt-4 rounded-xl border border-gray-150 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+                    
+                    {/* Trash Button in top right of each set card */}
+                    {activeArenaChallenge.status !== "completed" && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenDeleteSetConfirm(setIndex)}
+                        className="absolute top-2.5 right-2.5 p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+                        title={language === "en" ? "Delete this set" : "Xóa hiệp đấu này"}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+
+                    <span className="font-bold text-gray-500 text-xs uppercase tracking-wider shrink-0 self-start sm:self-center">
                       {language === "en" ? `Set ${setIndex + 1}` : `Hiệp ${setIndex + 1}`}
                     </span>
-
-                    {/* Challenger Set Score */}
-                    <div className="flex items-center gap-2 w-5/12 justify-end">
-                      <button 
-                        type="button"
-                        disabled={activeArenaChallenge.status === "completed"}
-                        onClick={() => {
-                          const arr = [...challengerScoresInput];
-                          arr[setIndex] = Math.max(0, arr[setIndex] - 1);
-                          setChallengerScoresInput(arr);
-                        }}
-                        className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 font-bold text-sm select-none cursor-pointer"
-                      >
-                        -
-                      </button>
-                      <span className="w-12 text-center font-black text-lg text-rose-600">
-                        {challengerScoresInput[setIndex] || 0}
-                      </span>
-                      <button 
-                        type="button"
-                        disabled={activeArenaChallenge.status === "completed"}
-                        onClick={() => {
-                          const arr = [...challengerScoresInput];
-                          arr[setIndex] = (arr[setIndex] || 0) + 1;
-                          setChallengerScoresInput(arr);
-                        }}
-                        className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 font-bold text-sm select-none cursor-pointer"
-                      >
-                        +
-                      </button>
+ 
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-3 w-full">
+                      {/* Challenger Set Score & Shot Checks */}
+                      <div className="flex flex-col items-center sm:items-end gap-1.5 w-full sm:w-5/12">
+                        {activeArenaChallenge.targetType === "bia_giay_tinh_diem" ? (
+                          <div className="w-full">
+                            <label className="block text-[10px] text-gray-400 font-bold uppercase mb-1 text-right">
+                              {language === "en" ? "Points" : "Nhập điểm"}
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="0"
+                              disabled={activeArenaChallenge.status === "completed"}
+                              value={challengerScoresInput[setIndex] !== undefined ? challengerScoresInput[setIndex] : ""}
+                              onChange={(e) => {
+                                const val = e.target.value === "" ? 0 : Number(e.target.value);
+                                const nextScores = [...challengerScoresInput];
+                                nextScores[setIndex] = val;
+                                setChallengerScoresInput(nextScores);
+                              }}
+                              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-black text-center text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                            />
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-1.5">
+                              <button 
+                                type="button"
+                                disabled={activeArenaChallenge.status === "completed"}
+                                onClick={() => {
+                                  const arr = [...challengerScoresInput];
+                                  arr[setIndex] = Math.max(0, (arr[setIndex] || 0) - 1);
+                                  setChallengerScoresInput(arr);
+                                }}
+                                className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 font-bold text-xs select-none cursor-pointer"
+                              >
+                                -
+                              </button>
+                              <span className="w-8 text-center font-black text-base text-rose-600">
+                                {challengerScoresInput[setIndex] || 0}
+                              </span>
+                              <button 
+                                type="button"
+                                disabled={activeArenaChallenge.status === "completed"}
+                                onClick={() => {
+                                  const arr = [...challengerScoresInput];
+                                  arr[setIndex] = (arr[setIndex] || 0) + 1;
+                                  setChallengerScoresInput(arr);
+                                }}
+                                className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 font-bold text-xs select-none cursor-pointer"
+                              >
+                                +
+                              </button>
+                            </div>
+      
+                            {/* Interactive Shot Boxes - Wrapped at maximum of 5 columns */}
+                            <div className="flex justify-center sm:justify-end w-full">
+                              <div className="grid grid-cols-5 gap-1.5 w-fit">
+                                {Array.from({ length: activeArenaChallenge.shotsPerSet || 5 }).map((_, shotIdx) => {
+                                  const shotVal = challengerShotsInput[setIndex]?.[shotIdx];
+                                  let btnClass = "bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-100";
+                                  let btnTitle = `Untapped (${shotIdx + 1})`;
+                                  if (shotVal === true) {
+                                    btnClass = "bg-green-600 border-green-700 text-white shadow-xs";
+                                    btnTitle = `Hit (${shotIdx + 1})`;
+                                  } else if (shotVal === false) {
+                                    btnClass = "bg-rose-600 border-rose-700 text-white shadow-xs";
+                                    btnTitle = `Miss (${shotIdx + 1})`;
+                                  }
+                                  return (
+                                    <button
+                                      key={shotIdx}
+                                      type="button"
+                                      disabled={activeArenaChallenge.status === "completed"}
+                                      onClick={() => {
+                                        const nextShots = [...challengerShotsInput];
+                                        if (!nextShots[setIndex]) {
+                                          nextShots[setIndex] = Array(activeArenaChallenge.shotsPerSet || 5).fill(null);
+                                        }
+                                        const row = [...nextShots[setIndex]];
+                                        const current = row[shotIdx];
+                                        if (current === undefined || current === null) {
+                                          row[shotIdx] = true;
+                                        } else if (current === true) {
+                                          row[shotIdx] = false;
+                                        } else {
+                                          row[shotIdx] = null;
+                                        }
+                                        nextShots[setIndex] = row;
+                                        setChallengerShotsInput(nextShots);
+      
+                                        // Auto count score (only true / hits count as points)
+                                        const hitCount = row.filter(v => v === true).length;
+                                        const nextScores = [...challengerScoresInput];
+                                        nextScores[setIndex] = hitCount;
+                                        setChallengerScoresInput(nextScores);
+                                      }}
+                                      className={`w-6 h-6 text-[10px] font-black rounded-md border flex items-center justify-center transition-all cursor-pointer ${btnClass}`}
+                                      title={btnTitle}
+                                    >
+                                      {shotIdx + 1}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+ 
+                      <span className="font-bold text-gray-300 px-1 shrink-0 hidden sm:inline">:</span>
+                      <div className="h-px bg-gray-100 w-full sm:hidden" />
+ 
+                      {/* Opponent Set Score & Shot Checks */}
+                      <div className="flex flex-col items-center sm:items-start gap-1.5 w-full sm:w-5/12">
+                        {activeArenaChallenge.targetType === "bia_giay_tinh_diem" ? (
+                          <div className="w-full">
+                            <label className="block text-[10px] text-gray-400 font-bold uppercase mb-1 text-left">
+                              {language === "en" ? "Points" : "Nhập điểm"}
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="0"
+                              disabled={activeArenaChallenge.status === "completed"}
+                              value={opponentScoresInput[setIndex] !== undefined ? opponentScoresInput[setIndex] : ""}
+                              onChange={(e) => {
+                                const val = e.target.value === "" ? 0 : Number(e.target.value);
+                                const nextScores = [...opponentScoresInput];
+                                nextScores[setIndex] = val;
+                                setOpponentScoresInput(nextScores);
+                              }}
+                              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-black text-center text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                            />
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-1.5">
+                              <button 
+                                type="button"
+                                disabled={activeArenaChallenge.status === "completed"}
+                                onClick={() => {
+                                  const arr = [...opponentScoresInput];
+                                  arr[setIndex] = Math.max(0, (arr[setIndex] || 0) - 1);
+                                  setOpponentScoresInput(arr);
+                                }}
+                                className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 font-bold text-xs select-none cursor-pointer"
+                              >
+                                -
+                              </button>
+                              <span className="w-8 text-center font-black text-base text-gray-800">
+                                {opponentScoresInput[setIndex] || 0}
+                              </span>
+                              <button 
+                                type="button"
+                                disabled={activeArenaChallenge.status === "completed"}
+                                onClick={() => {
+                                  const arr = [...opponentScoresInput];
+                                  arr[setIndex] = (arr[setIndex] || 0) + 1;
+                                  setOpponentScoresInput(arr);
+                                }}
+                                className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 font-bold text-xs select-none cursor-pointer"
+                              >
+                                +
+                              </button>
+                            </div>
+      
+                            {/* Interactive Shot Boxes - Wrapped at maximum of 5 columns */}
+                            <div className="flex justify-center sm:justify-start w-full">
+                              <div className="grid grid-cols-5 gap-1.5 w-fit">
+                                {Array.from({ length: activeArenaChallenge.shotsPerSet || 5 }).map((_, shotIdx) => {
+                                  const shotVal = opponentShotsInput[setIndex]?.[shotIdx];
+                                  let btnClass = "bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-100";
+                                  let btnTitle = `Untapped (${shotIdx + 1})`;
+                                  if (shotVal === true) {
+                                    btnClass = "bg-green-600 border-green-700 text-white shadow-xs";
+                                    btnTitle = `Hit (${shotIdx + 1})`;
+                                  } else if (shotVal === false) {
+                                    btnClass = "bg-rose-600 border-rose-700 text-white shadow-xs";
+                                    btnTitle = `Miss (${shotIdx + 1})`;
+                                  }
+                                  return (
+                                    <button
+                                      key={shotIdx}
+                                      type="button"
+                                      disabled={activeArenaChallenge.status === "completed"}
+                                      onClick={() => {
+                                        const nextShots = [...opponentShotsInput];
+                                        if (!nextShots[setIndex]) {
+                                          nextShots[setIndex] = Array(activeArenaChallenge.shotsPerSet || 5).fill(null);
+                                        }
+                                        const row = [...nextShots[setIndex]];
+                                        const current = row[shotIdx];
+                                        if (current === undefined || current === null) {
+                                          row[shotIdx] = true;
+                                        } else if (current === true) {
+                                          row[shotIdx] = false;
+                                        } else {
+                                          row[shotIdx] = null;
+                                        }
+                                        nextShots[setIndex] = row;
+                                        setOpponentShotsInput(nextShots);
+      
+                                        // Auto count score (only true / hits count as points)
+                                        const hitCount = row.filter(v => v === true).length;
+                                        const nextScores = [...opponentScoresInput];
+                                        nextScores[setIndex] = hitCount;
+                                        setOpponentScoresInput(nextScores);
+                                      }}
+                                      className={`w-6 h-6 text-[10px] font-black rounded-md border flex items-center justify-center transition-all cursor-pointer ${btnClass}`}
+                                      title={btnTitle}
+                                    >
+                                      {shotIdx + 1}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
-
-                    <span className="font-bold text-gray-300 px-1">:</span>
-
-                    {/* Opponent Set Score */}
-                    <div className="flex items-center gap-2 w-5/12 justify-start">
-                      <button 
-                        type="button"
-                        disabled={activeArenaChallenge.status === "completed"}
-                        onClick={() => {
-                          const arr = [...opponentScoresInput];
-                          arr[setIndex] = Math.max(0, arr[setIndex] - 1);
-                          setOpponentScoresInput(arr);
-                        }}
-                        className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 font-bold text-sm select-none cursor-pointer"
-                      >
-                        -
-                      </button>
-                      <span className="w-12 text-center font-black text-lg text-gray-800">
-                        {opponentScoresInput[setIndex] || 0}
-                      </span>
-                      <button 
-                        type="button"
-                        disabled={activeArenaChallenge.status === "completed"}
-                        onClick={() => {
-                          const arr = [...opponentScoresInput];
-                          arr[setIndex] = (arr[setIndex] || 0) + 1;
-                          setOpponentScoresInput(arr);
-                        }}
-                        className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 font-bold text-sm select-none cursor-pointer"
-                      >
-                        +
-                      </button>
-                    </div>
-
+ 
                   </div>
                 ))}
               </div>
+
+              {/* Dynamic Add Round Trigger */}
+              {activeArenaChallenge.status !== "completed" && (
+                <div className="flex justify-center mb-6">
+                  <button
+                    type="button"
+                    onClick={handleAddRound}
+                    className="flex items-center gap-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold px-4 py-2 rounded-xl transition-all shadow-xs cursor-pointer text-xs"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>{language === "en" ? "Add Match Round (+1 Set)" : "+ Thêm Hiệp Đấu 🎯"}</span>
+                  </button>
+                </div>
+              )}
 
               {/* Action Buttons for Arena */}
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4 border-t border-gray-100 pt-6">
@@ -975,6 +1653,8 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                   {filteredChallenges.map((challenge) => {
                     const isOwner = currentUser?.uid === challenge.challengerUid;
                     const isMatched = challenge.status !== "open";
+                    const admins = ["vscvietnamslingshot@gmail.com", "nahnatofficial@gmail.com"];
+                    const isAdmin = currentUser?.email && admins.includes(currentUser.email.toLowerCase());
 
                     return (
                       <motion.div
@@ -1028,6 +1708,18 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                               <div className="flex items-center gap-2">
                                 <Clock className="w-3.5 h-3.5 text-rose-500 shrink-0" />
                                 <span className="truncate font-medium">{formatDate(challenge.dateTime)}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Target className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                                <span className="truncate font-semibold text-gray-700">
+                                  {language === "en" ? "Distance: " : "Cự ly: "} {challenge.distance || "10m"}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Sword className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                                <span className="truncate font-semibold text-gray-700">
+                                  {language === "en" ? "Setup: " : "Thiết lập: "} {challenge.setsCount || 3} hiệp x {challenge.shotsPerSet || 5} viên
+                                </span>
                               </div>
                               <div className="flex items-center gap-2 sm:col-span-2 border-t border-gray-50 pt-2 mt-1">
                                 <Shield className="w-3.5 h-3.5 text-rose-500 shrink-0" />
@@ -1090,38 +1782,54 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                         </div>
 
                         {/* Card Footer Button Bar */}
-                        <div className="px-5 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3">
-                          {isOwner && !isMatched && (
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteChallenge(challenge.id)}
-                              className="text-xs font-medium text-rose-600 hover:text-rose-700 cursor-pointer"
-                            >
-                              {language === "en" ? "Cancel Challenge" : "Hủy kèo"}
-                            </button>
-                          )}
+                        <div className="px-5 py-4 bg-gray-50 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            {/* Edit Button */}
+                            {((isOwner || isAdmin) && challenge.status !== "completed") && (
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(challenge)}
+                                className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors cursor-pointer bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200"
+                              >
+                                {language === "en" ? "Edit ⚙️" : "Sửa Kèo ⚙️"}
+                              </button>
+                            )}
 
-                          {!isOwner && !isMatched && (
-                            <button
-                              type="button"
-                              onClick={() => handleAcceptChallenge(challenge)}
-                              className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2 rounded-xl cursor-pointer shadow-sm transition-colors ml-auto"
-                            >
-                              <Sword className="w-3.5 h-3.5" />
-                              <span>{language === "en" ? "Accept Challenge" : "Nhận Kèo PK"}</span>
-                            </button>
-                          )}
+                            {/* Delete Button */}
+                            {(isAdmin || (isOwner && challenge.status !== "completed")) && (
+                              <button
+                                type="button"
+                                onClick={() => openDeleteConfirmation(challenge.id)}
+                                className="text-xs font-bold text-rose-600 hover:text-rose-800 transition-colors cursor-pointer bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200"
+                              >
+                                {language === "en" ? "Delete 🗑️" : "Xóa Kèo 🗑️"}
+                              </button>
+                            )}
+                          </div>
 
-                          {isMatched && (
-                            <button
-                              type="button"
-                              onClick={() => setActiveArenaChallenge(challenge)}
-                              className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold px-4 py-2 rounded-xl cursor-pointer shadow-sm transition-all ml-auto w-full justify-center"
-                            >
-                              <Play className="w-3 h-3 text-rose-500 fill-rose-500" />
-                              <span>{language === "en" ? "Enter PK Arena" : "Vào Khán Đài PK 🏟️"}</span>
-                            </button>
-                          )}
+                          <div className="flex items-center gap-2 ml-auto">
+                            {!isOwner && !isMatched && (
+                              <button
+                                type="button"
+                                onClick={() => handleAcceptChallenge(challenge)}
+                                className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2 rounded-xl cursor-pointer shadow-sm transition-colors"
+                              >
+                                <Sword className="w-3.5 h-3.5" />
+                                <span>{language === "en" ? "Accept Challenge" : "Nhận Kèo PK"}</span>
+                              </button>
+                            )}
+
+                            {isMatched && (
+                              <button
+                                type="button"
+                                onClick={() => setActiveArenaChallenge(challenge)}
+                                className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold px-4 py-2 rounded-xl cursor-pointer shadow-sm transition-all justify-center"
+                              >
+                                <Play className="w-3 h-3 text-rose-500 fill-rose-500" />
+                                <span>{language === "en" ? "Enter PK Arena" : "Vào Khán Đài PK 🏟️"}</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
 
                       </motion.div>
@@ -1241,12 +1949,28 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                 {filteredChallenges.map((challenge) => {
                   const chScores = challenge.scores?.challengerScores || [];
                   const opScores = challenge.scores?.opponentScores || [];
+                  const winMechanism = challenge.winMechanism || "by_sets";
+
                   const chSum = chScores.reduce((a, b) => a + b, 0);
                   const opSum = opScores.reduce((a, b) => a + b, 0);
 
-                  const challengerWin = chSum > opSum;
-                  const opponentWin = opSum > chSum;
-                  const draw = chSum === opSum;
+                  let chSetsWon = 0;
+                  let opSetsWon = 0;
+                  const len = Math.max(chScores.length, opScores.length);
+                  for (let i = 0; i < len; i++) {
+                    const chS = chScores[i] || 0;
+                    const opS = opScores[i] || 0;
+                    if (chS > opS) chSetsWon++;
+                    else if (opS > chS) opSetsWon++;
+                  }
+
+                  const isBySets = winMechanism === "by_sets";
+                  const challengerWin = isBySets ? (chSetsWon > opSetsWon) : (chSum > opSum);
+                  const opponentWin = isBySets ? (opSetsWon > chSetsWon) : (opSum > chSum);
+                  const draw = isBySets ? (chSetsWon === opSetsWon) : (chSum === opSum);
+
+                  const admins = ["vscvietnamslingshot@gmail.com", "nahnatofficial@gmail.com"];
+                  const isAdmin = currentUser?.email && admins.includes(currentUser.email.toLowerCase());
 
                   return (
                     <div 
@@ -1256,7 +1980,13 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                       {/* Match metadata bar */}
                       <div className="px-5 py-3.5 bg-gray-50/50 border-b border-gray-100 flex items-center justify-between text-[10px] text-gray-400 font-bold uppercase tracking-wider">
                         <span>{formatDate(challenge.dateTime)}</span>
-                        <span>{challenge.type === "solo_1v1" ? "1v1 Solo" : "Club Team"}</span>
+                        <span>
+                          {challenge.type === "solo_1v1" ? "1v1 Solo" : "Club Team"}
+                          {" • "}
+                          {isBySets 
+                            ? (language === "en" ? "Set-by-Set Format" : "Tính theo Hiệp") 
+                            : (language === "en" ? "Total Points Format" : "Cộng tổng điểm")}
+                        </span>
                       </div>
 
                       {/* Scoreboard block */}
@@ -1269,7 +1999,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                           <div className="flex flex-col items-center text-center w-5/12">
                             <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center shadow-sm">
                               {challenge.challengerAvatar ? (
-                                <img src={challenge.challengerAvatar} alt={challenge.challengerName} className="w-full h-full object-cover" />
+                                <img src={challenge.challengerAvatar} alt={challenge.challengerName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                               ) : (
                                 <User className="w-5 h-5 text-gray-300" />
                               )}
@@ -1281,18 +2011,24 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                           </div>
 
                           {/* Scores Sum */}
-                          <div className="text-center shrink-0">
-                            <div className="font-black text-xl text-gray-900">
-                              {chSum} - {opSum}
+                          <div className="text-center shrink-0 flex flex-col items-center">
+                            <div className="font-black text-xl text-gray-900 leading-none">
+                              {isBySets ? `${chSetsWon} - ${opSetsWon}` : `${chSum} - ${opSum}`}
                             </div>
-                            <span className="text-[10px] text-gray-400 font-bold uppercase">Final</span>
+                            <span className="text-[9px] text-gray-400 font-bold uppercase mt-1">
+                              {isBySets 
+                                ? (language === "en" ? `Total: ${chSum}-${opSum}` : `Tổng điểm: ${chSum}-${opSum}`) 
+                                : (language === "en" ? `Sets: ${chSetsWon}-${opSetsWon}` : `Số hiệp: ${chSetsWon}-${opSetsWon}`)
+                              }
+                            </span>
+                            <span className="text-[9px] text-gray-400 font-bold uppercase mt-1">Final</span>
                           </div>
 
                           {/* Opponent */}
                           <div className="flex flex-col items-center text-center w-5/12">
                             <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center shadow-sm">
                               {challenge.opponentAvatar ? (
-                                <img src={challenge.opponentAvatar} alt={challenge.opponentName} className="w-full h-full object-cover" />
+                                <img src={challenge.opponentAvatar} alt={challenge.opponentName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                               ) : (
                                 <User className="w-5 h-5 text-gray-300" />
                               )}
@@ -1307,8 +2043,28 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                       </div>
 
                       {/* Footer Details */}
-                      <div className="px-5 py-3.5 bg-gray-50/50 border-t border-gray-100 text-xs text-gray-500">
-                        <span className="font-medium text-gray-600">Location: </span>{challenge.location}
+                      <div className="px-5 py-3.5 bg-gray-50/50 border-t border-gray-100 text-xs text-gray-500 flex items-center justify-between">
+                        <div>
+                          <span className="font-medium text-gray-600">{language === "en" ? "Location: " : "Địa điểm: "}</span>{challenge.location}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedDetailChallenge(challenge)}
+                            className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded border border-indigo-200"
+                          >
+                            {language === "en" ? "Details 👁️" : "Xem chi tiết 👁️"}
+                          </button>
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => openDeleteConfirmation(challenge.id)}
+                              className="text-xs font-bold text-rose-600 hover:text-rose-800 transition-colors cursor-pointer bg-rose-50 hover:bg-rose-100 px-2.5 py-1 rounded border border-rose-200"
+                            >
+                              {language === "en" ? "Delete 🗑️" : "Xóa Kèo 🗑️"}
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                     </div>
@@ -1323,15 +2079,15 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
       {/* ========================================================= */}
       {/* ➕ HOST CHALLENGE CREATION MODAL                             */}
       {/* ========================================================= */}
-      {isCreateModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+      {isCreateModalOpen && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center p-4 overflow-y-auto">
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden my-8"
+            className="bg-white rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden my-auto flex flex-col max-h-[90vh]"
           >
             {/* Modal Header */}
-            <div className="bg-rose-900 text-white px-6 py-4 flex items-center justify-between">
+            <div className="bg-rose-900 text-white px-6 py-4 flex items-center justify-between shrink-0">
               <h3 className="font-bold text-base flex items-center gap-2">
                 <Sword className="w-5 h-5 text-rose-400" />
                 <span>{language === "en" ? "Host New PK Challenge" : "Đăng Kèo PK Thách Đấu Mới"}</span>
@@ -1345,7 +2101,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleCreateChallenge} className="p-6 space-y-4">
+            <form onSubmit={handleCreateChallenge} className="flex-1 overflow-y-auto p-6 space-y-4">
               
               {/* Challenge Title */}
               <div>
@@ -1362,7 +2118,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                 />
               </div>
 
-              {/* Form Type & Size */}
+              {/* Form Type, Target Type & Size */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
@@ -1378,8 +2134,22 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                   </select>
                 </div>
 
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                    {language === "en" ? "Target Type *" : "Mục tiêu *"}
+                  </label>
+                  <select
+                    value={formTargetType}
+                    onChange={(e) => setFormTargetType(e.target.value as any)}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                  >
+                    <option value="bia_muc_tieu">{language === "en" ? "Target Plate (Default)" : "Bia mục tiêu (mặc định)"}</option>
+                    <option value="bia_giay_tinh_diem">{language === "en" ? "Paper Scoreboard" : "Bia giấy tính điểm"}</option>
+                  </select>
+                </div>
+
                 {formType === "team_vs_team" && (
-                  <div>
+                  <div className="sm:col-span-2">
                     <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
                       {language === "en" ? "Team size *" : "Số lượng VĐV mỗi bên *"}
                     </label>
@@ -1458,15 +2228,137 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                 </div>
               )}
 
+              {/* Dynamic Game Parameters: Distance, Shots per round, Rounds count */}
+              <div className="bg-rose-50/30 p-4 rounded-xl border border-rose-100/50 space-y-3.5">
+                <span className="text-xs font-bold text-rose-900 uppercase tracking-widest block mb-1 border-b border-rose-100 pb-1">
+                  {language === "en" ? "Match Settings" : "Cấu hình KÈO ĐẤU"}
+                </span>
+
+                {/* Win Mechanism */}
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
+                    {language === "en" ? "Win Mechanism *" : "Cách phân định thắng bại *"}
+                  </label>
+                  <select
+                    value={formWinMechanism}
+                    onChange={(e) => handleWinMechanismChange(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                  >
+                    <option value="by_sets">
+                      {language === "en" ? "Set-by-Set (Compare won rounds)" : "Tính theo Hiệp đấu (So sánh số hiệp thắng)"}
+                    </option>
+                    <option value="by_total_points">
+                      {language === "en" ? "Cumulative Points (Sum of all sets)" : "Cộng tổng điểm (Cộng dồn tất cả các hiệp)"}
+                    </option>
+                    <option value="by_target_shots">
+                      {language === "en" ? "Target Shots (Bắn chạm X viên)" : "Bắn chạm X viên"}
+                    </option>
+                  </select>
+                </div>
+
+                {/* Target Touch Shots Textbox */}
+                {formWinMechanism === "by_target_shots" && (
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
+                      {language === "en" ? "Target Touch Shots (Point to win) *" : "Số viên chạm thắng *"}
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      max={100}
+                      value={formTargetTouchShots}
+                      onChange={(e) => handleFormTargetTouchShotsChange(Math.max(1, Number(e.target.value)))}
+                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                    />
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Shots per Set */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
+                      {formWinMechanism === "by_target_shots"
+                        ? (language === "en" ? "Max Shots Limit *" : "Max số viên sẽ bắn *")
+                        : (language === "en" ? "Shots per Round *" : "Số viên / mỗi Hiệp *")}
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      max={100}
+                      value={formShotsPerSet}
+                      onChange={(e) => setFormShotsPerSet(Math.max(1, Number(e.target.value)))}
+                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                    />
+                  </div>
+
+                  {/* Distance */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
+                      {language === "en" ? "Distance (e.g. 10m, 15m) *" : "Cự ly (m) *"}
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="vd: 10m"
+                      value={formDistance}
+                      onChange={(e) => setFormDistance(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                    />
+                  </div>
+                </div>
+
+                {/* Rounds Count */}
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
+                    {language === "en" ? "Number of Rounds (Sets) *" : "Hiệp đấu (Số hiệp) *"}
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      disabled={formWinMechanism === "by_target_shots"}
+                      value={formWinMechanism === "by_target_shots" ? "1" : formSetsCountOption}
+                      onChange={(e) => setFormSetsCountOption(e.target.value)}
+                      className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20 disabled:bg-gray-100 disabled:text-gray-400"
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                        <option key={num} value={String(num)}>
+                          {language === "en" ? `${num} Round(s)` : `${num} Hiệp`}
+                        </option>
+                      ))}
+                      <option value="custom">{language === "en" ? "Custom value..." : "Khác (tự nhập số hiệp)..."}</option>
+                    </select>
+
+                    {formSetsCountOption === "custom" && formWinMechanism !== "by_target_shots" && (
+                      <input
+                        type="number"
+                        required
+                        min={1}
+                        max={50}
+                        placeholder="vd: 12"
+                        value={formSetsCountCustom}
+                        onChange={(e) => setFormSetsCountCustom(String(Math.max(1, Number(e.target.value))))}
+                        className="w-24 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                      />
+                    )}
+                  </div>
+                  {formWinMechanism === "by_target_shots" && (
+                    <p className="text-[10px] text-rose-600 mt-1 font-semibold">
+                      {language === "en" ? "Locked to 1 round for Target Shots format" : "Mặc định 1 hiệp cho thể thức Bắn chạm X viên"}
+                    </p>
+                  )}
+                </div>
+              </div>
+
               {/* Match Rules Rule Selection */}
               <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-                  {language === "en" ? "Match Rule & Point Format *" : "Quy định luật chơi & Cách phân thắng bại *"}
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span>{language === "en" ? "Match Rule & Point Format (Optional Note)" : "Ghi chú quy định luật chơi & Cách phân thắng bại"}</span>
+                  <span className="text-[10px] text-gray-400 normal-case font-medium">{language === "en" ? "Optional Note" : "Không bắt buộc (Ghi chú)"}</span>
                 </label>
                 <input
                   type="text"
-                  required
-                  placeholder="e.g., Best of 3, Chạm 11 điểm trước, hoặc Bắn 10 viên"
+                  placeholder={language === "en" ? "e.g., Best of 3, Chạm 11 trước, hoặc Bắn 10 viên" : "vd: Trọng tài chấm điểm, chạm 11 trước, hay Best of 3..."}
                   value={formRules}
                   onChange={(e) => setFormRules(e.target.value)}
                   className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
@@ -1555,7 +2447,836 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
             </form>
 
           </motion.div>
-        </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ========================================================= */}
+      {/* ⚙️ EDIT CHALLENGE SETTINGS MODAL                            */}
+      {/* ========================================================= */}
+      {isEditModalOpen && editingChallenge && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center p-4 overflow-y-auto">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden my-auto flex flex-col max-h-[90vh]"
+          >
+            {/* Modal Header */}
+            <div className="bg-blue-900 text-white px-6 py-4 flex items-center justify-between shrink-0">
+              <h3 className="font-bold text-base flex items-center gap-2">
+                <Target className="w-5 h-5 text-blue-400" />
+                <span>{language === "en" ? "Edit PK Challenge Settings" : "Sửa Cấu Hình KÈO PK"}</span>
+              </h3>
+              <button 
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setEditingChallenge(null);
+                }}
+                className="text-white/80 hover:text-white p-1.5 hover:bg-blue-800 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleUpdateChallengeSettings} className="flex-1 overflow-y-auto p-6 space-y-4">
+              
+              {/* Challenge Title & Target Type */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                    {language === "en" ? "Challenge Title *" : "Tiêu đề kèo thách đấu *"}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-gray-55 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                    {language === "en" ? "Target Type *" : "Mục tiêu *"}
+                  </label>
+                  <select
+                    value={editTargetType}
+                    onChange={(e) => setEditTargetType(e.target.value as any)}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  >
+                    <option value="bia_muc_tieu">{language === "en" ? "Target Plate (Default)" : "Bia mục tiêu (mặc định)"}</option>
+                    <option value="bia_giay_tinh_diem">{language === "en" ? "Paper Scoreboard" : "Bia giấy tính điểm"}</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Dynamic Game Parameters: Distance, Shots per round, Rounds count */}
+              <div className="bg-blue-50/30 p-4 rounded-xl border border-blue-100/50 space-y-3.5">
+                <span className="text-xs font-bold text-blue-900 uppercase tracking-widest block mb-1 border-b border-blue-100 pb-1">
+                  {language === "en" ? "Match Settings" : "Cấu hình KÈO ĐẤU"}
+                </span>
+
+                {/* Win Mechanism */}
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
+                    {language === "en" ? "Win Mechanism *" : "Cách phân định thắng bại *"}
+                  </label>
+                  <select
+                    value={editWinMechanism}
+                    onChange={(e) => handleEditWinMechanismChange(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    <option value="by_sets">
+                      {language === "en" ? "Set-by-Set (Compare won rounds)" : "Tính theo Hiệp đấu (So sánh số hiệp thắng)"}
+                    </option>
+                    <option value="by_total_points">
+                      {language === "en" ? "Cumulative Points (Sum of all sets)" : "Cộng tổng điểm (Cộng dồn tất cả các hiệp)"}
+                    </option>
+                    <option value="by_target_shots">
+                      {language === "en" ? "Target Shots (Bắn chạm X viên)" : "Bắn chạm X viên"}
+                    </option>
+                  </select>
+                </div>
+
+                {/* Target Touch Shots Textbox */}
+                {editWinMechanism === "by_target_shots" && (
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
+                      {language === "en" ? "Target Touch Shots (Point to win) *" : "Số viên chạm thắng *"}
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      max={100}
+                      value={editTargetTouchShots}
+                      onChange={(e) => handleEditTargetTouchShotsChange(Math.max(1, Number(e.target.value)))}
+                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Shots per Set */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
+                      {editWinMechanism === "by_target_shots"
+                        ? (language === "en" ? "Max Shots Limit *" : "Max số viên sẽ bắn *")
+                        : (language === "en" ? "Shots per Round *" : "Số viên / mỗi Hiệp *")}
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      max={100}
+                      value={editShotsPerSet}
+                      onChange={(e) => setEditShotsPerSet(Math.max(1, Number(e.target.value)))}
+                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+
+                  {/* Distance */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
+                      {language === "en" ? "Distance (e.g. 10m, 15m) *" : "Cự ly (m) *"}
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="vd: 10m"
+                      value={editDistance}
+                      onChange={(e) => setEditDistance(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+                </div>
+
+                {/* Rounds Count */}
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
+                    {language === "en" ? "Number of Rounds (Sets) *" : "Hiệp đấu (Số hiệp) *"}
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      disabled={editWinMechanism === "by_target_shots"}
+                      value={editWinMechanism === "by_target_shots" ? "1" : editSetsCountOption}
+                      onChange={(e) => setEditSetsCountOption(e.target.value)}
+                      className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-gray-100 disabled:text-gray-400"
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                        <option key={num} value={String(num)}>
+                          {language === "en" ? `${num} Round(s)` : `${num} Hiệp`}
+                        </option>
+                      ))}
+                      <option value="custom">{language === "en" ? "Custom value..." : "Khác (tự nhập số hiệp)..."}</option>
+                    </select>
+
+                    {editSetsCountOption === "custom" && editWinMechanism !== "by_target_shots" && (
+                      <input
+                        type="number"
+                        required
+                        min={1}
+                        max={50}
+                        placeholder="vd: 12"
+                        value={editSetsCountCustom}
+                        onChange={(e) => setEditSetsCountCustom(String(Math.max(1, Number(e.target.value))))}
+                        className="w-24 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      />
+                    )}
+                  </div>
+                  {editWinMechanism === "by_target_shots" && (
+                    <p className="text-[10px] text-rose-600 mt-1 font-semibold">
+                      {language === "en" ? "Locked to 1 round for Target Shots format" : "Mặc định 1 hiệp cho thể thức Bắn chạm X viên"}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Match Rules Selection */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span>{language === "en" ? "Match Rule & Point Format (Optional Note)" : "Ghi chú quy định luật chơi & Cách phân thắng bại"}</span>
+                  <span className="text-[10px] text-gray-400 normal-case font-medium">{language === "en" ? "Optional Note" : "Không bắt buộc (Ghi chú)"}</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder={language === "en" ? "e.g., Best of 3, Chạm 11 trước, hoặc Bắn 10 viên" : "vd: Trọng tài chấm điểm, chạm 11 trước, hay Best of 3..."}
+                  value={editRules}
+                  onChange={(e) => setEditRules(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-gray-55 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                />
+              </div>
+
+              {/* Date & Location */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                    {language === "en" ? "Scheduled DateTime *" : "Thời gian hẹn thi đấu *"}
+                  </label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={editDateTime}
+                    onChange={(e) => setEditDateTime(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-gray-55 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                    {language === "en" ? "Venue / Location *" : "Địa điểm / Sân thi đấu *"}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editLocation}
+                    onChange={(e) => setEditLocation(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-gray-55 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Optional Referee */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                  {language === "en" ? "Referee Email (Optional)" : "Email Trọng tài chỉ định (Không bắt buộc)"}
+                </label>
+                <input
+                  type="email"
+                  placeholder="referee@example.com"
+                  value={editRefereeEmail}
+                  onChange={(e) => setEditRefereeEmail(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-gray-55 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                />
+              </div>
+
+              {/* Challenge Description / Notes */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                  {language === "en" ? "Notes / Extra description" : "Mô tả thêm / Ghi chú kèo nước"}
+                </label>
+                <textarea
+                  rows={2}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-gray-55 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                />
+              </div>
+
+              {/* Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditModalOpen(false);
+                    setEditingChallenge(null);
+                  }}
+                  className="px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-150 rounded-xl transition-colors cursor-pointer"
+                >
+                  {language === "en" ? "Cancel" : "Hủy bỏ"}
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-md cursor-pointer transition-colors flex items-center gap-2"
+                >
+                  {actionLoading ? (
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : null}
+                  <span>{language === "en" ? "Save Settings" : "Lưu Thay Đổi"}</span>
+                </button>
+              </div>
+
+            </form>
+
+          </motion.div>
+        </div>,
+        document.body
+      )}
+
+      {/* ========================================================= */}
+      {/* 🗑️ TWO-STEP PERMANENT DELETE CONFIRMATION MODAL             */}
+      {/* ========================================================= */}
+      {deleteConfirmStep > 0 && deleteChallengeId && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[99999] bg-black/70 backdrop-blur-xs flex flex-col items-center justify-center p-4 overflow-y-auto">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden my-auto"
+          >
+            {/* Modal Header */}
+            <div className="bg-rose-900 text-white px-5 py-4 flex items-center justify-between">
+              <h3 className="font-bold text-sm flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-rose-300 shrink-0" />
+                <span>
+                  {deleteConfirmStep === 1 
+                    ? (language === "en" ? "Confirm Deletion (Step 1/2)" : "Xác nhận xóa kèo (Bước 1/2)")
+                    : (language === "en" ? "CRITICAL CONFIRMATION (Step 2/2)" : "XÁC NHẬN NGUY HIỂM (Bước 2/2)")}
+                </span>
+              </h3>
+              <button 
+                onClick={() => {
+                  setDeleteConfirmStep(0);
+                  setDeleteChallengeId(null);
+                }}
+                className="text-white/80 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4">
+              {deleteConfirmStep === 1 ? (
+                <>
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    {language === "en" 
+                      ? "Are you sure you want to delete this PK challenge? If matches are underway, this will erase temporary logs permanently." 
+                      : "Bạn có chắc chắn muốn xóa kèo đấu PK này không? Kèo đấu sẽ biến mất vĩnh viễn khỏi sảnh đấu và lịch sử."}
+                  </p>
+                  <div className="bg-amber-50 rounded-xl p-3 border border-amber-200 text-xs text-amber-800 flex gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{language === "en" ? "This action is irreversible." : "Hành động này không thể hoàn tác."}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-rose-800 font-bold leading-relaxed">
+                    {language === "en" 
+                      ? "WARNING: You are about to permanently purge this match from the database. This includes any scores registered, and can impact standings." 
+                      : "CẢNH BÁO: Bạn đang thực hiện xóa vĩnh viễn trận đấu khỏi hệ thống cơ sở dữ liệu. Tất cả điểm số, hiệp đấu đã lưu sẽ mất hoàn toàn."}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {language === "en" 
+                      ? "Please click 'Permanently Purge' to proceed, or close this window." 
+                      : "Vui lòng bấm 'Có, hãy xóa vĩnh viễn' để tiếp tục hoặc đóng cửa sổ này."}
+                  </p>
+                </>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteConfirmStep(0);
+                    setDeleteChallengeId(null);
+                  }}
+                  className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
+                >
+                  {language === "en" ? "Cancel" : "Hủy bỏ"}
+                </button>
+
+                {deleteConfirmStep === 1 ? (
+                  <button
+                    type="button"
+                    onClick={handleConfirmDeleteStep1}
+                    className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-md cursor-pointer transition-colors"
+                  >
+                    {language === "en" ? "Continue" : "Tiếp tục bước 2"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    onClick={handleConfirmDeleteFinal}
+                    className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-md cursor-pointer transition-colors flex items-center gap-1"
+                  >
+                    {actionLoading && <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
+                    <span>{language === "en" ? "Permanently Purge 🗑️" : "Có, hãy xóa vĩnh viễn 🗑️"}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        </div>,
+        document.body
+      )}
+
+      {/* ========================================================= */}
+      {/* 🗑️ TWO-STEP INDIVIDUAL SET DELETE CONFIRMATION MODAL        */}
+      {/* ========================================================= */}
+      {deleteSetConfirmStep > 0 && deletingSetIndex !== null && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center p-4 overflow-y-auto">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden my-auto"
+          >
+            {/* Modal Header */}
+            <div className="bg-rose-900 text-white px-5 py-4 flex items-center justify-between">
+              <h3 className="font-bold text-sm flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-rose-300 shrink-0" />
+                <span>
+                  {deleteSetConfirmStep === 1 
+                    ? (language === "en" ? "Delete Hiệp Đấu (Step 1/2)" : "Xóa Hiệp Đấu (Cảnh báo 1/2)")
+                    : (language === "en" ? "CRITICAL (Step 2/2)" : "CẢNH BÁO NGUY HIỂM (Cảnh báo 2/2)")}
+                </span>
+              </h3>
+              <button 
+                onClick={() => {
+                  setDeleteSetConfirmStep(0);
+                  setDeletingSetIndex(null);
+                }}
+                className="text-white/80 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4">
+              {deleteSetConfirmStep === 1 ? (
+                <>
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    {language === "en" 
+                      ? `Are you sure you want to delete Set ${deletingSetIndex + 1}? All scored shots and points for this set will be removed.` 
+                      : `Bạn có chắc chắn muốn xóa Hiệp ${deletingSetIndex + 1} không? Toàn bộ điểm số và lượt bắn của hiệp đấu này sẽ bị loại bỏ hoàn toàn.`}
+                  </p>
+                  <div className="bg-amber-50 rounded-xl p-3 border border-amber-200 text-xs text-amber-800 flex gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{language === "en" ? "The remaining sets will be re-numbered." : "Các hiệp đấu còn lại sẽ được tự động đánh số lại thứ tự."}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-rose-800 font-bold leading-relaxed">
+                    {language === "en" 
+                      ? `WARNING: This action is permanent! The scores and shot lists for Set ${deletingSetIndex + 1} cannot be recovered.` 
+                      : `CẢNH BÁO NGUY HIỂM: Thao tác này là vĩnh viễn! Điểm số và thông tin bắn trúng/trượt của Hiệp ${deletingSetIndex + 1} sẽ không thể khôi phục.`}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {language === "en" 
+                      ? "Click 'Confirm Deletion' to proceed, or click 'Cancel' to keep the set." 
+                      : "Bấm 'Tôi đồng ý xóa vĩnh viễn hiệp đấu' để tiến hành xóa, hoặc chọn 'Hủy bỏ' để giữ lại hiệp đấu."}
+                  </p>
+                </>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteSetConfirmStep(0);
+                    setDeletingSetIndex(null);
+                  }}
+                  className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
+                >
+                  {language === "en" ? "Cancel" : "Hủy bỏ"}
+                </button>
+
+                {deleteSetConfirmStep === 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => setDeleteSetConfirmStep(2)}
+                    className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-md cursor-pointer transition-colors"
+                  >
+                    {language === "en" ? "Next Warning" : "Tiếp tục cảnh báo 2"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    onClick={handleConfirmDeleteSet}
+                    className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-md cursor-pointer transition-colors flex items-center gap-1"
+                  >
+                    {actionLoading && <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
+                    <span>{language === "en" ? "Confirm Deletion 🗑️" : "Tôi đồng ý xóa vĩnh viễn hiệp đấu 🗑️"}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        </div>,
+        document.body
+      )}
+
+      {/* ========================================================= */}
+      {/* 👁️ COMPLETED MATCH DETAILS POP-UP MODAL                   */}
+      {/* ========================================================= */}
+      {selectedDetailChallenge !== null && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center p-4 overflow-y-auto">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden my-auto flex flex-col max-h-[90vh]"
+          >
+            {/* Modal Header */}
+            <div className="bg-indigo-900 text-white px-6 py-4 flex items-center justify-between shrink-0">
+              <h3 className="font-bold text-base flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-indigo-400" />
+                <span>{language === "en" ? "Match Scorecard Details" : "Chi Tiết Kết Quả Kèo Đấu"}</span>
+              </h3>
+              <button 
+                onClick={() => setSelectedDetailChallenge(null)}
+                className="text-indigo-200 hover:text-white p-1.5 hover:bg-indigo-800 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div className="text-center">
+                <h4 className="font-extrabold text-base text-gray-900">{selectedDetailChallenge.title}</h4>
+                <p className="text-xs text-gray-500 mt-1 flex justify-center gap-4">
+                  <span>{formatDate(selectedDetailChallenge.dateTime)}</span>
+                  <span>•</span>
+                  <span>{selectedDetailChallenge.location}</span>
+                  <span>•</span>
+                  <span>{language === "en" ? `Distance: ${selectedDetailChallenge.distance || "10m"}` : `Cự ly: ${selectedDetailChallenge.distance || "10m"}`}</span>
+                </p>
+                <div className="inline-block mt-2 px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-semibold rounded-full border border-indigo-100">
+                  {selectedDetailChallenge.winMechanism === "by_total_points" 
+                    ? (language === "en" ? "Rule: Cumulative Points" : "Luật: Cộng dồn tổng điểm")
+                    : selectedDetailChallenge.winMechanism === "by_target_shots"
+                    ? (language === "en" ? `Rule: Target Touch (${selectedDetailChallenge.targetTouchShots || 0} Shots)` : `Luật: Bắn chạm (${selectedDetailChallenge.targetTouchShots || 0} viên)`)
+                    : (language === "en" ? "Rule: Set-by-Set Wins" : "Luật: Tính theo số hiệp thắng")}
+                </div>
+              </div>
+
+              {/* Match Information Grid */}
+              <div className="bg-indigo-50/40 p-4 rounded-xl border border-indigo-100/50 grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
+                <div>
+                  <span className="block text-[10px] text-indigo-800 font-bold uppercase tracking-wider mb-0.5">
+                    {language === "en" ? "Target Type" : "Mục tiêu"}
+                  </span>
+                  <span className="font-semibold text-gray-800">
+                    {selectedDetailChallenge.targetType === "bia_giay_tinh_diem" 
+                      ? (language === "en" ? "Paper Scoreboard" : "Bia giấy tính điểm") 
+                      : (language === "en" ? "Standard Target" : "Bia mục tiêu")}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[10px] text-indigo-800 font-bold uppercase tracking-wider mb-0.5">
+                    {language === "en" ? "Shots Per Round" : "Số viên mỗi hiệp"}
+                  </span>
+                  <span className="font-semibold text-gray-800">
+                    {selectedDetailChallenge.shotsPerSet || 5} {language === "en" ? "shots" : "viên"}
+                  </span>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <span className="block text-[10px] text-indigo-800 font-bold uppercase tracking-wider mb-0.5">
+                    {language === "en" ? "Rounds Count" : "Hiệp đấu"}
+                  </span>
+                  <span className="font-semibold text-gray-800">
+                    {selectedDetailChallenge.setsCount || 3} {language === "en" ? "rounds" : "hiệp"}
+                  </span>
+                </div>
+                {selectedDetailChallenge.description && (
+                  <div className="col-span-2 sm:col-span-3 border-t border-indigo-100/40 pt-3 mt-1">
+                    <span className="block text-[10px] text-indigo-800 font-bold uppercase tracking-wider mb-1">
+                      {language === "en" ? "Match Description" : "Mô tả kèo đấu"}
+                    </span>
+                    <p className="text-gray-700 leading-relaxed font-normal bg-white/75 p-2.5 rounded-lg border border-indigo-100/20 whitespace-pre-wrap">
+                      {selectedDetailChallenge.description}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Head-to-Head display */}
+              {(() => {
+                const chScores = selectedDetailChallenge.scores?.challengerScores || [];
+                const opScores = selectedDetailChallenge.scores?.opponentScores || [];
+                const chSum = chScores.reduce((a, b) => a + b, 0);
+                const opSum = opScores.reduce((a, b) => a + b, 0);
+
+                let chSetsWon = 0;
+                let opSetsWon = 0;
+                const len = Math.max(chScores.length, opScores.length);
+                for (let i = 0; i < len; i++) {
+                  const chS = chScores[i] || 0;
+                  const opS = opScores[i] || 0;
+                  if (chS > opS) chSetsWon++;
+                  else if (opS > chS) opSetsWon++;
+                }
+
+                const isBySets = selectedDetailChallenge.winMechanism === "by_sets" || !selectedDetailChallenge.winMechanism;
+                const chWin = isBySets ? (chSetsWon > opSetsWon) : (chSum > opSum);
+                const opWin = isBySets ? (opSetsWon > chSetsWon) : (opSum > chSum);
+
+                let challengerShots: boolean[][] = [];
+                let opponentShots: boolean[][] = [];
+                if (typeof selectedDetailChallenge.scores?.challengerShots === "string") {
+                  try { challengerShots = JSON.parse(selectedDetailChallenge.scores.challengerShots); } catch (e) {}
+                } else if (Array.isArray(selectedDetailChallenge.scores?.challengerShots)) {
+                  challengerShots = selectedDetailChallenge.scores.challengerShots;
+                }
+                if (typeof selectedDetailChallenge.scores?.opponentShots === "string") {
+                  try { opponentShots = JSON.parse(selectedDetailChallenge.scores.opponentShots); } catch (e) {}
+                } else if (Array.isArray(selectedDetailChallenge.scores?.opponentShots)) {
+                  opponentShots = selectedDetailChallenge.scores.opponentShots;
+                }
+
+                return (
+                  <>
+                    <div className="flex items-center justify-around gap-4 bg-gray-50 p-5 rounded-2xl border border-gray-100">
+                      {/* Challenger */}
+                      <div className="flex flex-col items-center text-center w-5/12">
+                        <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-indigo-200 bg-white flex items-center justify-center shadow-md">
+                          {selectedDetailChallenge.challengerAvatar ? (
+                            <img src={selectedDetailChallenge.challengerAvatar} alt={selectedDetailChallenge.challengerName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <User className="w-6 h-6 text-gray-300" />
+                          )}
+                        </div>
+                        <span className="text-sm font-bold text-gray-950 mt-2">{selectedDetailChallenge.challengerName}</span>
+                        {chWin && (
+                          <span className="text-[10px] font-black uppercase text-green-700 bg-green-100 border border-green-200 px-2 py-0.5 rounded-md mt-1">Winner</span>
+                        )}
+                      </div>
+
+                      {/* Main Score Display */}
+                      <div className="text-center shrink-0">
+                        <div className="font-extrabold text-2xl text-gray-950">
+                          {isBySets ? `${chSetsWon} - ${opSetsWon}` : `${chSum} - ${opSum}`}
+                        </div>
+                        <span className="text-[10px] text-gray-500 font-bold uppercase block mt-1 tracking-wider">
+                          {isBySets ? (language === "en" ? "Sets Score" : "Tỷ số Hiệp") : (language === "en" ? "Points Score" : "Tỷ số Điểm")}
+                        </span>
+                        <div className="text-[10px] text-gray-400 mt-1 font-semibold">
+                          {isBySets 
+                            ? (language === "en" ? `Total points: ${chSum} - ${opSum}` : `Tổng điểm: ${chSum} - ${opSum}`) 
+                            : (language === "en" ? `Sets won: ${chSetsWon} - ${opSetsWon}` : `Số hiệp thắng: ${chSetsWon} - ${opSetsWon}`)
+                          }
+                        </div>
+                      </div>
+
+                      {/* Opponent */}
+                      <div className="flex flex-col items-center text-center w-5/12">
+                        <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-indigo-200 bg-white flex items-center justify-center shadow-md">
+                          {selectedDetailChallenge.opponentAvatar ? (
+                            <img src={selectedDetailChallenge.opponentAvatar} alt={selectedDetailChallenge.opponentName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <User className="w-6 h-6 text-gray-300" />
+                          )}
+                        </div>
+                        <span className="text-sm font-bold text-gray-950 mt-2">{selectedDetailChallenge.opponentName || "Guest"}</span>
+                        {opWin && (
+                          <span className="text-[10px] font-black uppercase text-green-700 bg-green-100 border border-green-200 px-2 py-0.5 rounded-md mt-1">Winner</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Sets Breakdown */}
+                    <div className="space-y-4">
+                      <h5 className="font-bold text-xs text-gray-700 uppercase tracking-widest border-b border-gray-100 pb-1">
+                        {language === "en" ? "Rounds Breakdown" : "Chi tiết từng hiệp đấu"}
+                      </h5>
+
+                      <div className="space-y-3">
+                        {Array.from({ length: selectedDetailChallenge.setsCount || 3 }).map((_, setIdx) => {
+                          const chSetScore = chScores[setIdx] ?? 0;
+                          const opSetScore = opScores[setIdx] ?? 0;
+                          const shotsLimit = selectedDetailChallenge.shotsPerSet || 5;
+
+                          const chRowShots = challengerShots[setIdx] || [];
+                          const opRowShots = opponentShots[setIdx] || [];
+
+                          return (
+                            <div key={setIdx} className="bg-gray-50/50 p-3.5 rounded-xl border border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+                              {/* Round Number */}
+                              <span className="font-extrabold text-xs text-indigo-900 uppercase shrink-0">
+                                {language === "en" ? `Set ${setIdx + 1}` : `Hiệp ${setIdx + 1}`}
+                              </span>
+
+                              {/* Challenger shots & score */}
+                              <div className="flex items-center gap-3 w-full sm:w-auto justify-end flex-1 sm:justify-end">
+                                <div className="grid grid-cols-5 gap-1 w-fit">
+                                  {Array.from({ length: shotsLimit }).map((_, shotIdx) => {
+                                    const shotVal = chRowShots[shotIdx];
+                                    let cellClass = "bg-gray-50 border-gray-200 text-gray-400";
+                                    let cellTitle = "Untapped";
+                                    if (shotVal === true) {
+                                      cellClass = "bg-green-600 border-green-700 text-white";
+                                      cellTitle = "Hit";
+                                    } else if (shotVal === false) {
+                                      cellClass = "bg-rose-600 border-rose-700 text-white";
+                                      cellTitle = "Miss";
+                                    }
+                                    return (
+                                      <div 
+                                        key={shotIdx} 
+                                        className={`w-5 h-5 rounded text-[8px] font-black flex items-center justify-center border ${cellClass}`}
+                                        title={cellTitle}
+                                      >
+                                        {shotIdx + 1}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                <span className="font-black text-sm text-gray-800 bg-white px-2 py-0.5 rounded border border-gray-150 min-w-[28px] text-center">
+                                  {chSetScore}
+                                </span>
+                              </div>
+
+                              <span className="font-bold text-gray-300 hidden sm:inline">:</span>
+
+                              {/* Opponent shots & score */}
+                              <div className="flex items-center gap-3 w-full sm:w-auto justify-start flex-1 sm:justify-start">
+                                <span className="font-black text-sm text-gray-800 bg-white px-2 py-0.5 rounded border border-gray-150 min-w-[28px] text-center">
+                                  {opSetScore}
+                                </span>
+                                <div className="grid grid-cols-5 gap-1 w-fit">
+                                  {Array.from({ length: shotsLimit }).map((_, shotIdx) => {
+                                    const shotVal = opRowShots[shotIdx];
+                                    let cellClass = "bg-gray-50 border-gray-200 text-gray-400";
+                                    let cellTitle = "Untapped";
+                                    if (shotVal === true) {
+                                      cellClass = "bg-green-600 border-green-700 text-white";
+                                      cellTitle = "Hit";
+                                    } else if (shotVal === false) {
+                                      cellClass = "bg-rose-600 border-rose-700 text-white";
+                                      cellTitle = "Miss";
+                                    }
+                                    return (
+                                      <div 
+                                        key={shotIdx} 
+                                        className={`w-5 h-5 rounded text-[8px] font-black flex items-center justify-center border ${cellClass}`}
+                                        title={cellTitle}
+                                      >
+                                        {shotIdx + 1}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+
+              {/* Referee email and system stats */}
+              {selectedDetailChallenge.refereeEmail && (
+                <div className="bg-amber-50 rounded-xl p-3 border border-amber-100 text-xs text-amber-900 flex items-center justify-between">
+                  <span className="font-bold">{language === "en" ? "Referee:" : "Trọng tài giám sát:"}</span>
+                  <span className="font-medium bg-amber-100/50 px-2.5 py-0.5 rounded-lg border border-amber-200/50">{selectedDetailChallenge.refereeEmail}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedDetailChallenge(null)}
+                className="bg-indigo-900 hover:bg-indigo-950 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-md cursor-pointer transition-colors"
+              >
+                {language === "en" ? "Close Scorecard" : "Đóng bảng điểm"}
+              </button>
+            </div>
+          </motion.div>
+        </div>,
+        document.body
+       )}
+
+      {/* ========================================================= */}
+      {/* 🎯 VIEWPORT CENTER TARGET SHOTS REACHED ANNOUNCEMENT       */}
+      {/* ========================================================= */}
+      {touchAnnouncement !== null && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[100000] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            transition={{ type: "spring", duration: 0.5 }}
+            className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-amber-200 text-center relative"
+          >
+            {/* Elegant decorative top pattern */}
+            <div className="bg-amber-500 h-2.5 w-full absolute top-0 left-0" />
+            
+            <div className="p-8 flex flex-col items-center">
+              {/* Animated Target / Trophy Icon inside a golden ripple ring */}
+              <div className="relative mb-6">
+                <div className="absolute inset-0 rounded-full bg-amber-100 animate-ping opacity-75" />
+                <div className="w-20 h-20 rounded-full bg-amber-50 border-4 border-amber-300 flex items-center justify-center relative z-10 shadow-inner">
+                  <Trophy className="w-10 h-10 text-amber-500 animate-bounce" />
+                </div>
+              </div>
+
+              {/* Header text */}
+              <h3 className="text-xl font-extrabold text-amber-950 uppercase tracking-widest mb-2">
+                {language === "en" ? "Target Reached!" : "Đã Chạm Mục Tiêu!"}
+              </h3>
+              
+              <div className="bg-amber-50 border border-amber-100 rounded-2xl px-5 py-3 mb-6 w-full">
+                <span className="block text-[11px] font-bold text-amber-800 uppercase tracking-wider mb-1">
+                  {language === "en" ? "Format: Target Shots Touch" : "Thể thức: Bắn chạm X viên"}
+                </span>
+                <span className="text-3xl font-black text-amber-600 block leading-none">
+                  {touchAnnouncement.target} {language === "en" ? "Shots" : "Viên"}
+                </span>
+              </div>
+
+              {/* Athlete Name Display with display style typography */}
+              <div className="mb-8">
+                <p className="text-xs text-gray-400 uppercase tracking-widest font-bold mb-1.5">
+                  {language === "en" ? "Athlete Accomplished" : "Vận động viên đạt mốc"}
+                </p>
+                <h4 className="text-2xl font-black text-gray-900 leading-tight">
+                  {touchAnnouncement.name}
+                </h4>
+              </div>
+
+              {/* Dismiss Action Button */}
+              <button
+                type="button"
+                onClick={() => setTouchAnnouncement(null)}
+                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3.5 px-6 rounded-2xl shadow-lg hover:shadow-xl transition-all cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0 text-sm tracking-wider uppercase"
+              >
+                {language === "en" ? "Continue Match" : "Tiếp tục trận đấu"}
+              </button>
+            </div>
+          </motion.div>
+        </div>,
+        document.body
       )}
 
     </div>
