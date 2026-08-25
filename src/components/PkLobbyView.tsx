@@ -386,18 +386,18 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
       dbOpShots = Array(finalSetsCount).fill(null).map(() => Array(finalShotsPerSet).fill(null));
     }
 
-    // 2. Decide what to sync to local state based on user role to avoid race conditions
+    // 2. Decide what to sync to local state based on user role and permissions to avoid race conditions
     const isChallenger = currentUser?.uid === activeArenaChallenge.challengerUid;
     const isOpponent = currentUser?.uid === activeArenaChallenge.opponentUid;
+    const hasReferee = !!(activeArenaChallenge.refereeEmail && activeArenaChallenge.refereeEmail.trim() !== "");
+    
+    const admins = ["vscvietnamslingshot@gmail.com", "nahnatofficial@gmail.com"];
+    const isReferee = !!((activeArenaChallenge.refereeEmail && currentUser?.email && activeArenaChallenge.refereeEmail.toLowerCase() === currentUser.email.toLowerCase()) || (currentUser?.email && admins.includes(currentUser.email.toLowerCase())));
 
-    if (isChallenger) {
-      // We are the Challenger:
-      // - Sync Opponent's scores and shots from database in real-time instantly
-      setOpponentScoresInput(dbOpScores);
-      setOpponentShotsInput(dbOpShots);
+    const canEditCh = activeArenaChallenge.status !== "completed" && (isReferee || (!hasReferee && (isChallenger || isOpponent)));
+    const canEditOp = activeArenaChallenge.status !== "completed" && (isReferee || (!hasReferee && (isChallenger || isOpponent)));
 
-      // - Sync our own inputs if they differ structurally from what's in database
-      // This allows real-time updates from referee/other devices while preventing flashing during local taps
+    if (canEditCh) {
       setChallengerScoresInput((prev) => {
         if (JSON.stringify(prev) !== JSON.stringify(dbChScores)) {
           return dbChScores;
@@ -410,13 +410,12 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
         }
         return prev;
       });
-    } else if (isOpponent) {
-      // We are the Opponent:
-      // - Sync Challenger's scores and shots from database in real-time instantly
+    } else {
       setChallengerScoresInput(dbChScores);
       setChallengerShotsInput(dbChShots);
+    }
 
-      // - Sync our own inputs if they differ structurally
+    if (canEditOp) {
       setOpponentScoresInput((prev) => {
         if (JSON.stringify(prev) !== JSON.stringify(dbOpScores)) {
           return dbOpScores;
@@ -430,9 +429,6 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
         return prev;
       });
     } else {
-      // Spectator or Referee: sync everything in real-time
-      setChallengerScoresInput(dbChScores);
-      setChallengerShotsInput(dbChShots);
       setOpponentScoresInput(dbOpScores);
       setOpponentShotsInput(dbOpShots);
     }
@@ -868,13 +864,25 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
     return !!(activeArenaChallenge && currentUser?.uid === activeArenaChallenge.opponentUid);
   }, [activeArenaChallenge, currentUser?.uid]);
   
+  const hasRefereeAssigned = useMemo(() => {
+    return !!(activeArenaChallenge?.refereeEmail && activeArenaChallenge.refereeEmail.trim() !== "");
+  }, [activeArenaChallenge?.refereeEmail]);
+
   const canEditChallenger = useMemo(() => {
-    return activeArenaChallenge?.status !== "completed" && (isChallengerOfMatch || isRefereeOfMatch);
-  }, [activeArenaChallenge?.status, isChallengerOfMatch, isRefereeOfMatch]);
+    if (!activeArenaChallenge || activeArenaChallenge.status === "completed") return false;
+    if (hasRefereeAssigned) {
+      return isRefereeOfMatch;
+    }
+    return isChallengerOfMatch || isOpponentOfMatch || isRefereeOfMatch;
+  }, [activeArenaChallenge, hasRefereeAssigned, isRefereeOfMatch, isChallengerOfMatch, isOpponentOfMatch]);
 
   const canEditOpponent = useMemo(() => {
-    return activeArenaChallenge?.status !== "completed" && (isOpponentOfMatch || isRefereeOfMatch);
-  }, [activeArenaChallenge?.status, isOpponentOfMatch, isRefereeOfMatch]);
+    if (!activeArenaChallenge || activeArenaChallenge.status === "completed") return false;
+    if (hasRefereeAssigned) {
+      return isRefereeOfMatch;
+    }
+    return isChallengerOfMatch || isOpponentOfMatch || isRefereeOfMatch;
+  }, [activeArenaChallenge, hasRefereeAssigned, isRefereeOfMatch, isChallengerOfMatch, isOpponentOfMatch]);
 
   // Dynamically add a new round (set) to the active arena challenge
   const handleAddRound = async () => {
@@ -1363,10 +1371,16 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                    (language === "en" ? "Spectator Mode" : "Chế độ Khán giả 👁️")}
                 </span>
                 <span className="font-medium">
-                  {isRefereeOfMatch ? (language === "en" ? "You have authority to record score and shot ticks for both sides." : "Bạn có quyền ghi điểm và trúng/trượt cho cả hai đấu thủ.") :
-                   (isChallengerOfMatch && canEditChallenger) ? (language === "en" ? "You can tick shots and edit scores for yourself. Opponent side is locked." : "Bạn có thể tích điểm trúng/trượt và điểm số cho bản thân. Bên đối thủ được khóa an toàn.") :
-                   (isOpponentOfMatch && canEditOpponent) ? (language === "en" ? "You can tick shots and edit scores for yourself. Challenger side is locked." : "Bạn có thể tích điểm trúng/trượt và điểm số cho bản thân. Bên thách đấu được khóa an toàn.") :
-                   (language === "en" ? "Live mode is read-only. Scores are synchronized in real-time." : "Đang đồng bộ trực tiếp thời gian thực từ đấu trường (Chỉ xem).")}
+                  {isRefereeOfMatch ? (language === "en" ? "You have full authority to record score and shot ticks for both sides." : "Bạn có quyền tối cao ghi điểm và tích trúng/trượt cho cả hai đấu thủ.") :
+                   (isChallengerOfMatch || isOpponentOfMatch) ? (
+                     hasRefereeAssigned ? (
+                       language === "en" ? "Assigned match. You cannot edit; only watch the referee scoring in real-time." : "Kèo đấu có trọng tài chỉ định. VĐV không được tự chấm điểm, chỉ xem trọng tài chấm trực tiếp."
+                     ) : (
+                       language === "en" ? "No referee assigned. You have full rights to score for yourself and your opponent." : "Tự quản lý (Không trọng tài). Bạn và đối thủ có thể tự chấm điểm cho nhau và cho bản thân."
+                     )
+                   ) : (
+                     language === "en" ? "Live mode is read-only. Scores are synchronized in real-time." : "Đang đồng bộ trực tiếp thời gian thực từ đấu trường (Chỉ xem)."
+                   )}
                 </span>
               </div>
               <div className="text-[10px] text-amber-600 font-bold hidden md:inline uppercase tracking-widest bg-white border border-amber-200 px-2.5 py-1 rounded-lg">
