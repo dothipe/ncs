@@ -123,5 +123,34 @@ export interface DeviceBackupItem {
 
 export const VSC_DEFAULT_LOGO = "https://lh3.googleusercontent.com/d/1CAz9xUSO8XIvtEy9TYqil228Cz-jYcIM";
 
+export interface PKChallenge {
+  id: string;
+  type: "solo_1v1" | "team_vs_team";
+  teamSize?: number;
+  title: string;
+  rules: string;
+  dateTime: string;
+  location: string;
+  description?: string;
+  status: "open" | "accepted" | "ongoing" | "completed";
+  challengerUid: string;
+  challengerName: string;
+  challengerAvatar?: string;
+  challengerMembers?: { athleteId: string; name: string }[];
+  opponentUid?: string;
+  opponentName?: string;
+  opponentAvatar?: string;
+  opponentMembers?: { athleteId: string; name: string }[];
+  scores?: {
+    challengerScores?: number[];
+    opponentScores?: number[];
+    winnerUid?: string;
+    challengerConfirm?: boolean;
+    opponentConfirm?: boolean;
+  };
+  refereeEmail?: string;
+  createdAt: string;
+}
+
 
 

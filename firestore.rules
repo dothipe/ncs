@@ -177,5 +177,11 @@ service cloud.firestore {
                       ('creatorId' in existing() && existing().creatorId == request.auth.uid)
                     );
     }
+
+    // --- VSC PK Challenges ---
+    match /vsc_pk_challenges/{challengeId} {
+      allow read: if true;
+      allow write: if isEmailVerified() && isValidId(challengeId);
+    }
   }
 }

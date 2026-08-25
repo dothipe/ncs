@@ -72,6 +72,7 @@ import { HomeView } from "./components/HomeView";
 import { DashboardView } from "./components/DashboardView";
 import { HistoryView } from "./components/HistoryView";
 import { AdminQltvView } from "./components/AdminQltvView";
+import { PkLobbyView } from "./components/PkLobbyView";
 import {
   CompetitionModeSelectionModal,
   MobileRankingSelectionModal,
@@ -310,7 +311,7 @@ export default function App() {
 
         // 2. Active Tab
         const tabParam = params.get("tab");
-        const allowedTabs = ["home", "desktop", "dashboard", "scoring", "input_scores", "leaderboard", "teams", "athletes", "settings", "history", "control_panel", "qltv", "vsc_system_directory", "vsc_clubs_directory"];
+        const allowedTabs = ["home", "desktop", "dashboard", "scoring", "input_scores", "leaderboard", "teams", "athletes", "settings", "history", "control_panel", "qltv", "vsc_system_directory", "vsc_clubs_directory", "pk_lobby"];
         if (tabParam && allowedTabs.includes(tabParam)) {
           setActiveTab(tabParam as any);
         } else {
@@ -466,11 +467,11 @@ export default function App() {
     }
   }, [masterAthletes]);
 
-  const [activeTab, setActiveTab] = useState<"home" | "desktop" | "dashboard" | "scoring" | "input_scores" | "leaderboard" | "teams" | "athletes" | "settings" | "history" | "control_panel" | "qltv" | "vsc_system_directory" | "vsc_clubs_directory">(() => {
+  const [activeTab, setActiveTab] = useState<"home" | "desktop" | "dashboard" | "scoring" | "input_scores" | "leaderboard" | "teams" | "athletes" | "settings" | "history" | "control_panel" | "qltv" | "vsc_system_directory" | "vsc_clubs_directory" | "pk_lobby">(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get("tab");
-      const allowedTabs = ["home", "desktop", "dashboard", "scoring", "input_scores", "leaderboard", "teams", "athletes", "settings", "history", "control_panel", "qltv", "vsc_system_directory", "vsc_clubs_directory"];
+      const allowedTabs = ["home", "desktop", "dashboard", "scoring", "input_scores", "leaderboard", "teams", "athletes", "settings", "history", "control_panel", "qltv", "vsc_system_directory", "vsc_clubs_directory", "pk_lobby"];
       if (tabParam && allowedTabs.includes(tabParam)) {
         return tabParam as any;
       }
@@ -901,6 +902,11 @@ export default function App() {
       description = isEng
         ? "Official verified database of professional slingshot clubs with long-term rosters and combined performance statistics."
         : "Cơ sở dữ liệu chính thức lưu trữ danh sách, chỉ số chuyên môn và cơ cấu thành viên của các Câu lạc bộ Ná cao su trên toàn quốc.";
+    } else if (activeTab === "pk_lobby") {
+      title = isEng ? "VSC | PK Arena & Matchmaking" : "VSC | Khán Đài PK & Thách Đấu";
+      description = isEng
+        ? "Host or accept 1v1 and team slingshot battles, log live scorecards, and compete for ELO standings."
+        : "Nơi đăng kèo, thách đấu 1v1, thi đấu đồng đội CLB và cập nhật điểm số trực tuyến tính điểm xếp hạng ELO quốc gia.";
     }
 
     // Set Document Title
@@ -3752,6 +3758,14 @@ export default function App() {
               userRole={isGlobalAdmin ? "admin" : "user"}
               history={history}
               onlineTournaments={onlineTournaments}
+              onOpenAuthModal={() => setIsAuthModalOpen(true)}
+            />
+          )}
+
+          {/* TAB 9: VSC PK MATCHMAKING LOBBY */}
+          {activeTab === "pk_lobby" && (
+            <PkLobbyView
+              currentUser={currentUser}
               onOpenAuthModal={() => setIsAuthModalOpen(true)}
             />
           )}

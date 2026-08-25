@@ -899,6 +899,7 @@ export async function findLinkedEmailAndAvatarForAthlete(
   const cleanEmail = athleteEmail ? athleteEmail.trim().toLowerCase() : "";
   if (!cleanEmail) return null;
 
+  // 1. Try finding in the "users" collection first
   const profile = await getUserProfileByEmail(cleanEmail);
   if (profile && (profile.avatarUrl || profile.photoURL)) {
     return {
@@ -906,7 +907,29 @@ export async function findLinkedEmailAndAvatarForAthlete(
       avatarUrl: profile.avatarUrl || profile.photoURL
     };
   }
-  return null;
+
+  // 2. Fallback: Search in "vsc_system_athletes" collection for any athlete matching this email
+  try {
+    const athletesSnap = await getDocs(collection(db, "vsc_system_athletes"));
+    const foundAthleteDoc = athletesSnap.docs.find(d => {
+      const data = d.data();
+      return data.email && data.email.trim().toLowerCase() === cleanEmail && data.avatarUrl && !data.avatarUrl.includes("avatar-preset") && !data.avatarUrl.includes("vsc_default_logo");
+    });
+    if (foundAthleteDoc) {
+      return {
+        email: cleanEmail,
+        avatarUrl: foundAthleteDoc.data().avatarUrl
+      };
+    }
+  } catch (err) {
+    console.error("Error searching matching athlete avatar:", err);
+  }
+
+  // 3. Fallback: Generate a high quality Dicebear Avatar using seed email as the ultimate email-locked fallback!
+  return {
+    email: cleanEmail,
+    avatarUrl: `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(cleanEmail)}`
+  };
 }
 
 /**

@@ -65,6 +65,31 @@
         "creatorEmail": { "type": "string" }
       },
       "required": ["id", "name"]
+    },
+    "PKChallenge": {
+      "title": "PKChallenge",
+      "description": "Represents a 1v1 or team match challenge",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "teamSize": { "type": "number" },
+        "title": { "type": "string" },
+        "rules": { "type": "string" },
+        "dateTime": { "type": "string" },
+        "location": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string" },
+        "challengerUid": { "type": "string" },
+        "challengerName": { "type": "string" },
+        "challengerAvatar": { "type": "string" },
+        "challengerMembers": { "type": "array" },
+        "opponentUid": { "type": "string" },
+        "opponentName": { "type": "string" },
+        "opponentAvatar": { "type": "string" },
+        "opponentMembers": { "type": "array" }
+      },
+      "required": ["id", "type", "title", "status", "challengerUid", "challengerName"]
     }
   },
   "firestore": {
@@ -83,6 +108,10 @@
     "vsc_system_clubs/{clubId}": {
       "schema": "#/entities/Club",
       "description": "Global official list of clubs"
+    },
+    "vsc_pk_challenges/{challengeId}": {
+      "schema": "#/entities/PKChallenge",
+      "description": "List of active and historical PK match challenges"
     }
   }
 }
