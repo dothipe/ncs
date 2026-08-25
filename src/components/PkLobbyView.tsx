@@ -24,7 +24,8 @@ import {
   TrendingUp,
   AlertCircle,
   Target,
-  Trash2
+  Trash2,
+  Eye
 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import { PKChallenge, Athlete, SystemClub } from "../types";
@@ -391,22 +392,43 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
 
     if (isChallenger) {
       // We are the Challenger:
-      // - Initialize our own inputs if currently empty, otherwise keep our local edits
-      setChallengerScoresInput((prev) => prev.length === 0 ? dbChScores : prev);
-      setChallengerShotsInput((prev) => prev.length === 0 ? dbChShots : prev);
-
-      // - Sync Opponent's scores and shots from database in real-time
+      // - Sync Opponent's scores and shots from database in real-time instantly
       setOpponentScoresInput(dbOpScores);
       setOpponentShotsInput(dbOpShots);
+
+      // - Sync our own inputs if they differ structurally from what's in database
+      // This allows real-time updates from referee/other devices while preventing flashing during local taps
+      setChallengerScoresInput((prev) => {
+        if (JSON.stringify(prev) !== JSON.stringify(dbChScores)) {
+          return dbChScores;
+        }
+        return prev;
+      });
+      setChallengerShotsInput((prev) => {
+        if (JSON.stringify(prev) !== JSON.stringify(dbChShots)) {
+          return dbChShots;
+        }
+        return prev;
+      });
     } else if (isOpponent) {
       // We are the Opponent:
-      // - Initialize our own inputs if currently empty, otherwise keep our local edits
-      setOpponentScoresInput((prev) => prev.length === 0 ? dbOpScores : prev);
-      setOpponentShotsInput((prev) => prev.length === 0 ? dbOpShots : prev);
-
-      // - Sync Challenger's scores and shots from database in real-time
+      // - Sync Challenger's scores and shots from database in real-time instantly
       setChallengerScoresInput(dbChScores);
       setChallengerShotsInput(dbChShots);
+
+      // - Sync our own inputs if they differ structurally
+      setOpponentScoresInput((prev) => {
+        if (JSON.stringify(prev) !== JSON.stringify(dbOpScores)) {
+          return dbOpScores;
+        }
+        return prev;
+      });
+      setOpponentShotsInput((prev) => {
+        if (JSON.stringify(prev) !== JSON.stringify(dbOpShots)) {
+          return dbOpShots;
+        }
+        return prev;
+      });
     } else {
       // Spectator or Referee: sync everything in real-time
       setChallengerScoresInput(dbChScores);
@@ -838,6 +860,22 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
     return false;
   }, [currentUser, activeArenaChallenge]);
 
+  const isChallengerOfMatch = useMemo(() => {
+    return !!(activeArenaChallenge && currentUser?.uid === activeArenaChallenge.challengerUid);
+  }, [activeArenaChallenge, currentUser?.uid]);
+
+  const isOpponentOfMatch = useMemo(() => {
+    return !!(activeArenaChallenge && currentUser?.uid === activeArenaChallenge.opponentUid);
+  }, [activeArenaChallenge, currentUser?.uid]);
+  
+  const canEditChallenger = useMemo(() => {
+    return activeArenaChallenge?.status !== "completed" && (isChallengerOfMatch || isRefereeOfMatch);
+  }, [activeArenaChallenge?.status, isChallengerOfMatch, isRefereeOfMatch]);
+
+  const canEditOpponent = useMemo(() => {
+    return activeArenaChallenge?.status !== "completed" && (isOpponentOfMatch || isRefereeOfMatch);
+  }, [activeArenaChallenge?.status, isOpponentOfMatch, isRefereeOfMatch]);
+
   // Dynamically add a new round (set) to the active arena challenge
   const handleAddRound = async () => {
     if (!currentUser || !activeArenaChallenge) return;
@@ -977,6 +1015,37 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
       alert("Lỗi khi xóa hiệp: " + (err as Error).message);
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  // Auto-save scores and shots to Firestore in real-time
+  const saveScoresAndShotsToDb = async (
+    chScores: number[],
+    opScores: number[],
+    chShots: (boolean | null)[][],
+    opShots: (boolean | null)[][]
+  ) => {
+    if (!activeArenaChallenge) return;
+    try {
+      const challengeRef = doc(db, "vsc_pk_challenges", activeArenaChallenge.id);
+      
+      // Merge with latest confirmations to avoid wiping them
+      const snap = await getDoc(challengeRef);
+      if (snap.exists()) {
+        const freshData = snap.data() as PKChallenge;
+        const freshScores = freshData.scores || {};
+        
+        await updateDoc(challengeRef, {
+          "scores.challengerScores": chScores,
+          "scores.opponentScores": opScores,
+          "scores.challengerShots": JSON.stringify(chShots),
+          "scores.opponentShots": JSON.stringify(opShots),
+          "scores.challengerConfirm": freshScores.challengerConfirm || false,
+          "scores.opponentConfirm": freshScores.opponentConfirm || false,
+        });
+      }
+    } catch (error) {
+      console.error("Error auto-saving scoreboard:", error);
     }
   };
 
@@ -1281,6 +1350,30 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
               )}
             </div>
 
+            {/* Real-time Match Mode Banner */}
+            <div className="bg-amber-50 border-b border-amber-100 px-6 py-3 flex items-center justify-between gap-4 text-xs text-amber-800">
+              <div className="flex items-center gap-2">
+                <span className="flex h-2 w-2 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                </span>
+                <span className="font-semibold uppercase tracking-wider text-[10px] bg-amber-200/60 text-amber-900 px-2 py-0.5 rounded-md">
+                  {isRefereeOfMatch ? (language === "en" ? "Referee Mode" : "Chế độ Trọng tài 👑") :
+                   (isChallengerOfMatch || isOpponentOfMatch) ? (language === "en" ? "Athlete Mode" : "Chế độ VĐV ⚔️") :
+                   (language === "en" ? "Spectator Mode" : "Chế độ Khán giả 👁️")}
+                </span>
+                <span className="font-medium">
+                  {isRefereeOfMatch ? (language === "en" ? "You have authority to record score and shot ticks for both sides." : "Bạn có quyền ghi điểm và trúng/trượt cho cả hai đấu thủ.") :
+                   (isChallengerOfMatch && canEditChallenger) ? (language === "en" ? "You can tick shots and edit scores for yourself. Opponent side is locked." : "Bạn có thể tích điểm trúng/trượt và điểm số cho bản thân. Bên đối thủ được khóa an toàn.") :
+                   (isOpponentOfMatch && canEditOpponent) ? (language === "en" ? "You can tick shots and edit scores for yourself. Challenger side is locked." : "Bạn có thể tích điểm trúng/trượt và điểm số cho bản thân. Bên thách đấu được khóa an toàn.") :
+                   (language === "en" ? "Live mode is read-only. Scores are synchronized in real-time." : "Đang đồng bộ trực tiếp thời gian thực từ đấu trường (Chỉ xem).")}
+                </span>
+              </div>
+              <div className="text-[10px] text-amber-600 font-bold hidden md:inline uppercase tracking-widest bg-white border border-amber-200 px-2.5 py-1 rounded-lg">
+                {language === "en" ? "Syncing Live" : "Đồng bộ Online"}
+              </div>
+            </div>
+
             {/* Versus Arena Combatants Layout */}
             <div className="p-8 flex flex-col md:flex-row items-center justify-around gap-8 bg-gradient-to-b from-rose-50/20 to-white">
               
@@ -1384,7 +1477,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                   <div key={setIndex} className="relative bg-white p-4 pr-10 pt-6 sm:pt-4 rounded-xl border border-gray-150 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
                     
                     {/* Trash Button in top right of each set card */}
-                    {activeArenaChallenge.status !== "completed" && (
+                    {activeArenaChallenge.status !== "completed" && (isChallengerOfMatch || isOpponentOfMatch || isRefereeOfMatch) && (
                       <button
                         type="button"
                         onClick={() => handleOpenDeleteSetConfirm(setIndex)}
@@ -1411,15 +1504,16 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                               type="number"
                               min="0"
                               placeholder="0"
-                              disabled={activeArenaChallenge.status === "completed"}
+                              disabled={!canEditChallenger}
                               value={challengerScoresInput[setIndex] !== undefined ? challengerScoresInput[setIndex] : ""}
                               onChange={(e) => {
                                 const val = e.target.value === "" ? 0 : Number(e.target.value);
                                 const nextScores = [...challengerScoresInput];
                                 nextScores[setIndex] = val;
                                 setChallengerScoresInput(nextScores);
+                                saveScoresAndShotsToDb(nextScores, opponentScoresInput, challengerShotsInput, opponentShotsInput);
                               }}
-                              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-black text-center text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-black text-center text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-500/20 disabled:opacity-60 disabled:cursor-not-allowed"
                             />
                           </div>
                         ) : (
@@ -1427,13 +1521,14 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                             <div className="flex items-center gap-1.5">
                               <button 
                                 type="button"
-                                disabled={activeArenaChallenge.status === "completed"}
+                                disabled={!canEditChallenger}
                                 onClick={() => {
                                   const arr = [...challengerScoresInput];
                                   arr[setIndex] = Math.max(0, (arr[setIndex] || 0) - 1);
                                   setChallengerScoresInput(arr);
+                                  saveScoresAndShotsToDb(arr, opponentScoresInput, challengerShotsInput, opponentShotsInput);
                                 }}
-                                className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 font-bold text-xs select-none cursor-pointer"
+                                className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 font-bold text-xs select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 -
                               </button>
@@ -1442,13 +1537,14 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                               </span>
                               <button 
                                 type="button"
-                                disabled={activeArenaChallenge.status === "completed"}
+                                disabled={!canEditChallenger}
                                 onClick={() => {
                                   const arr = [...challengerScoresInput];
                                   arr[setIndex] = (arr[setIndex] || 0) + 1;
                                   setChallengerScoresInput(arr);
+                                  saveScoresAndShotsToDb(arr, opponentScoresInput, challengerShotsInput, opponentShotsInput);
                                 }}
-                                className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 font-bold text-xs select-none cursor-pointer"
+                                className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 font-bold text-xs select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 +
                               </button>
@@ -1472,7 +1568,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                                     <button
                                       key={shotIdx}
                                       type="button"
-                                      disabled={activeArenaChallenge.status === "completed"}
+                                      disabled={!canEditChallenger}
                                       onClick={() => {
                                         const nextShots = [...challengerShotsInput];
                                         if (!nextShots[setIndex]) {
@@ -1495,8 +1591,10 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                                         const nextScores = [...challengerScoresInput];
                                         nextScores[setIndex] = hitCount;
                                         setChallengerScoresInput(nextScores);
+
+                                        saveScoresAndShotsToDb(nextScores, opponentScoresInput, nextShots, opponentShotsInput);
                                       }}
-                                      className={`w-6 h-6 text-[10px] font-black rounded-md border flex items-center justify-center transition-all cursor-pointer ${btnClass}`}
+                                      className={`w-6 h-6 text-[10px] font-black rounded-md border flex items-center justify-center transition-all cursor-pointer ${btnClass} disabled:opacity-60 disabled:cursor-not-allowed`}
                                       title={btnTitle}
                                     >
                                       {shotIdx + 1}
@@ -1523,15 +1621,16 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                               type="number"
                               min="0"
                               placeholder="0"
-                              disabled={activeArenaChallenge.status === "completed"}
+                              disabled={!canEditOpponent}
                               value={opponentScoresInput[setIndex] !== undefined ? opponentScoresInput[setIndex] : ""}
                               onChange={(e) => {
                                 const val = e.target.value === "" ? 0 : Number(e.target.value);
                                 const nextScores = [...opponentScoresInput];
                                 nextScores[setIndex] = val;
                                 setOpponentScoresInput(nextScores);
+                                saveScoresAndShotsToDb(challengerScoresInput, nextScores, challengerShotsInput, opponentShotsInput);
                               }}
-                              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-black text-center text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-black text-center text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-60 disabled:cursor-not-allowed"
                             />
                           </div>
                         ) : (
@@ -1539,13 +1638,14 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                             <div className="flex items-center gap-1.5">
                               <button 
                                 type="button"
-                                disabled={activeArenaChallenge.status === "completed"}
+                                disabled={!canEditOpponent}
                                 onClick={() => {
                                   const arr = [...opponentScoresInput];
                                   arr[setIndex] = Math.max(0, (arr[setIndex] || 0) - 1);
                                   setOpponentScoresInput(arr);
+                                  saveScoresAndShotsToDb(challengerScoresInput, arr, challengerShotsInput, opponentShotsInput);
                                 }}
-                                className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 font-bold text-xs select-none cursor-pointer"
+                                className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 font-bold text-xs select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 -
                               </button>
@@ -1554,13 +1654,14 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                               </span>
                               <button 
                                 type="button"
-                                disabled={activeArenaChallenge.status === "completed"}
+                                disabled={!canEditOpponent}
                                 onClick={() => {
                                   const arr = [...opponentScoresInput];
                                   arr[setIndex] = (arr[setIndex] || 0) + 1;
                                   setOpponentScoresInput(arr);
+                                  saveScoresAndShotsToDb(challengerScoresInput, arr, challengerShotsInput, opponentShotsInput);
                                 }}
-                                className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 font-bold text-xs select-none cursor-pointer"
+                                className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 font-bold text-xs select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 +
                               </button>
@@ -1584,7 +1685,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                                     <button
                                       key={shotIdx}
                                       type="button"
-                                      disabled={activeArenaChallenge.status === "completed"}
+                                      disabled={!canEditOpponent}
                                       onClick={() => {
                                         const nextShots = [...opponentShotsInput];
                                         if (!nextShots[setIndex]) {
@@ -1607,8 +1708,10 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                                         const nextScores = [...opponentScoresInput];
                                         nextScores[setIndex] = hitCount;
                                         setOpponentScoresInput(nextScores);
+
+                                        saveScoresAndShotsToDb(challengerScoresInput, nextScores, challengerShotsInput, nextShots);
                                       }}
-                                      className={`w-6 h-6 text-[10px] font-black rounded-md border flex items-center justify-center transition-all cursor-pointer ${btnClass}`}
+                                      className={`w-6 h-6 text-[10px] font-black rounded-md border flex items-center justify-center transition-all cursor-pointer ${btnClass} disabled:opacity-60 disabled:cursor-not-allowed`}
                                       title={btnTitle}
                                     >
                                       {shotIdx + 1}
@@ -1764,6 +1867,10 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                     const isMatched = challenge.status !== "open";
                     const admins = ["vscvietnamslingshot@gmail.com", "nahnatofficial@gmail.com"];
                     const isAdmin = currentUser?.email && admins.includes(currentUser.email.toLowerCase());
+                    const isChallenger = currentUser?.uid === challenge.challengerUid;
+                    const isOpponent = currentUser?.uid === challenge.opponentUid;
+                    const isReferee = challenge.refereeEmail && currentUser?.email && challenge.refereeEmail.toLowerCase() === currentUser.email.toLowerCase();
+                    const isParticipantOrRef = isChallenger || isOpponent || isReferee || isAdmin;
 
                     return (
                       <motion.div
@@ -1929,14 +2036,25 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                             )}
 
                             {isMatched && (
-                              <button
-                                type="button"
-                                onClick={() => setActiveArenaChallenge(challenge)}
-                                className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold px-4 py-2 rounded-xl cursor-pointer shadow-sm transition-all justify-center"
-                              >
-                                <Play className="w-3 h-3 text-rose-500 fill-rose-500" />
-                                <span>{language === "en" ? "Enter PK Arena" : "Vào Khán Đài PK 🏟️"}</span>
-                              </button>
+                              isParticipantOrRef ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveArenaChallenge(challenge)}
+                                  className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold px-4 py-2 rounded-xl cursor-pointer shadow-sm transition-all justify-center"
+                                >
+                                  <Play className="w-3 h-3 text-rose-500 fill-rose-500" />
+                                  <span>{language === "en" ? "Enter PK Arena" : "Vào Khán Đài PK 🏟️"}</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveArenaChallenge(challenge)}
+                                  className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl cursor-pointer shadow-sm transition-all justify-center"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>{language === "en" ? "Watch PK Live" : "Vào Xem PK 👁️"}</span>
+                                </button>
+                              )
                             )}
                           </div>
                         </div>
