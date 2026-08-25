@@ -81,7 +81,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
   const [formSetsCountCustom, setFormSetsCountCustom] = useState<string>("3");
   const [formWinMechanism, setFormWinMechanism] = useState<"by_sets" | "by_total_points" | "by_target_shots">("by_sets");
   const [formTargetType, setFormTargetType] = useState<"bia_muc_tieu" | "bia_giay_tinh_diem">("bia_muc_tieu");
-  const [formTargetTouchShots, setFormTargetTouchShots] = useState<number>(30);
+  const [formTargetTouchShots, setFormTargetTouchShots] = useState<number>(5);
 
   // Edit Challenge Modal state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -98,15 +98,16 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
   const [editSetsCountCustom, setEditSetsCountCustom] = useState("3");
   const [editWinMechanism, setEditWinMechanism] = useState<"by_sets" | "by_total_points" | "by_target_shots">("by_sets");
   const [editTargetType, setEditTargetType] = useState<"bia_muc_tieu" | "bia_giay_tinh_diem">("bia_muc_tieu");
-  const [editTargetTouchShots, setEditTargetTouchShots] = useState<number>(30);
+  const [editTargetTouchShots, setEditTargetTouchShots] = useState<number>(5);
 
-  const handleWinMechanismChange = (val: "by_sets" | "by_total_points" | "by_target_shots", currentTouchShots = formTargetTouchShots) => {
+  const handleWinMechanismChange = (val: "by_sets" | "by_total_points" | "by_target_shots", currentTouchShots = 5) => {
     setFormWinMechanism(val);
     if (val === "by_target_shots") {
       setFormSetsCountOption("1");
       setFormSetsCountCustom("1");
-      setFormShotsPerSet(50);
-      setFormRules(language === "en" ? `Target Shots (First to reach ${currentTouchShots} hits wins)` : `Bắn chạm ${currentTouchShots} viên`);
+      setFormTargetTouchShots(5);
+      setFormShotsPerSet(20);
+      setFormRules(language === "en" ? `Target Shots (First to reach 5 hits wins)` : `Bắn chạm 5 viên`);
     } else {
       // Revert to default 10 shots, 3 sets
       setFormSetsCountOption("3");
@@ -120,13 +121,14 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
     }
   };
 
-  const handleEditWinMechanismChange = (val: "by_sets" | "by_total_points" | "by_target_shots", currentTouchShots = editTargetTouchShots) => {
+  const handleEditWinMechanismChange = (val: "by_sets" | "by_total_points" | "by_target_shots", currentTouchShots = 5) => {
     setEditWinMechanism(val);
     if (val === "by_target_shots") {
       setEditSetsCountOption("1");
       setEditSetsCountCustom("1");
-      setEditShotsPerSet(50);
-      setEditRules(language === "en" ? `Target Shots (First to reach ${currentTouchShots} hits wins)` : `Bắn chạm ${currentTouchShots} viên`);
+      setEditTargetTouchShots(5);
+      setEditShotsPerSet(20);
+      setEditRules(language === "en" ? `Target Shots (First to reach 5 hits wins)` : `Bắn chạm 5 viên`);
     } else {
       // Revert to default 10 shots, 3 sets
       setEditSetsCountOption("3");
@@ -230,9 +232,13 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
     activeArenaChallengeRef.current = activeArenaChallenge;
   }, [activeArenaChallenge]);
 
+  // Loading indicator / Toast message
+  const [actionLoading, setActionLoading] = useState(false);
+  const [isSignConfirmModalOpen, setIsSignConfirmModalOpen] = useState(false);
+
   // Lock scroll when any modal is open
   useEffect(() => {
-    const isAnyModalOpen = isCreateModalOpen || isEditModalOpen || (deleteConfirmStep > 0) || (deleteSetConfirmStep > 0) || (selectedDetailChallenge !== null) || (touchAnnouncement !== null);
+    const isAnyModalOpen = isCreateModalOpen || isEditModalOpen || (deleteConfirmStep > 0) || (deleteSetConfirmStep > 0) || (selectedDetailChallenge !== null) || (touchAnnouncement !== null) || isSignConfirmModalOpen;
     if (isAnyModalOpen) {
       document.body.style.overflow = "hidden";
     } else {
@@ -241,10 +247,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
     return () => {
       document.body.style.overflow = "";
     };
-  }, [isCreateModalOpen, isEditModalOpen, deleteConfirmStep, deleteSetConfirmStep, selectedDetailChallenge, touchAnnouncement]);
-
-  // Loading indicator / Toast message
-  const [actionLoading, setActionLoading] = useState(false);
+  }, [isCreateModalOpen, isEditModalOpen, deleteConfirmStep, deleteSetConfirmStep, selectedDetailChallenge, touchAnnouncement, isSignConfirmModalOpen]);
 
   // Subscribe to PK Challenges (Real-time updates)
   useEffect(() => {
@@ -485,8 +488,27 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
       }
 
       const scores = challenge.scores;
-      const chSum = (scores.challengerScores || []).reduce((a, b) => a + b, 0);
-      const opSum = (scores.opponentScores || []).reduce((a, b) => a + b, 0);
+      const chScores = scores.challengerScores || [];
+      const opScores = scores.opponentScores || [];
+      const winMechanism = challenge.winMechanism || "by_sets";
+
+      const chSum = chScores.reduce((a, b) => Number(a) + Number(b), 0);
+      const opSum = opScores.reduce((a, b) => Number(a) + Number(b), 0);
+
+      let chSetsWon = 0;
+      let opSetsWon = 0;
+      const len = Math.max(chScores.length, opScores.length);
+      for (let i = 0; i < len; i++) {
+        const chS = Number(chScores[i]) || 0;
+        const opS = Number(opScores[i]) || 0;
+        if (chS > opS) chSetsWon++;
+        else if (opS > chS) opSetsWon++;
+      }
+
+      const isBySets = winMechanism === "by_sets";
+      const challengerWin = isBySets ? (chSetsWon > opSetsWon) : (chSum > opSum);
+      const opponentWin = isBySets ? (opSetsWon > chSetsWon) : (opSum > chSum);
+      const draw = isBySets ? (chSetsWon === opSetsWon) : (chSum === opSum);
 
       // Simple ELO computation helper
       const rCh = stats[challengerKey].elo;
@@ -495,7 +517,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
       const expectedOp = 1 / (1 + Math.pow(10, (rCh - rOp) / 400));
       const K = 32;
 
-      if (chSum > opSum) {
+      if (challengerWin) {
         // Challenger wins
         stats[challengerKey].wins += 1;
         stats[challengerKey].streak += 1;
@@ -504,7 +526,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
 
         stats[challengerKey].elo = Math.round(rCh + K * (1 - expectedCh));
         stats[opponentKey].elo = Math.round(rOp + K * (0 - expectedOp));
-      } else if (opSum > chSum) {
+      } else if (opponentWin) {
         // Opponent wins
         stats[opponentKey].wins += 1;
         stats[opponentKey].streak += 1;
@@ -870,6 +892,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
 
   const canEditChallenger = useMemo(() => {
     if (!activeArenaChallenge || activeArenaChallenge.status === "completed") return false;
+    if (activeArenaChallenge.scores?.challengerConfirm) return false;
     if (hasRefereeAssigned) {
       return isRefereeOfMatch;
     }
@@ -878,6 +901,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
 
   const canEditOpponent = useMemo(() => {
     if (!activeArenaChallenge || activeArenaChallenge.status === "completed") return false;
+    if (activeArenaChallenge.scores?.opponentConfirm) return false;
     if (hasRefereeAssigned) {
       return isRefereeOfMatch;
     }
@@ -964,6 +988,18 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
   // Confirm and delete individual set from match
   const handleConfirmDeleteSet = async () => {
     if (deletingSetIndex === null || !activeArenaChallenge) return;
+    
+    const isChallenger = currentUser?.uid === activeArenaChallenge.challengerUid;
+    const admins = ["vscvietnamslingshot@gmail.com", "nahnatofficial@gmail.com"];
+    const isReferee = (activeArenaChallenge.refereeEmail && currentUser?.email && activeArenaChallenge.refereeEmail.toLowerCase() === currentUser.email.toLowerCase()) || (currentUser?.email && admins.includes(currentUser.email.toLowerCase()));
+    
+    if (!isChallenger && !isReferee) {
+      alert(language === "en" ? "Only the Challenger or Referee can delete rounds!" : "Chỉ người mở kèo (Challenger) hoặc Trọng tài mới có quyền xóa hiệp đấu!");
+      setDeleteSetConfirmStep(0);
+      setDeletingSetIndex(null);
+      return;
+    }
+
     try {
       setActionLoading(true);
       const setIdx = deletingSetIndex;
@@ -1491,7 +1527,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                   <div key={setIndex} className="relative bg-white p-4 pr-10 pt-6 sm:pt-4 rounded-xl border border-gray-150 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
                     
                     {/* Trash Button in top right of each set card */}
-                    {activeArenaChallenge.status !== "completed" && (isChallengerOfMatch || isOpponentOfMatch || isRefereeOfMatch) && (
+                    {activeArenaChallenge.status !== "completed" && (isChallengerOfMatch || isRefereeOfMatch) && (
                       <button
                         type="button"
                         onClick={() => handleOpenDeleteSetConfirm(setIndex)}
@@ -1777,18 +1813,43 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                 {(currentUser?.uid === activeArenaChallenge.challengerUid || 
                   currentUser?.uid === activeArenaChallenge.opponentUid || 
                   isRefereeOfMatch) && (
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateScores(true)}
-                    className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-2.5 rounded-xl transition-colors cursor-pointer text-sm flex items-center justify-center gap-2 shadow-md"
-                  >
-                    <Check className="w-4 h-4" />
-                    <span>
-                      {isRefereeOfMatch 
-                        ? (language === "en" ? "Referee Match Confirmation" : "Xác nhận kết quả (Trọng tài) 👑")
-                        : (language === "en" ? "Submit & Lock Result" : "Ký xác nhận tỉ số ✍️")}
-                    </span>
-                  </button>
+                  <>
+                    {/* If current user is Challenger and has already confirmed */}
+                    {(currentUser?.uid === activeArenaChallenge.challengerUid && activeArenaChallenge.scores?.challengerConfirm) ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="w-full sm:w-auto bg-green-50 text-green-700 border border-green-200 font-semibold px-6 py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 cursor-not-allowed opacity-80"
+                      >
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                        <span>{language === "en" ? "Signed ✔️" : "Đã ký xác nhận ✔️"}</span>
+                      </button>
+                    ) : (currentUser?.uid === activeArenaChallenge.opponentUid && activeArenaChallenge.scores?.opponentConfirm) ? (
+                      /* If current user is Opponent and has already confirmed */
+                      <button
+                        type="button"
+                        disabled
+                        className="w-full sm:w-auto bg-green-50 text-green-700 border border-green-200 font-semibold px-6 py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 cursor-not-allowed opacity-80"
+                      >
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                        <span>{language === "en" ? "Signed ✔️" : "Đã ký xác nhận ✔️"}</span>
+                      </button>
+                    ) : (
+                      /* Clickable confirm button opening modal */
+                      <button
+                        type="button"
+                        onClick={() => setIsSignConfirmModalOpen(true)}
+                        className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-2.5 rounded-xl transition-colors cursor-pointer text-sm flex items-center justify-center gap-2 shadow-md"
+                      >
+                        <Check className="w-4 h-4" />
+                        <span>
+                          {isRefereeOfMatch 
+                            ? (language === "en" ? "Referee Match Confirmation" : "Xác nhận kết quả (Trọng tài) 👑")
+                            : (language === "en" ? "Submit & Lock Result" : "Ký xác nhận tỉ số ✍️")}
+                        </span>
+                      </button>
+                    )}
+                  </>
                 )}
 
                 {/* Return button */}
@@ -3517,6 +3578,113 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                 className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3.5 px-6 rounded-2xl shadow-lg hover:shadow-xl transition-all cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0 text-sm tracking-wider uppercase"
               >
                 {language === "en" ? "Continue Match" : "Tiếp tục trận đấu"}
+              </button>
+            </div>
+          </motion.div>
+        </div>,
+        document.body
+      )}
+
+      {/* ========================================================= */}
+      {/* ✍️ SIGNATURE / LOCK SCORE CONFIRMATION MODAL               */}
+      {/* ========================================================= */}
+      {isSignConfirmModalOpen && activeArenaChallenge && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[100001] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-gray-100"
+          >
+            {/* Modal Header */}
+            <div className="bg-green-700 text-white px-6 py-5 flex items-center justify-between">
+              <h3 className="font-bold text-base flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-green-200 shrink-0" />
+                <span>{language === "en" ? "Sign & Lock Scoreboard" : "Ký Xác Nhận Tỉ Số"}</span>
+              </h3>
+              <button 
+                onClick={() => setIsSignConfirmModalOpen(false)}
+                className="text-white/80 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-5">
+              <div className="text-center">
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  {language === "en" 
+                    ? "Please review the scoreboard. Once you sign and confirm, you CANNOT modify any scores or shot ticks anymore." 
+                    : "Vui lòng kiểm tra kỹ điểm số trước khi ký. Sau khi ký xác nhận, hệ thống sẽ KHÓA toàn bộ bảng điểm của bạn và không cho phép chỉnh sửa hay tích trúng trượt nữa."}
+                </p>
+              </div>
+
+              {/* Match Score Summary Card */}
+              <div className="bg-gray-50 rounded-2xl p-4 border border-gray-150 space-y-3">
+                <div className="text-center text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                  {language === "en" ? "Current Standings" : "Tỉ số ghi nhận"}
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1 text-center">
+                    <span className="block text-xs font-bold text-gray-700 truncate">{activeArenaChallenge.challengerName}</span>
+                    <span className="text-2xl font-black text-indigo-900">
+                      {challengerScoresInput.reduce((a, b) => Number(a) + Number(b), 0)}
+                    </span>
+                  </div>
+                  <div className="text-gray-300 font-bold text-xs shrink-0 uppercase tracking-widest">VS</div>
+                  <div className="flex-1 text-center">
+                    <span className="block text-xs font-bold text-gray-700 truncate">
+                      {activeArenaChallenge.opponentName || (language === "en" ? "Opponent" : "Đối thủ")}
+                    </span>
+                    <span className="text-2xl font-black text-indigo-900">
+                      {opponentScoresInput.reduce((a, b) => Number(a) + Number(b), 0)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="border-t border-gray-200/60 pt-2.5 text-center text-[11px] text-gray-500">
+                  <span className="font-semibold uppercase text-gray-400">
+                    {language === "en" ? "Format: " : "Thể thức: "}
+                  </span>
+                  {activeArenaChallenge.winMechanism === "by_sets" 
+                    ? (language === "en" ? "Set-by-Set" : "Tính theo Hiệp đấu")
+                    : activeArenaChallenge.winMechanism === "by_total_points"
+                    ? (language === "en" ? "Total Points" : "Cộng tổng điểm")
+                    : (language === "en" ? `Target Shots (${activeArenaChallenge.targetTouchShots} Hits)` : `Bắn chạm ${activeArenaChallenge.targetTouchShots} viên`)}
+                </div>
+              </div>
+
+              {/* Directives Checklist */}
+              <div className="space-y-2 text-xs text-gray-600 bg-amber-50/60 border border-amber-100 rounded-xl p-3">
+                <div className="flex items-start gap-2">
+                  <Check className="w-3.5 h-3.5 text-green-600 mt-0.5 shrink-0" />
+                  <span>{language === "en" ? "Accuracy of all sets verified" : "Xác nhận điểm số các hiệp chính xác"}</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Check className="w-3.5 h-3.5 text-green-600 mt-0.5 shrink-0" />
+                  <span>{language === "en" ? "Recalculate ELO on final signature match" : "Cập nhật bảng xếp hạng ELO sau khi khớp"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsSignConfirmModalOpen(false)}
+                className="w-full sm:w-auto border border-gray-200 hover:bg-gray-100 text-gray-700 text-xs font-bold px-5 py-2.5 rounded-xl cursor-pointer transition-colors text-center"
+              >
+                {language === "en" ? "Cancel" : "Quay lại kiểm tra"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSignConfirmModalOpen(false);
+                  handleUpdateScores(true);
+                }}
+                className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-md cursor-pointer transition-colors text-center"
+              >
+                {language === "en" ? "Agree & Sign ✍️" : "Đồng ý Ký & Khóa kết quả ✍️"}
               </button>
             </div>
           </motion.div>
