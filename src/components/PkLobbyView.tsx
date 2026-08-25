@@ -192,12 +192,22 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
     if (!activeArenaChallenge || activeArenaChallenge.winMechanism !== "by_target_shots" || hasShownTouchAnnouncement) {
       return;
     }
-    const target = activeArenaChallenge.targetTouchShots;
-    if (!target) return;
+    // Only show live alerts during ongoing play, not for completed matches
+    if (activeArenaChallenge.status === "completed") {
+      return;
+    }
+
+    const target = Number(activeArenaChallenge.targetTouchShots);
+    if (!target || target <= 0) return;
 
     // Check first round score
-    const chScore = challengerScoresInput[0] || 0;
-    const opScore = opponentScoresInput[0] || 0;
+    const chScore = Number(challengerScoresInput[0]) || 0;
+    const opScore = Number(opponentScoresInput[0]) || 0;
+
+    // Do not alert if scores are still empty / untouched
+    if (chScore === 0 && opScore === 0) {
+      return;
+    }
 
     if (chScore >= target) {
       setTouchAnnouncement({
@@ -319,50 +329,92 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
     }
   }, [isCreateModalOpen, loggedInAthlete, systemAthletes, loggedInClubs]);
 
-  // Sync arena input score states with the active arena data
+  // Reset inputs when changing active arena matches
   useEffect(() => {
-    if (activeArenaChallenge) {
-      const scores = activeArenaChallenge.scores;
-      const finalSetsCount = scores?.challengerScores?.length || activeArenaChallenge.setsCount || 3;
-      const finalShotsPerSet = activeArenaChallenge.shotsPerSet || 5;
-
-      const initialChScores = scores?.challengerScores || Array(finalSetsCount).fill(0);
-      const initialOpScores = scores?.opponentScores || Array(finalSetsCount).fill(0);
-      setChallengerScoresInput(initialChScores);
-      setOpponentScoresInput(initialOpScores);
-
-      // Load shots array details from firebase if saved, otherwise initialize as empty grids
-      let initialChShots: boolean[][] = [];
-      let initialOpShots: boolean[][] = [];
-
-      if (typeof scores?.challengerShots === "string") {
-        try {
-          initialChShots = JSON.parse(scores.challengerShots);
-        } catch (e) {
-          initialChShots = Array(finalSetsCount).fill(null).map(() => Array(finalShotsPerSet).fill(null));
-        }
-      } else if (Array.isArray(scores?.challengerShots)) {
-        initialChShots = scores.challengerShots as boolean[][];
-      } else {
-        initialChShots = Array(finalSetsCount).fill(null).map(() => Array(finalShotsPerSet).fill(null));
-      }
-
-      if (typeof scores?.opponentShots === "string") {
-        try {
-          initialOpShots = JSON.parse(scores.opponentShots);
-        } catch (e) {
-          initialOpShots = Array(finalSetsCount).fill(null).map(() => Array(finalShotsPerSet).fill(null));
-        }
-      } else if (Array.isArray(scores?.opponentShots)) {
-        initialOpShots = scores.opponentShots as boolean[][];
-      } else {
-        initialOpShots = Array(finalSetsCount).fill(null).map(() => Array(finalShotsPerSet).fill(null));
-      }
-
-      setChallengerShotsInput(initialChShots);
-      setOpponentShotsInput(initialOpShots);
-    }
+    setChallengerScoresInput([]);
+    setOpponentScoresInput([]);
+    setChallengerShotsInput([]);
+    setOpponentShotsInput([]);
   }, [activeArenaChallenge?.id]);
+
+  // Sync arena input score states with the active arena data in real-time
+  useEffect(() => {
+    if (!activeArenaChallenge) return;
+
+    const scores = activeArenaChallenge.scores;
+    const finalSetsCount = scores?.challengerScores?.length || activeArenaChallenge.setsCount || 3;
+    const finalShotsPerSet = activeArenaChallenge.shotsPerSet || 5;
+
+    // 1. Get database scores
+    const dbChScores = scores?.challengerScores || Array(finalSetsCount).fill(0);
+    const dbOpScores = scores?.opponentScores || Array(finalSetsCount).fill(0);
+
+    // Parse database shots
+    let dbChShots: boolean[][] = [];
+    let dbOpShots: boolean[][] = [];
+
+    if (typeof scores?.challengerShots === "string" && scores.challengerShots !== "") {
+      try {
+        dbChShots = JSON.parse(scores.challengerShots);
+      } catch (e) {
+        dbChShots = Array(finalSetsCount).fill(null).map(() => Array(finalShotsPerSet).fill(null));
+      }
+    } else if (Array.isArray(scores?.challengerShots)) {
+      dbChShots = scores.challengerShots as boolean[][];
+    } else {
+      dbChShots = Array(finalSetsCount).fill(null).map(() => Array(finalShotsPerSet).fill(null));
+    }
+
+    if (dbChShots.length === 0) {
+      dbChShots = Array(finalSetsCount).fill(null).map(() => Array(finalShotsPerSet).fill(null));
+    }
+
+    if (typeof scores?.opponentShots === "string" && scores.opponentShots !== "") {
+      try {
+        dbOpShots = JSON.parse(scores.opponentShots);
+      } catch (e) {
+        dbOpShots = Array(finalSetsCount).fill(null).map(() => Array(finalShotsPerSet).fill(null));
+      }
+    } else if (Array.isArray(scores?.opponentShots)) {
+      dbOpShots = scores.opponentShots as boolean[][];
+    } else {
+      dbOpShots = Array(finalSetsCount).fill(null).map(() => Array(finalShotsPerSet).fill(null));
+    }
+
+    if (dbOpShots.length === 0) {
+      dbOpShots = Array(finalSetsCount).fill(null).map(() => Array(finalShotsPerSet).fill(null));
+    }
+
+    // 2. Decide what to sync to local state based on user role to avoid race conditions
+    const isChallenger = currentUser?.uid === activeArenaChallenge.challengerUid;
+    const isOpponent = currentUser?.uid === activeArenaChallenge.opponentUid;
+
+    if (isChallenger) {
+      // We are the Challenger:
+      // - Initialize our own inputs if currently empty, otherwise keep our local edits
+      setChallengerScoresInput((prev) => prev.length === 0 ? dbChScores : prev);
+      setChallengerShotsInput((prev) => prev.length === 0 ? dbChShots : prev);
+
+      // - Sync Opponent's scores and shots from database in real-time
+      setOpponentScoresInput(dbOpScores);
+      setOpponentShotsInput(dbOpShots);
+    } else if (isOpponent) {
+      // We are the Opponent:
+      // - Initialize our own inputs if currently empty, otherwise keep our local edits
+      setOpponentScoresInput((prev) => prev.length === 0 ? dbOpScores : prev);
+      setOpponentShotsInput((prev) => prev.length === 0 ? dbOpShots : prev);
+
+      // - Sync Challenger's scores and shots from database in real-time
+      setChallengerScoresInput(dbChScores);
+      setChallengerShotsInput(dbChShots);
+    } else {
+      // Spectator or Referee: sync everything in real-time
+      setChallengerScoresInput(dbChScores);
+      setChallengerShotsInput(dbChShots);
+      setOpponentScoresInput(dbOpScores);
+      setOpponentShotsInput(dbOpShots);
+    }
+  }, [activeArenaChallenge, currentUser?.uid]);
 
   // Calculate stats dynamically for PK Leaderboard
   const pkLeaderboard = useMemo(() => {
@@ -935,23 +987,80 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
     try {
       const challengeRef = doc(db, "vsc_pk_challenges", activeArenaChallenge.id);
       
+      // Fetch the latest fresh document from Firestore to avoid race conditions
+      const freshSnap = await getDoc(challengeRef);
+      if (!freshSnap.exists()) {
+        throw new Error(language === "en" ? "Challenge no longer exists!" : "Kèo đấu không tồn tại!");
+      }
+      const freshData = freshSnap.data() as PKChallenge;
+      const freshScores = freshData.scores || {};
+
+      // Get database scores & shots
+      const dbChScores = freshScores.challengerScores || [];
+      const dbOpScores = freshScores.opponentScores || [];
+      
+      let dbChShots = [];
+      if (typeof freshScores.challengerShots === "string" && freshScores.challengerShots !== "") {
+        try { dbChShots = JSON.parse(freshScores.challengerShots); } catch(e) {}
+      } else if (Array.isArray(freshScores.challengerShots)) {
+        dbChShots = freshScores.challengerShots;
+      }
+
+      let dbOpShots = [];
+      if (typeof freshScores.opponentShots === "string" && freshScores.opponentShots !== "") {
+        try { dbOpShots = JSON.parse(freshScores.opponentShots); } catch(e) {}
+      } else if (Array.isArray(freshScores.opponentShots)) {
+        dbOpShots = freshScores.opponentShots;
+      }
+
+      const isChScoresEmpty = dbChScores.length === 0 || dbChScores.every((val: any) => Number(val) === 0);
+      const isOpScoresEmpty = dbOpScores.length === 0 || dbOpScores.every((val: any) => Number(val) === 0);
+
+      const isChallenger = currentUser.uid === activeArenaChallenge.challengerUid;
+      const isOpponent = currentUser.uid === activeArenaChallenge.opponentUid;
+      const isRefConfirm = isRefereeOfMatch && isConfirmStep;
+
+      // Determine final scores & shots to save
+      let finalChallengerScores = challengerScoresInput;
+      let finalOpponentScores = opponentScoresInput;
+      let finalChallengerShots = challengerShotsInput;
+      let finalOpponentShots = opponentShotsInput;
+
+      if (isChallenger) {
+        // Source of truth for Challenger is local input, opponent comes from DB if not empty
+        finalChallengerScores = challengerScoresInput;
+        finalChallengerShots = challengerShotsInput;
+        finalOpponentScores = isOpScoresEmpty ? opponentScoresInput : dbOpScores;
+        finalOpponentShots = isOpScoresEmpty ? opponentShotsInput : dbOpShots;
+      } else if (isOpponent) {
+        // Source of truth for Opponent is local input, challenger comes from DB if not empty
+        finalOpponentScores = opponentScoresInput;
+        finalOpponentShots = opponentShotsInput;
+        finalChallengerScores = isChScoresEmpty ? challengerScoresInput : dbChScores;
+        finalChallengerShots = isChScoresEmpty ? challengerShotsInput : dbChShots;
+      } else {
+        // Referee or other: use whatever is in inputs (referee is absolute power)
+        finalChallengerScores = challengerScoresInput;
+        finalOpponentScores = opponentScoresInput;
+        finalChallengerShots = challengerShotsInput;
+        finalOpponentShots = opponentShotsInput;
+      }
+
       const updatedScores = {
-        challengerScores: challengerScoresInput,
-        opponentScores: opponentScoresInput,
-        challengerShots: JSON.stringify(challengerShotsInput),
-        opponentShots: JSON.stringify(opponentShotsInput),
-        challengerConfirm: isConfirmStep && currentUser.uid === activeArenaChallenge.challengerUid 
+        challengerScores: finalChallengerScores,
+        opponentScores: finalOpponentScores,
+        challengerShots: JSON.stringify(finalChallengerShots),
+        opponentShots: JSON.stringify(finalOpponentShots),
+        challengerConfirm: (isConfirmStep && isChallenger) || isRefConfirm
           ? true 
-          : activeArenaChallenge.scores?.challengerConfirm || false,
-        opponentConfirm: isConfirmStep && currentUser.uid === activeArenaChallenge.opponentUid 
+          : (freshScores.challengerConfirm || false),
+        opponentConfirm: (isConfirmStep && isOpponent) || isRefConfirm
           ? true 
-          : activeArenaChallenge.scores?.opponentConfirm || false,
+          : (freshScores.opponentConfirm || false),
       };
 
       // If both sides confirmed or referee submitted, complete the match
       const bothConfirmed = updatedScores.challengerConfirm && updatedScores.opponentConfirm;
-      const isRefConfirm = isRefereeOfMatch && isConfirmStep;
-
       const newStatus = (bothConfirmed || isRefConfirm) ? "completed" : "ongoing";
 
       await updateDoc(challengeRef, {
@@ -1951,15 +2060,15 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                   const opScores = challenge.scores?.opponentScores || [];
                   const winMechanism = challenge.winMechanism || "by_sets";
 
-                  const chSum = chScores.reduce((a, b) => a + b, 0);
-                  const opSum = opScores.reduce((a, b) => a + b, 0);
+                  const chSum = chScores.reduce((a, b) => Number(a) + Number(b), 0);
+                  const opSum = opScores.reduce((a, b) => Number(a) + Number(b), 0);
 
                   let chSetsWon = 0;
                   let opSetsWon = 0;
                   const len = Math.max(chScores.length, opScores.length);
                   for (let i = 0; i < len; i++) {
-                    const chS = chScores[i] || 0;
-                    const opS = opScores[i] || 0;
+                    const chS = Number(chScores[i]) || 0;
+                    const opS = Number(opScores[i]) || 0;
                     if (chS > opS) chSetsWon++;
                     else if (opS > chS) opSetsWon++;
                   }
@@ -3021,15 +3130,15 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
               {(() => {
                 const chScores = selectedDetailChallenge.scores?.challengerScores || [];
                 const opScores = selectedDetailChallenge.scores?.opponentScores || [];
-                const chSum = chScores.reduce((a, b) => a + b, 0);
-                const opSum = opScores.reduce((a, b) => a + b, 0);
+                const chSum = chScores.reduce((a, b) => Number(a) + Number(b), 0);
+                const opSum = opScores.reduce((a, b) => Number(a) + Number(b), 0);
 
                 let chSetsWon = 0;
                 let opSetsWon = 0;
                 const len = Math.max(chScores.length, opScores.length);
                 for (let i = 0; i < len; i++) {
-                  const chS = chScores[i] || 0;
-                  const opS = opScores[i] || 0;
+                  const chS = Number(chScores[i]) || 0;
+                  const opS = Number(opScores[i]) || 0;
                   if (chS > opS) chSetsWon++;
                   else if (opS > chS) opSetsWon++;
                 }
@@ -3125,29 +3234,31 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
 
                               {/* Challenger shots & score */}
                               <div className="flex items-center gap-3 w-full sm:w-auto justify-end flex-1 sm:justify-end">
-                                <div className="grid grid-cols-5 gap-1 w-fit">
-                                  {Array.from({ length: shotsLimit }).map((_, shotIdx) => {
-                                    const shotVal = chRowShots[shotIdx];
-                                    let cellClass = "bg-gray-50 border-gray-200 text-gray-400";
-                                    let cellTitle = "Untapped";
-                                    if (shotVal === true) {
-                                      cellClass = "bg-green-600 border-green-700 text-white";
-                                      cellTitle = "Hit";
-                                    } else if (shotVal === false) {
-                                      cellClass = "bg-rose-600 border-rose-700 text-white";
-                                      cellTitle = "Miss";
-                                    }
-                                    return (
-                                      <div 
-                                        key={shotIdx} 
-                                        className={`w-5 h-5 rounded text-[8px] font-black flex items-center justify-center border ${cellClass}`}
-                                        title={cellTitle}
-                                      >
-                                        {shotIdx + 1}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
+                                {selectedDetailChallenge.targetType !== "bia_giay_tinh_diem" && (
+                                  <div className="grid grid-cols-5 gap-1 w-fit">
+                                    {Array.from({ length: shotsLimit }).map((_, shotIdx) => {
+                                      const shotVal = chRowShots[shotIdx];
+                                      let cellClass = "bg-gray-50 border-gray-200 text-gray-400";
+                                      let cellTitle = "Untapped";
+                                      if (shotVal === true) {
+                                        cellClass = "bg-green-600 border-green-700 text-white";
+                                        cellTitle = "Hit";
+                                      } else if (shotVal === false) {
+                                        cellClass = "bg-rose-600 border-rose-700 text-white";
+                                        cellTitle = "Miss";
+                                      }
+                                      return (
+                                        <div 
+                                          key={shotIdx} 
+                                          className={`w-5 h-5 rounded text-[8px] font-black flex items-center justify-center border ${cellClass}`}
+                                          title={cellTitle}
+                                        >
+                                          {shotIdx + 1}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                                 <span className="font-black text-sm text-gray-800 bg-white px-2 py-0.5 rounded border border-gray-150 min-w-[28px] text-center">
                                   {chSetScore}
                                 </span>
@@ -3160,29 +3271,31 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                                 <span className="font-black text-sm text-gray-800 bg-white px-2 py-0.5 rounded border border-gray-150 min-w-[28px] text-center">
                                   {opSetScore}
                                 </span>
-                                <div className="grid grid-cols-5 gap-1 w-fit">
-                                  {Array.from({ length: shotsLimit }).map((_, shotIdx) => {
-                                    const shotVal = opRowShots[shotIdx];
-                                    let cellClass = "bg-gray-50 border-gray-200 text-gray-400";
-                                    let cellTitle = "Untapped";
-                                    if (shotVal === true) {
-                                      cellClass = "bg-green-600 border-green-700 text-white";
-                                      cellTitle = "Hit";
-                                    } else if (shotVal === false) {
-                                      cellClass = "bg-rose-600 border-rose-700 text-white";
-                                      cellTitle = "Miss";
-                                    }
-                                    return (
-                                      <div 
-                                        key={shotIdx} 
-                                        className={`w-5 h-5 rounded text-[8px] font-black flex items-center justify-center border ${cellClass}`}
-                                        title={cellTitle}
-                                      >
-                                        {shotIdx + 1}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
+                                {selectedDetailChallenge.targetType !== "bia_giay_tinh_diem" && (
+                                  <div className="grid grid-cols-5 gap-1 w-fit">
+                                    {Array.from({ length: shotsLimit }).map((_, shotIdx) => {
+                                      const shotVal = opRowShots[shotIdx];
+                                      let cellClass = "bg-gray-50 border-gray-200 text-gray-400";
+                                      let cellTitle = "Untapped";
+                                      if (shotVal === true) {
+                                        cellClass = "bg-green-600 border-green-700 text-white";
+                                        cellTitle = "Hit";
+                                      } else if (shotVal === false) {
+                                        cellClass = "bg-rose-600 border-rose-700 text-white";
+                                        cellTitle = "Miss";
+                                      }
+                                      return (
+                                        <div 
+                                          key={shotIdx} 
+                                          className={`w-5 h-5 rounded text-[8px] font-black flex items-center justify-center border ${cellClass}`}
+                                          title={cellTitle}
+                                        >
+                                          {shotIdx + 1}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           );
