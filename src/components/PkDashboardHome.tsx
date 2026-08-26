@@ -1,0 +1,830 @@
+import React from "react";
+import { motion } from "motion/react";
+import { 
+  Trophy, 
+  Sword, 
+  Flame, 
+  Clock, 
+  MapPin, 
+  User, 
+  ChevronRight, 
+  Lock, 
+  Shield, 
+  Target, 
+  Play, 
+  Users,
+  Award
+} from "lucide-react";
+import { PKChallenge } from "../types";
+
+interface PkDashboardHomeProps {
+  challenges: PKChallenge[];
+  pkLeaderboard: any[];
+  setActiveSubTab: (tab: "dashboard" | "lobby" | "leaderboard" | "history") => void;
+  setActiveArenaChallenge: (challenge: PKChallenge | null) => void;
+  setSelectedDetailChallenge?: (challenge: PKChallenge | null) => void;
+  language: "en" | "vi";
+  onViewAthleteProfile?: (name: string, email?: string, athleteId?: string) => void;
+  currentUser?: any;
+  onAcceptChallenge?: (challenge: PKChallenge) => void;
+  onOpenAuthModal?: () => void;
+}
+
+export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
+  challenges,
+  pkLeaderboard,
+  setActiveSubTab,
+  setActiveArenaChallenge,
+  setSelectedDetailChallenge,
+  language,
+  onViewAthleteProfile,
+  currentUser,
+  onAcceptChallenge,
+  onOpenAuthModal
+}) => {
+  // Statistics
+  const openChallenges = challenges.filter(c => c.status === "open");
+  const liveMatches = challenges.filter(c => c.status === "accepted" || c.status === "ongoing");
+  const completedMatches = challenges.filter(c => c.status === "completed");
+
+  const recentCompleted = [...completedMatches]
+    .sort((a, b) => (b.dateTime || b.createdAt || "").localeCompare(a.dateTime || a.createdAt || ""))
+    .slice(0, 4);
+
+  // Get Top 3 players for podium
+  const topThree = pkLeaderboard.slice(0, 3);
+  // Reorder to [Silver, Gold, Bronze] for physical podium representation
+  const podiumPlayers = (() => {
+    if (topThree.length === 0) return [];
+    if (topThree.length === 1) return [null, topThree[0], null];
+    if (topThree.length === 2) return [topThree[1], topThree[0], null];
+    return [topThree[1], topThree[0], topThree[2]];
+  })();
+
+  const formatDate = (isoString: string) => {
+    if (!isoString) return "";
+    try {
+      let clean = isoString;
+      if (clean.includes(" ") && !clean.includes("T")) {
+        clean = clean.replace(" ", "T");
+      }
+      const date = new Date(clean);
+      if (isNaN(date.getTime())) {
+        return isoString;
+      }
+      return date.toLocaleDateString(language === "en" ? "en-US" : "vi-VN", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    } catch {
+      return isoString;
+    }
+  };
+
+  return (
+    <div className="space-y-8 pb-10">
+      {/* 🚀 Statistics Summary Banner */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Open Matches CTA card */}
+        <motion.div 
+          whileHover={{ y: -2 }}
+          onClick={() => setActiveSubTab("lobby")}
+          className="bg-gradient-to-br from-rose-50 to-rose-100/40 p-5 rounded-2xl border border-rose-150/50 shadow-xs cursor-pointer flex items-center justify-between group transition-all"
+        >
+          <div className="space-y-1">
+            <span className="text-[11px] font-bold text-rose-800 uppercase tracking-wider block">
+              {language === "en" ? "Awaiting Guest Lobby" : "Sảnh Kèo Đang Chờ"}
+            </span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-black text-rose-950">{openChallenges.length}</span>
+              <span className="text-xs text-rose-700/80 font-semibold">{language === "en" ? "challenges" : "kèo đấu mở"}</span>
+            </div>
+            <span className="text-[10px] font-semibold text-rose-600 group-hover:text-rose-800 flex items-center gap-0.5 mt-1 transition-colors">
+              <span>{language === "en" ? "View Match Lobby" : "Vào Sảnh Ghép Kèo"}</span>
+              <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+            </span>
+          </div>
+          <div className="w-12 h-12 rounded-xl bg-rose-200/50 flex items-center justify-center text-rose-700 font-extrabold group-hover:scale-110 transition-transform">
+            <Sword className="w-6 h-6" />
+          </div>
+        </motion.div>
+
+        {/* Live Arena Matches CTA card */}
+        <motion.div 
+          whileHover={{ y: -2 }}
+          onClick={() => setActiveSubTab("lobby")}
+          className="bg-gradient-to-br from-amber-50 to-amber-100/40 p-5 rounded-2xl border border-amber-150/50 shadow-xs cursor-pointer flex items-center justify-between group transition-all"
+        >
+          <div className="space-y-1">
+            <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider block">
+              {language === "en" ? "Live Arena Matches" : "Trận Đấu Đang Diễn Ra"}
+            </span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-black text-amber-950">{liveMatches.length}</span>
+              <span className="text-xs text-amber-700/80 font-semibold">{language === "en" ? "live" : "trận đang PK"}</span>
+            </div>
+            <span className="text-[10px] font-semibold text-amber-600 group-hover:text-amber-800 flex items-center gap-0.5 mt-1 transition-colors">
+              <span>{language === "en" ? "Spectate Matches" : "Theo Dõi Trực Tiếp"}</span>
+              <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+            </span>
+          </div>
+          <div className="w-12 h-12 rounded-xl bg-amber-200/50 flex items-center justify-center text-amber-700 font-extrabold group-hover:scale-110 transition-transform">
+            <Flame className="w-6 h-6 text-amber-600" />
+          </div>
+        </motion.div>
+
+        {/* Completed History CTA card */}
+        <motion.div 
+          whileHover={{ y: -2 }}
+          onClick={() => setActiveSubTab("history")}
+          className="bg-gradient-to-br from-blue-50 to-blue-100/40 p-5 rounded-2xl border border-blue-150/50 shadow-xs cursor-pointer flex items-center justify-between group transition-all"
+        >
+          <div className="space-y-1">
+            <span className="text-[11px] font-bold text-blue-800 uppercase tracking-wider block">
+              {language === "en" ? "Arena Glory History" : "Lịch Sử Kết Quả PK"}
+            </span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-black text-blue-950">{completedMatches.length}</span>
+              <span className="text-xs text-blue-700/80 font-semibold">{language === "en" ? "battles" : "trận hoàn tất"}</span>
+            </div>
+            <span className="text-[10px] font-semibold text-blue-600 group-hover:text-blue-800 flex items-center gap-0.5 mt-1 transition-colors">
+              <span>{language === "en" ? "View Match History" : "Xem Bảng Vàng Vinh Danh"}</span>
+              <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+            </span>
+          </div>
+          <div className="w-12 h-12 rounded-xl bg-blue-200/50 flex items-center justify-center text-blue-700 font-extrabold group-hover:scale-110 transition-transform">
+            <Trophy className="w-6 h-6 text-blue-600" />
+          </div>
+        </motion.div>
+      </div>
+
+      {/* ⚔️ Section 2: Open Challenges Queue (Kèo Đấu Đang Chờ Tìm Đối Thủ) with full detailed info boxes */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+          <div>
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
+              <Sword className="w-4 h-4 text-rose-600" />
+              <span>{language === "en" ? "Matchmaking Queue" : "Kèo Đấu Đang Chờ Tìm Đối Thủ"}</span>
+            </h3>
+            <p className="text-[11px] text-gray-500 mt-0.5">
+              {language === "en" ? "Open PK challenges looking for worthy challengers in the stadium" : "Danh sách kèo đấu đang chờ ứng tuyển - Bạn có thể xem thông tin và vào nhận kèo ngay"}
+            </p>
+          </div>
+          <button 
+            type="button" 
+            onClick={() => setActiveSubTab("lobby")}
+            className="text-xs font-bold text-rose-600 hover:text-rose-800 transition-colors flex items-center gap-0.5"
+          >
+            <span>{language === "en" ? "Browse All" : "Xem Tất Cả Sảnh Kèo"}</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {openChallenges.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center text-gray-400 text-[11px] font-semibold">
+            {language === "en" ? "No challenges currently in lobby." : "Hiện không có kèo đấu mở nào đang tìm đối thủ."}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {openChallenges.slice(0, 10).map((challenge) => {
+              const isOwner = currentUser?.uid === challenge.challengerUid;
+
+              return (
+                <div 
+                  key={challenge.id} 
+                  className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden relative"
+                >
+                  {/* Card Header Status Indicator */}
+                  <div className="px-5 py-3 bg-slate-50 border-b border-gray-100 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 animate-pulse">
+                        {language === "en" ? "Awaiting Guest" : "Tìm đối thủ 🔍"}
+                      </span>
+                      {challenge.pin && (
+                        <span className="flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-100 text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                          <Lock className="w-2.5 h-2.5 text-amber-600" />
+                          <span>PIN</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                      {challenge.type === "solo_1v1" ? "Solo 1v1" : `${challenge.teamSize}v${challenge.teamSize} Team`}
+                    </span>
+                  </div>
+
+                  {/* Content Body */}
+                  <div className="p-5 flex-1 flex flex-col justify-between gap-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900 line-clamp-1 mb-1">
+                        {challenge.title}
+                      </h3>
+                      {challenge.description && (
+                        <p className="text-xs text-gray-500 line-clamp-2 mt-0.5">
+                          {challenge.description}
+                        </p>
+                      )}
+
+                      {/* Challenge Details Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 text-[11px] text-gray-600">
+                        <div className="flex items-center gap-2">
+                          <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                          <span className="truncate font-medium">{challenge.location}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                          <span className="truncate font-medium">{formatDate(challenge.dateTime)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Target className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                          <span className="truncate font-medium">
+                            {language === "en" ? "Distance: " : "Cự ly: "} {challenge.distance || "10m"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Award className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                          <span className="truncate font-medium">
+                            {language === "en" ? "Target: " : "Mục tiêu: "} {challenge.targetType === "bia_giay_tinh_diem" ? (language === "en" ? "Paper Target" : "Bia giấy tính điểm") : (language === "en" ? "Target Plate" : "Bia mục tiêu")}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 sm:col-span-2">
+                          <Sword className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                          <span className="truncate font-medium">
+                            {language === "en" ? "Setup: " : "Thiết lập: "} {challenge.setsCount || 3} hiệp x {challenge.shotsPerSet || 5} viên {challenge.winMechanism === "by_target_shots" ? (language === "en" ? `(Chạm ${challenge.targetTouchShots} viên)` : `(Chạm ${challenge.targetTouchShots} viên)`) : ""}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 sm:col-span-2 border-t border-gray-50 pt-1.5 mt-1">
+                          <Shield className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                          <span className="font-medium truncate text-[10px]">
+                            {language === "en" ? "Rules: " : "Quy định: "} {challenge.rules}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Challenger Section */}
+                    <div className="flex items-center justify-between border-t border-gray-50 pt-3">
+                      <button
+                        type="button"
+                        onClick={() => onViewAthleteProfile?.(challenge.challengerName, challenge.challengerEmail, challenge.challengerUid)}
+                        className="flex items-center gap-2 text-left focus:outline-none hover:text-rose-600 transition-colors"
+                      >
+                        <div className="w-8 h-8 rounded-full overflow-hidden border border-rose-150 bg-gray-50 shrink-0">
+                          {challenge.challengerAvatar ? (
+                            <img src={challenge.challengerAvatar} alt={challenge.challengerName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <User className="w-4 h-4 text-gray-400 m-auto" />
+                          )}
+                        </div>
+                        <div>
+                          <span className="text-xs font-black text-gray-800 block truncate max-w-[125px]">
+                            {challenge.challengerName}
+                          </span>
+                          <span className="text-[9px] text-gray-450 font-bold block">
+                            {challenge.type === "solo_1v1" ? "Chủ kèo" : "Đại diện CLB"}
+                          </span>
+                        </div>
+                      </button>
+
+                      <div className="flex flex-col items-end text-right">
+                        <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">
+                          {language === "en" ? "Opponent Slot" : "Vị trí đối thủ"}
+                        </span>
+                        <span className="text-[10px] italic text-rose-600 font-bold">
+                          {language === "en" ? "Awaiting..." : "Đang tìm đối thủ..."}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card Action Footer */}
+                  <div className="px-5 py-3.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+                    <span className="text-[10px] text-gray-400 font-bold">
+                      {language === "en" ? "Posted: " : "Đăng lúc: "} {formatDate(challenge.createdAt)}
+                    </span>
+                    <div>
+                      {!isOwner ? (
+                        <button
+                          type="button"
+                          onClick={() => onAcceptChallenge ? onAcceptChallenge(challenge) : setActiveSubTab("lobby")}
+                          className="flex items-center gap-1 bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg cursor-pointer shadow-3xs transition-colors"
+                        >
+                          <Sword className="w-3.5 h-3.5" />
+                          <span>{language === "en" ? "Join Challenge" : "Nhận Kèo Ngay"}</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setActiveSubTab("lobby")}
+                          className="text-[10px] font-bold text-gray-600 hover:text-gray-850 transition-colors cursor-pointer bg-gray-150 hover:bg-gray-200 px-2.5 py-1.5 rounded-md border border-gray-200"
+                        >
+                          {language === "en" ? "Manage requests" : "Quản lý ứng tuyển"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* 🏆 Section 3: Leaderboard split (Podium on Left, TOP 4-10 list on Right completing TOP 10) */}
+      {pkLeaderboard.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-6 border-b border-gray-100 pb-4">
+            <div>
+              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-amber-500 animate-bounce" />
+                <span>{language === "en" ? "PK Slingshot Gladiators (TOP 10)" : "Bảng Anh Hùng PK Đỉnh Phong (TOP 10)"}</span>
+              </h3>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                {language === "en" ? "Arena champions podium on left and TOP 4 to 10 list on right" : "Ba kỳ thủ sở hữu điểm ELO cao nhất bên trái và danh sách từ hạng 4 đến hạng 10 bên phải"}
+              </p>
+            </div>
+            <button 
+              type="button" 
+              onClick={() => setActiveSubTab("leaderboard")}
+              className="text-xs font-bold text-rose-600 hover:text-rose-800 transition-colors flex items-center gap-0.5"
+            >
+              <span>{language === "en" ? "Full Standings" : "Xem Bảng Đầy Đủ"}</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+            {/* Left Column: Top 3 Podium */}
+            <div className="lg:col-span-5 flex flex-col justify-center bg-slate-50/50 p-6 rounded-2xl border border-gray-100">
+              <div className="text-center mb-6">
+                <span className="text-[10px] font-black uppercase text-rose-800 bg-rose-50 border border-rose-100 px-3 py-1 rounded-full">
+                  {language === "en" ? "TOP 3 GLORY PODIUM" : "BẢNG VÀNG TOP 3"}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 pt-2 items-end">
+                {podiumPlayers.map((player, idx) => {
+                  if (!player) {
+                    return (
+                      <div key={`empty-${idx}`} className="flex flex-col items-center justify-end pb-4">
+                        <div className="w-10 h-10 rounded-full bg-gray-150 border border-dashed border-gray-200 flex items-center justify-center">
+                          <User className="w-4 h-4 text-gray-300" />
+                        </div>
+                        <span className="text-[9px] text-gray-400 font-medium mt-1">Awaiting...</span>
+                      </div>
+                    );
+                  }
+
+                  const isGold = player.elo === topThree[0]?.elo;
+                  const isSilver = player.elo === topThree[1]?.elo && topThree.length > 1;
+                  const isBronze = player.elo === topThree[2]?.elo && topThree.length > 2;
+
+                  let placementLabel = "2nd";
+                  let placementColor = "bg-slate-200 text-slate-800 border-slate-300";
+                  let podiumHeight = "h-20 sm:h-24";
+                  let avatarSize = "w-12 h-12 sm:w-14 sm:h-14";
+
+                  if (isGold) {
+                    placementLabel = "1st";
+                    placementColor = "bg-amber-100 text-amber-800 border-amber-200";
+                    podiumHeight = "h-28 sm:h-32 bg-amber-50/50 border-amber-150";
+                    avatarSize = "w-14 h-14 sm:w-18 sm:h-18 ring-4 ring-amber-300";
+                  } else if (isBronze) {
+                    placementLabel = "3rd";
+                    placementColor = "bg-orange-100 text-orange-800 border-orange-200";
+                    podiumHeight = "h-16 sm:h-18";
+                  }
+
+                  return (
+                    <div key={player.uid} className="flex flex-col items-center justify-end">
+                      {/* Avatar and Info */}
+                      <div className="text-center space-y-1 mb-2">
+                        <div className="relative mx-auto flex items-center justify-center">
+                          <button
+                            type="button"
+                            onClick={() => onViewAthleteProfile?.(player.name, player.email, player.athleteId || player.uid)}
+                            className="relative block rounded-full focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-transform active:scale-95"
+                          >
+                            <div className={`${avatarSize} rounded-full overflow-hidden border-2 border-white shadow-md bg-gray-100`}>
+                              {player.avatarUrl ? (
+                                <img src={player.avatarUrl} alt={player.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              ) : (
+                                <User className="w-6 h-6 text-gray-400 m-auto" />
+                              )}
+                            </div>
+                            {isGold && (
+                              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 drop-shadow-sm">
+                                <span className="text-base sm:text-lg">👑</span>
+                              </div>
+                            )}
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onViewAthleteProfile?.(player.name, player.email, player.athleteId || player.uid)}
+                          className="text-[10px] sm:text-[11px] font-extrabold text-gray-800 hover:text-rose-600 transition-colors block line-clamp-1 max-w-[85px] mx-auto text-center"
+                        >
+                          {player.name}
+                        </button>
+                        <span className="text-[10px] font-extrabold text-rose-600 block">ELO {player.elo}</span>
+                        <span className="text-[8px] text-gray-400 font-bold block">{player.wins}W - {player.losses}L</span>
+                      </div>
+
+                      {/* Physical Podium Block */}
+                      <div className={`w-full ${podiumHeight} rounded-t-xl border-t border-x flex flex-col items-center justify-center gap-1 bg-white border-gray-150 shadow-3xs`}>
+                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full border ${placementColor}`}>
+                          {placementLabel}
+                        </span>
+                        {isGold && <Trophy className="w-4 h-4 text-amber-500 animate-pulse" />}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Right Column: TOP 4-10 list (shows exactly 7 players) */}
+            <div className="lg:col-span-7 flex flex-col">
+              <div className="flex items-center justify-between mb-3.5">
+                <span className="text-xs font-black uppercase text-gray-800 flex items-center gap-1.5">
+                  <Sword className="w-3.5 h-3.5 text-rose-600" />
+                  {language === "en" ? "GLADIATORS RANKED 4 - 10" : "DANH SÁCH HẠNG 4 - HẠNG 10"}
+                </span>
+                <span className="text-[10px] text-gray-400 font-bold">
+                  {pkLeaderboard.length} {language === "en" ? "athletes total" : "kỳ thủ hệ thống"}
+                </span>
+              </div>
+
+              <div className="max-h-[340px] overflow-y-auto pr-1 border border-gray-100 rounded-xl divide-y divide-gray-50 bg-white shadow-3xs">
+                {pkLeaderboard.slice(3, 10).map((player, index) => {
+                  const rank = index + 4;
+                  const rankBg = "bg-gray-50 text-gray-500 border-gray-100";
+
+                  return (
+                    <div 
+                      key={player.uid} 
+                      className="flex items-center justify-between p-2.5 sm:p-3 hover:bg-slate-50/50 transition-colors group"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {/* Rank Badge */}
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black border ${rankBg} shrink-0`}>
+                          {rank}
+                        </div>
+
+                        {/* Player Avatar & Name with profile link */}
+                        <button
+                          type="button"
+                          onClick={() => onViewAthleteProfile?.(player.name, player.email, player.athleteId || player.uid)}
+                          className="flex items-center gap-2.5 min-w-0 text-left focus:outline-none group-hover:text-rose-600 transition-colors"
+                        >
+                          <div className="w-8 h-8 rounded-full overflow-hidden border border-gray-100 bg-gray-100 shrink-0">
+                            {player.avatarUrl ? (
+                              <img src={player.avatarUrl} alt={player.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            ) : (
+                              <User className="w-4 h-4 text-gray-400 m-auto" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <span className="text-xs font-black text-gray-800 block truncate group-hover:text-rose-600 transition-colors">
+                              {player.name}
+                            </span>
+                            <span className="text-[9px] text-gray-400 font-bold block">
+                              {player.clubName || (language === "en" ? "Independent" : "Tự do")}
+                            </span>
+                          </div>
+                        </button>
+                      </div>
+
+                      {/* ELO & Win-loss record */}
+                      <div className="flex items-center gap-4 shrink-0 text-right">
+                        <div>
+                          <span className="text-xs font-black text-rose-600 block">
+                            {player.elo} ELO
+                          </span>
+                          <span className="text-[9px] text-gray-400 font-semibold block">
+                            {player.wins}W - {player.losses}L
+                          </span>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-400 transition-colors" />
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {pkLeaderboard.length <= 3 && (
+                  <div className="p-4 text-center text-xs italic text-gray-400">
+                    {language === "en" ? "No more rank 4-10 gladiators found." : "Hiện chưa có thêm đấu thủ xếp hạng từ 4 đến 10."}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ⚔️ Section 4: Live/Active Matches Arena */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide">
+              {language === "en" ? "Live Battle Arena" : "Đấu Trường Đang Thi Đấu"}
+            </h3>
+          </div>
+          <span className="text-xs text-gray-400 font-semibold">
+            {liveMatches.length} {language === "en" ? "active matches" : "trận đang đấu"}
+          </span>
+        </div>
+
+        {liveMatches.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center shadow-xs">
+            <Sword className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+            <span className="text-xs font-bold text-gray-700 block">{language === "en" ? "No matches currently active" : "Hiện tại không có trận PK nào đang diễn ra"}</span>
+            <p className="text-[11px] text-gray-400 mt-1 max-w-xs mx-auto">
+              {language === "en" ? "Go to lobby to host a new challenge or accept an open challenge!" : "Hãy sang tab Sảnh Kèo để thách đấu hoặc nhận kèo của người chơi khác!"}
+            </p>
+            <button
+              onClick={() => setActiveSubTab("lobby")}
+              className="mt-3 bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg cursor-pointer transition-all"
+            >
+              {language === "en" ? "Go to Matchmaking" : "Vào Sảnh Ghép Kèo"}
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {liveMatches.map((match) => {
+              const chSum = match.scores?.challengerScores?.reduce((a, b) => a + b, 0) || 0;
+              const opSum = match.scores?.opponentScores?.reduce((a, b) => a + b, 0) || 0;
+              
+              // Count rounds completed
+              const roundsCount = match.scores?.challengerScores?.length || 0;
+
+              return (
+                <div key={match.id} className="bg-white rounded-2xl border border-gray-100 shadow-xs hover:shadow-md transition-all p-5 flex flex-col justify-between gap-4">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[9px] bg-red-50 text-red-600 border border-red-100 font-extrabold px-1.5 py-0.5 rounded">
+                        {match.status === "ongoing" ? "LIVE ⚔️" : "READY 🤝"}
+                      </span>
+                      <span className="text-[10px] text-gray-400 font-bold">{match.type === "solo_1v1" ? "Solo 1v1" : "Đồng Đội CLB"}</span>
+                    </div>
+                    <h4 className="text-xs font-bold text-gray-900 line-clamp-1">{match.title}</h4>
+                    <div className="flex items-center gap-3 text-[10px] text-gray-500 mt-2">
+                      <span className="flex items-center gap-1"><MapPin className="w-3 h-3 text-rose-500" />{match.location}</span>
+                      <span className="flex items-center gap-1"><Target className="w-3 h-3 text-rose-500" />{match.distance}</span>
+                    </div>
+                  </div>
+
+                  {/* Scoreboard Preview Row */}
+                  <div className="bg-gray-50 rounded-xl p-3 flex items-center justify-between border border-gray-100">
+                    {/* Challenger link */}
+                    <button
+                      type="button"
+                      onClick={() => onViewAthleteProfile?.(match.challengerName, match.challengerEmail, match.challengerUid)}
+                      className="flex items-center gap-1.5 w-[40%] text-left hover:text-rose-650 transition-colors"
+                    >
+                      <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 border border-gray-200">
+                        {match.challengerAvatar ? (
+                          <img src={match.challengerAvatar} alt={match.challengerName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <User className="w-3 h-3 text-gray-400 m-auto" />
+                        )}
+                      </div>
+                      <span className="text-[11px] font-bold text-gray-800 truncate hover:text-rose-600">{match.challengerName}</span>
+                    </button>
+
+                    <div className="flex flex-col items-center">
+                      <span className="text-[11px] font-black text-rose-600 tracking-wider">
+                        {chSum} - {opSum}
+                      </span>
+                      <span className="text-[8px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">
+                        {roundsCount} Sets
+                      </span>
+                    </div>
+
+                    {/* Opponent link */}
+                    <button
+                      type="button"
+                      onClick={() => onViewAthleteProfile?.(match.opponentName || "Đối thủ", match.opponentEmail, match.opponentUid)}
+                      className="flex items-center gap-1.5 w-[40%] justify-end text-right hover:text-rose-650 transition-colors"
+                    >
+                      <span className="text-[11px] font-bold text-gray-800 truncate hover:text-rose-600">{match.opponentName || "Awaiting"}</span>
+                      <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 border border-gray-200">
+                        {match.opponentAvatar ? (
+                          <img src={match.opponentAvatar} alt={match.opponentName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <User className="w-3 h-3 text-gray-400 m-auto" />
+                        )}
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* Match Access Button */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveArenaChallenge(match)}
+                    className="w-full py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Play className="w-3 h-3 text-white fill-white" />
+                    <span>{language === "en" ? "Enter Battle Arena" : "Vào Xem Trận PK Thách Đấu 👁️"}</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* 📜 Section 5: Lịch Sử Kết Quả PK Gần Đây (Hiển thị giống tab Lịch Sử Kết Quả, tối đa 4 kết quả) */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
+        <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+          <div>
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
+              <Clock className="w-4 h-4 text-blue-500" />
+              <span>{language === "en" ? "Recent Battle Results" : "Lịch Sử Kết Quả PK Đấu Trường"}</span>
+            </h3>
+            <p className="text-[11px] text-gray-500 mt-0.5">
+              {language === "en" ? "4 most recent battles resolved in the arena" : "Thông tin kết quả chi tiết của 4 trận đấu gần nhất tại đấu trường"}
+            </p>
+          </div>
+          <button 
+            type="button" 
+            onClick={() => setActiveSubTab("history")}
+            className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-0.5"
+          >
+            <span>{language === "en" ? "Full History" : "Xem Đầy Đủ Lịch Sử"}</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {recentCompleted.length === 0 ? (
+          <div className="text-center p-8 text-gray-400 text-xs italic bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+            {language === "en" ? "No completed battles recorded yet." : "Hiện chưa có trận đấu nào được hoàn tất."}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {recentCompleted.map((match) => {
+              const chScores = match.scores?.challengerScores || [];
+              const opScores = match.scores?.opponentScores || [];
+              const winMechanism = match.winMechanism || "by_sets";
+
+              const chSum = chScores.reduce((a, b) => Number(a) + Number(b), 0);
+              const opSum = opScores.reduce((a, b) => Number(a) + Number(b), 0);
+
+              let chSetsWon = 0;
+              let opSetsWon = 0;
+              const len = Math.max(chScores.length, opScores.length);
+              for (let i = 0; i < len; i++) {
+                const chS = Number(chScores[i]) || 0;
+                const opS = Number(opScores[i]) || 0;
+                if (chS > opS) chSetsWon++;
+                else if (opS > chS) opSetsWon++;
+              }
+
+              const isBySets = winMechanism === "by_sets";
+              const challengerWin = isBySets ? (chSetsWon > opSetsWon) : (chSum > opSum);
+              const opponentWin = isBySets ? (opSetsWon > chSetsWon) : (opSum > chSum);
+
+              return (
+                <div 
+                  key={match.id}
+                  className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col justify-between"
+                >
+                  {/* Match metadata bar */}
+                  <div className="px-5 py-3 bg-gray-50/50 border-b border-gray-100 flex items-center justify-between text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                    <span>{formatDate(match.dateTime || match.createdAt)}</span>
+                    <span>
+                      {match.type === "solo_1v1" ? "1v1 Solo" : "Club Team"}
+                      {" • "}
+                      {winMechanism === "by_sets" 
+                        ? (language === "en" ? "Set-by-Set Format" : "Tính theo Hiệp") 
+                        : winMechanism === "by_target_shots"
+                        ? (language === "en" ? `Touch ${match.targetTouchShots || 15} Shots` : `Chạm ${match.targetTouchShots || 15} Viên`)
+                        : (language === "en" ? "Total Points Format" : "Cộng tổng điểm")}
+                    </span>
+                  </div>
+
+                  {/* Scoreboard block */}
+                  <div className="p-5 flex-1 flex flex-col justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold text-gray-900 text-center mb-1 line-clamp-1">{match.title}</h4>
+                      
+                      {/* Match Specifications subheader */}
+                      <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-[9px] text-gray-500 font-extrabold mb-4 bg-slate-100/60 py-1 px-2.5 rounded-lg border border-slate-200/50 max-w-sm mx-auto">
+                        <span className="flex items-center gap-0.5">
+                          <span className="text-rose-650">🎯</span>
+                          <span>{language === "en" ? "Target:" : "Mục tiêu:"}</span>
+                          <span className="text-gray-800">
+                            {match.targetType === "bia_giay_tinh_diem" 
+                              ? (language === "en" ? "Paper Target" : "Bia giấy tính điểm") 
+                              : (language === "en" ? "Target Plate" : "Bia mục tiêu")}
+                          </span>
+                        </span>
+                        <span className="text-gray-300">•</span>
+                        <span>
+                          {language === "en" ? "Shots/Set:" : "Số viên/Hiệp:"} <span className="text-gray-800">{match.shotsPerSet || 5}</span>
+                        </span>
+                        <span className="text-gray-300">•</span>
+                        <span>
+                          {language === "en" ? "Sets:" : "Số Hiệp:"} <span className="text-gray-800">{match.setsCount || 3}</span>
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-around gap-4 bg-gray-50 p-3.5 rounded-xl border border-gray-50">
+                      
+                      {/* Challenger */}
+                      <button
+                        type="button"
+                        onClick={() => onViewAthleteProfile?.(match.challengerName, match.challengerEmail, match.challengerUid)}
+                        className="flex flex-col items-center text-center w-5/12 focus:outline-none hover:text-rose-650 transition-colors cursor-pointer"
+                      >
+                        <div className="w-8 h-8 rounded-full overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center shadow-xs">
+                          {match.challengerAvatar ? (
+                            <img src={match.challengerAvatar} alt={match.challengerName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <User className="w-4 h-4 text-gray-300" />
+                          )}
+                        </div>
+                        <span className="text-[11px] font-bold mt-1.5 truncate max-w-full text-gray-850">{match.challengerName}</span>
+                        {challengerWin && (
+                          <span className="text-[8px] font-black uppercase text-green-600 bg-green-50 border border-green-100 px-1.5 py-0.2 rounded mt-0.5">Winner</span>
+                        )}
+                      </button>
+
+                      {/* Scores Sum */}
+                      <div className="text-center shrink-0 flex flex-col items-center">
+                        <div className="font-black text-lg text-gray-900 leading-none">
+                          {isBySets ? `${chSetsWon} - ${opSetsWon}` : `${chSum} - ${opSum}`}
+                        </div>
+                        <span className="text-[8px] text-gray-400 font-bold uppercase mt-1">
+                          {isBySets 
+                            ? (language === "en" ? `Total: ${chSum}-${opSum}` : `Tổng điểm: ${chSum}-${opSum}`) 
+                            : (language === "en" ? `Sets: ${chSetsWon}-${opSetsWon}` : `Số hiệp: ${chSetsWon}-${opSetsWon}`)
+                          }
+                        </span>
+                        <span className="text-[8px] text-gray-400 font-bold uppercase mt-0.5">Final</span>
+                      </div>
+
+                      {/* Opponent */}
+                      <button
+                        type="button"
+                        onClick={() => onViewAthleteProfile?.(match.opponentName || "Đối thủ", match.opponentEmail, match.opponentUid)}
+                        className="flex flex-col items-center text-center w-5/12 focus:outline-none hover:text-rose-650 transition-colors cursor-pointer"
+                      >
+                        <div className="w-8 h-8 rounded-full overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center shadow-xs">
+                          {match.opponentAvatar ? (
+                            <img src={match.opponentAvatar} alt={match.opponentName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <User className="w-4 h-4 text-gray-300" />
+                          )}
+                        </div>
+                        <span className="text-[11px] font-bold mt-1.5 truncate max-w-full text-gray-850">{match.opponentName || "Guest"}</span>
+                        {opponentWin && (
+                          <span className="text-[8px] font-black uppercase text-green-600 bg-green-50 border border-green-100 px-1.5 py-0.2 rounded mt-0.5">Winner</span>
+                        )}
+                      </button>
+
+                    </div>
+                  </div>
+
+                  {/* Footer Details */}
+                  <div className="px-5 py-3 bg-gray-50/50 border-t border-gray-100 text-[11px] text-gray-500 flex items-center justify-between">
+                    <span className="truncate max-w-[60%] font-medium">
+                      <span className="text-gray-400">{language === "en" ? "Loc: " : "Địa điểm: "}</span>{match.location}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (setSelectedDetailChallenge) {
+                          setSelectedDetailChallenge(match);
+                        } else {
+                          setActiveArenaChallenge(match);
+                        }
+                      }}
+                      className="text-[10px] font-extrabold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer bg-indigo-50/80 hover:bg-indigo-100 px-2.5 py-1 rounded-md border border-indigo-200/50"
+                    >
+                      {language === "en" ? "Details 👁️" : "Chi tiết 👁️"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="flex justify-center pt-3 border-t border-gray-50">
+          <button
+            type="button"
+            onClick={() => setActiveSubTab("history")}
+            className="px-5 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-extrabold uppercase tracking-widest rounded-xl transition-all cursor-pointer shadow-xs active:scale-95"
+          >
+            {language === "en" ? "View More Matches" : "Xem Thêm Kết Quả"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};

@@ -526,6 +526,11 @@ export default function App() {
   });
   const [globalSearch, setGlobalSearch] = useState("");
 
+  // PK Challenge redirect and deep linking states
+  const [activePkChallengeId, setActivePkChallengeId] = useState<string | null>(null);
+  const [pkChallengeToEditId, setPkChallengeToEditId] = useState<string | null>(null);
+  const [activePkSubTab, setActivePkSubTab] = useState<"dashboard" | "lobby" | "leaderboard" | "history" | null>(null);
+
   // Keep non-logged in guests restricted to public-facing viewing tabs
   useEffect(() => {
     if (!currentUser && !["home", "dashboard", "leaderboard", "teams", "vsc_system_directory", "vsc_clubs_directory"].includes(activeTab)) {
@@ -3729,6 +3734,15 @@ export default function App() {
               systemClubs={clubs}
               vscSystemAthletes={vscSystemAthletes}
               onlineTournaments={onlineTournaments}
+              onSelectPkChallenge={(id, subTab) => {
+                setActivePkChallengeId(id);
+                if (subTab) setActivePkSubTab(subTab);
+                setActiveTab("pk_lobby");
+              }}
+              onEditPkChallenge={(id) => {
+                setPkChallengeToEditId(id);
+                setActiveTab("pk_lobby");
+              }}
             />
           )}
 
@@ -3767,6 +3781,12 @@ export default function App() {
             <PkLobbyView
               currentUser={currentUser}
               onOpenAuthModal={() => setIsAuthModalOpen(true)}
+              activeChallengeId={activePkChallengeId}
+              onClearActiveChallengeId={() => setActivePkChallengeId(null)}
+              initialSubTab={activePkSubTab}
+              onClearInitialSubTab={() => setActivePkSubTab(null)}
+              editChallengeId={pkChallengeToEditId}
+              onClearEditChallengeId={() => setPkChallengeToEditId(null)}
             />
           )}
 

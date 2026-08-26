@@ -158,6 +158,15 @@ export interface PKChallenge {
   };
   refereeEmail?: string;
   createdAt: string;
+  pin?: string;
+  opponentAthleteId?: string;
+  joinRequests?: {
+    uid: string;
+    name: string;
+    avatar?: string;
+    athleteId?: string;
+    requestedAt: string;
+  }[];
 }
 
 

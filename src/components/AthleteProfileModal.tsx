@@ -1,9 +1,10 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Athlete, MatchHistoryItem } from "../types";
+import { Athlete, MatchHistoryItem, PKChallenge } from "../types";
 import { User, X, FileText, Lock, Award } from "lucide-react";
 import { AVATAR_MALE } from "./AthleteManagement";
 import { getHitCount } from "../utils/qualification";
+import { db, collection, query, orderBy, onSnapshot } from "../firebase";
 
 interface AthleteProfileModalProps {
   athlete: Athlete | null;
@@ -26,6 +27,145 @@ export const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({
   isGlobalAdmin,
   language = "vi",
 }) => {
+  const [challenges, setChallenges] = useState<PKChallenge[]>([]);
+
+  // Subscribe to PK Challenges to compute ELO live
+  useEffect(() => {
+    if (!isOpen || !athlete) return;
+    const q = query(collection(db, "vsc_pk_challenges"), orderBy("createdAt", "desc"));
+    const unsub = onSnapshot(q, (snapshot) => {
+      const list: PKChallenge[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push({ id: docSnap.id, ...docSnap.data() } as PKChallenge);
+      });
+      setChallenges(list);
+    }, (error) => {
+      console.warn("Error subscribing to PK challenges inside modal:", error);
+    });
+    return () => unsub();
+  }, [isOpen, athlete]);
+
+  // Calculate live PK Stats
+  const pkStats = useMemo(() => {
+    if (!athlete || challenges.length === 0) {
+      return { elo: 1000, wins: 0, losses: 0, draws: 0, streak: 0, totalMatches: 0 };
+    }
+
+    const stats: Record<string, { 
+      uid: string; 
+      name: string; 
+      wins: number; 
+      losses: number; 
+      draws: number; 
+      elo: number; 
+      streak: number; 
+    }> = {};
+
+    // Play through all completed matches chronologically to calculate ELO
+    const sortedChallenges = [...challenges]
+      .filter(c => c.status === "completed" && c.scores)
+      .sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
+
+    sortedChallenges.forEach((challenge) => {
+      const challengerKey = challenge.type === "solo_1v1" ? challenge.challengerUid : `club-${challenge.challengerUid}`;
+      const opponentKey = challenge.type === "solo_1v1" ? challenge.opponentUid : `club-${challenge.opponentUid}`;
+
+      if (!challengerKey || !opponentKey) return;
+
+      if (!stats[challengerKey]) {
+        stats[challengerKey] = { 
+          uid: challenge.challengerUid, 
+          name: challenge.challengerName, 
+          wins: 0, 
+          losses: 0, 
+          draws: 0, 
+          elo: 1000, 
+          streak: 0,
+        };
+      }
+      if (!stats[opponentKey]) {
+        stats[opponentKey] = { 
+          uid: challenge.opponentUid!, 
+          name: challenge.opponentName || "Đối thủ", 
+          wins: 0, 
+          losses: 0, 
+          draws: 0, 
+          elo: 1000, 
+          streak: 0,
+        };
+      }
+
+      const scores = challenge.scores!;
+      const chScores = scores.challengerScores || [];
+      const opScores = scores.opponentScores || [];
+      const winMechanism = challenge.winMechanism || "by_sets";
+
+      const chSum = chScores.reduce((a, b) => Number(a) + Number(b), 0);
+      const opSum = opScores.reduce((a, b) => Number(a) + Number(b), 0);
+
+      let chSetsWon = 0;
+      let opSetsWon = 0;
+      const len = Math.max(chScores.length, opScores.length);
+      for (let i = 0; i < len; i++) {
+        const chS = Number(chScores[i]) || 0;
+        const opS = Number(opScores[i]) || 0;
+        if (chS > opS) chSetsWon++;
+        else if (opS > chS) opSetsWon++;
+      }
+
+      const isBySets = winMechanism === "by_sets";
+      const challengerWin = isBySets ? (chSetsWon > opSetsWon) : (chSum > opSum);
+      const opponentWin = isBySets ? (opSetsWon > chSetsWon) : (opSum > chSum);
+
+      const rCh = stats[challengerKey].elo;
+      const rOp = stats[opponentKey].elo;
+      const expectedCh = 1 / (1 + Math.pow(10, (rOp - rCh) / 400));
+      const expectedOp = 1 / (1 + Math.pow(10, (rCh - rOp) / 400));
+      const K = 32;
+
+      if (challengerWin) {
+        stats[challengerKey].wins += 1;
+        stats[challengerKey].streak += 1;
+        stats[opponentKey].losses += 1;
+        stats[opponentKey].streak = 0;
+
+        stats[challengerKey].elo = Math.round(rCh + K * (1 - expectedCh));
+        stats[opponentKey].elo = Math.round(rOp + K * (0 - expectedOp));
+      } else if (opponentWin) {
+        stats[opponentKey].wins += 1;
+        stats[opponentKey].streak += 1;
+        stats[challengerKey].losses += 1;
+        stats[challengerKey].streak = 0;
+
+        stats[challengerKey].elo = Math.round(rCh + K * (0 - expectedCh));
+        stats[opponentKey].elo = Math.round(rOp + K * (1 - expectedOp));
+      } else {
+        stats[challengerKey].draws += 1;
+        stats[opponentKey].draws += 1;
+
+        stats[challengerKey].elo = Math.round(rCh + K * (0.5 - expectedCh));
+        stats[opponentKey].elo = Math.round(rOp + K * (0.5 - expectedOp));
+      }
+    });
+
+    const playerStats = Object.values(stats).find(s => {
+      return s.name.trim().toLowerCase() === athlete.name.trim().toLowerCase();
+    });
+
+    if (playerStats) {
+      return {
+        elo: playerStats.elo,
+        wins: playerStats.wins,
+        losses: playerStats.losses,
+        draws: playerStats.draws,
+        streak: playerStats.streak,
+        totalMatches: playerStats.wins + playerStats.losses + playerStats.draws
+      };
+    }
+
+    return { elo: 1000, wins: 0, losses: 0, draws: 0, streak: 0, totalMatches: 0 };
+  }, [athlete, challenges]);
+
   // Prevent background scroll when modal is open
   React.useEffect(() => {
     if (isOpen && athlete) {
@@ -324,6 +464,45 @@ export const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-bold">
                   🛡️ {athlete.team || (language === "en" ? "Independent" : "Tự do")}
                 </p>
+              </div>
+            </div>
+          </div>
+
+          {/* PK Challenge Arena Stats Block */}
+          <div className="bg-gradient-to-br from-rose-50/50 to-amber-50/30 dark:from-slate-900/60 dark:to-rose-950/15 border border-rose-100 dark:border-slate-800/85 rounded-2xl p-5 shadow-sm">
+            <h4 className="text-xs font-black text-[#9c0c13] dark:text-rose-400 uppercase tracking-widest border-b border-rose-100/60 dark:border-slate-800/85 pb-2 mb-4 flex items-center gap-2">
+              <span className="text-sm">⚔️</span>
+              {language === "en" ? "PK ARENA FIGHTING RECORD" : "THÀNH TÍCH ĐẤU TRƯỜNG PK"}
+            </h4>
+            
+            <div className="grid grid-cols-4 gap-2 text-center">
+              <div className="bg-white dark:bg-slate-950 p-2.5 rounded-xl border border-rose-100/50 dark:border-slate-900">
+                <div className="text-[9px] font-extrabold text-[#9c0c13] dark:text-rose-400 uppercase">
+                  ELO PK
+                </div>
+                <div className="text-base font-black text-[#9c0c13] dark:text-rose-400 mt-0.5">{pkStats.elo}</div>
+              </div>
+              <div className="bg-white dark:bg-slate-950 p-2.5 rounded-xl border border-rose-100/50 dark:border-slate-900">
+                <div className="text-[9px] font-extrabold text-slate-500 uppercase">
+                  {language === "en" ? "Matches" : "Số Trận"}
+                </div>
+                <div className="text-base font-black text-slate-700 dark:text-slate-200 mt-0.5">{pkStats.totalMatches}</div>
+              </div>
+              <div className="bg-white dark:bg-slate-950 p-2.5 rounded-xl border border-rose-100/50 dark:border-slate-900 col-span-2 sm:col-span-1">
+                <div className="text-[9px] font-extrabold text-emerald-600 uppercase">
+                  {language === "en" ? "Win-Loss" : "Thắng - Thua"}
+                </div>
+                <div className="text-base font-black text-emerald-600 mt-0.5">
+                  {pkStats.wins}W - {pkStats.losses}L
+                </div>
+              </div>
+              <div className="bg-white dark:bg-slate-950 p-2.5 rounded-xl border border-rose-100/50 dark:border-slate-900 col-span-2 sm:col-span-1">
+                <div className="text-[9px] font-extrabold text-amber-600 uppercase">
+                  {language === "en" ? "Streak" : "Chuỗi Thắng"}
+                </div>
+                <div className="text-base font-black text-amber-500 mt-0.5">
+                  {pkStats.streak > 0 ? `🔥 ${pkStats.streak}` : "---"}
+                </div>
               </div>
             </div>
           </div>

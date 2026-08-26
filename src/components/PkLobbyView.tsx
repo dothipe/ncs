@@ -25,10 +25,15 @@ import {
   AlertCircle,
   Target,
   Trash2,
-  Eye
+  Eye,
+  Lock,
+  Key,
+  UserCheck
 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import { PKChallenge, Athlete, SystemClub } from "../types";
+import { PkDashboardHome } from "./PkDashboardHome";
+import { AthleteProfileModal } from "./AthleteProfileModal";
 import { db } from "../firebase";
 import { 
   collection, 
@@ -39,22 +44,85 @@ import {
   query, 
   orderBy, 
   getDoc,
-  deleteDoc
+  deleteDoc,
+  arrayUnion,
+  arrayRemove
 } from "firebase/firestore";
-import { subscribeToVscSystemAthletes, subscribeToVscSystemClubs } from "../lib/firebaseService";
+import { subscribeToVscSystemAthletes, subscribeToVscSystemClubs, subscribeToTournamentsList } from "../lib/firebaseService";
 
 interface PkLobbyViewProps {
   currentUser: any;
   onOpenAuthModal: () => void;
+  activeChallengeId?: string | null;
+  onClearActiveChallengeId?: () => void;
+  initialSubTab?: "dashboard" | "lobby" | "leaderboard" | "history" | null;
+  onClearInitialSubTab?: () => void;
+  editChallengeId?: string | null;
+  onClearEditChallengeId?: () => void;
 }
 
-export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAuthModal }) => {
+export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ 
+  currentUser, 
+  onOpenAuthModal,
+  activeChallengeId,
+  onClearActiveChallengeId,
+  initialSubTab,
+  onClearInitialSubTab,
+  editChallengeId,
+  onClearEditChallengeId
+}) => {
   const { language } = useLanguage();
-  const [activeSubTab, setActiveSubTab] = useState<"lobby" | "leaderboard" | "history">("lobby");
+  const [activeSubTab, setActiveSubTab] = useState<"dashboard" | "lobby" | "leaderboard" | "history">("dashboard");
   const [challenges, setChallenges] = useState<PKChallenge[]>([]);
   const [systemAthletes, setSystemAthletes] = useState<Athlete[]>([]);
   const [systemClubs, setSystemClubs] = useState<SystemClub[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [selectedProfileAthlete, setSelectedProfileAthlete] = useState<Athlete | null>(null);
+  const [onlineTournaments, setOnlineTournaments] = useState<any[]>([]);
+
+  // Subscribe to system tournaments list to calculate athlete achievements
+  useEffect(() => {
+    const unsub = subscribeToTournamentsList((list) => {
+      setOnlineTournaments(list);
+    });
+    return () => unsub();
+  }, []);
+
+  const handleViewAthleteProfile = (name: string, email?: string, athleteId?: string) => {
+    let found: Athlete | undefined = undefined;
+    
+    // 1. If athleteId matches
+    if (athleteId) {
+      const cleanId = athleteId.trim().toLowerCase();
+      found = systemAthletes.find(a => a.id && a.id.trim().toLowerCase() === cleanId);
+    }
+    
+    // 2. If email matches
+    if (!found && email) {
+      const cleanEmail = email.trim().toLowerCase();
+      found = systemAthletes.find(a => a.email && a.email.trim().toLowerCase() === cleanEmail);
+    }
+    
+    // 3. If name matches (case-insensitive)
+    if (!found && name) {
+      const cleanName = name.trim().toLowerCase();
+      found = systemAthletes.find(a => a.name && a.name.trim().toLowerCase() === cleanName);
+    }
+    
+    if (found) {
+      setSelectedProfileAthlete(found);
+    } else {
+      // Create a temporary profile so unlinked PK users can still be viewed elegantly!
+      setSelectedProfileAthlete({
+        id: athleteId || "TỰ DO",
+        name: name,
+        team: "Tự do",
+        email: email || "",
+        scores: {}
+      });
+    }
+  };
 
   // Filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -73,6 +141,12 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
   const [formRefereeEmail, setFormRefereeEmail] = useState("");
   const [selectedAthleteId, setSelectedAthleteId] = useState("");
   const [selectedClubId, setSelectedClubId] = useState("");
+
+  // Create Challenge Pin & Opponent designation states
+  const [formPin, setFormPin] = useState("");
+  const [formDesignateOpponent, setFormDesignateOpponent] = useState(false);
+  const [formDesignatedOpponentAthleteId, setFormDesignatedOpponentAthleteId] = useState("");
+  const [formDesignatedOpponentClubId, setFormDesignatedOpponentClubId] = useState("");
 
   // New challenge settings fields
   const [formDistance, setFormDistance] = useState("10m");
@@ -99,6 +173,14 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
   const [editWinMechanism, setEditWinMechanism] = useState<"by_sets" | "by_total_points" | "by_target_shots">("by_sets");
   const [editTargetType, setEditTargetType] = useState<"bia_muc_tieu" | "bia_giay_tinh_diem">("bia_muc_tieu");
   const [editTargetTouchShots, setEditTargetTouchShots] = useState<number>(5);
+  const [editType, setEditType] = useState<"solo_1v1" | "team_vs_team" | "">("solo_1v1");
+  const [editTeamSize, setEditTeamSize] = useState<number>(3);
+  const [editSelectedAthleteId, setEditSelectedAthleteId] = useState("");
+  const [editSelectedClubId, setEditSelectedClubId] = useState("");
+  const [editDesignateOpponent, setEditDesignateOpponent] = useState(false);
+  const [editDesignatedOpponentAthleteId, setEditDesignatedOpponentAthleteId] = useState("");
+  const [editDesignatedOpponentClubId, setEditDesignatedOpponentClubId] = useState("");
+  const [editPin, setEditPin] = useState("");
 
   const handleWinMechanismChange = (val: "by_sets" | "by_total_points" | "by_target_shots", currentTouchShots = 5) => {
     setFormWinMechanism(val);
@@ -609,6 +691,49 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
         targetTouchShots: Number(formTargetTouchShots) || 30,
       };
 
+      if (formPin.trim()) {
+        challengeData.pin = formPin.trim();
+      }
+
+      // Handle Direct Opponent Designation
+      if (formDesignateOpponent) {
+        let opName = "";
+        let opAvatar = "";
+        let opAthleteId = "";
+
+        if (formType === "solo_1v1" && formDesignatedOpponentAthleteId) {
+          const linkedAth = systemAthletes.find(a => a.id === formDesignatedOpponentAthleteId);
+          if (linkedAth) {
+            opName = linkedAth.name;
+            opAvatar = linkedAth.avatarUrl || "";
+            opAthleteId = linkedAth.id;
+          }
+        } else if (formType === "team_vs_team" && formDesignatedOpponentClubId) {
+          const linkedClub = systemClubs.find(c => c.id === formDesignatedOpponentClubId);
+          if (linkedClub) {
+            opName = linkedClub.name;
+            opAvatar = linkedClub.logoUrl || "";
+          }
+        }
+
+        if (opName) {
+          challengeData.status = "accepted";
+          challengeData.opponentName = opName;
+          challengeData.opponentAvatar = opAvatar;
+          if (opAthleteId) {
+            challengeData.opponentAthleteId = opAthleteId;
+          }
+          challengeData.scores = {
+            challengerScores: Array(finalSetsCount).fill(0),
+            opponentScores: Array(finalSetsCount).fill(0),
+            challengerShots: JSON.stringify(Array(finalSetsCount).fill(null).map(() => Array(Number(formShotsPerSet) || 5).fill(null))),
+            opponentShots: JSON.stringify(Array(finalSetsCount).fill(null).map(() => Array(Number(formShotsPerSet) || 5).fill(null))),
+            challengerConfirm: false,
+            opponentConfirm: false
+          };
+        }
+      }
+
       if (formType === "team_vs_team") {
         challengeData.teamSize = formTeamSize;
       }
@@ -623,6 +748,10 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
       setFormDescription("");
       setFormLocation("VSC ONLINE");
       setFormRefereeEmail("");
+      setFormPin("");
+      setFormDesignateOpponent(false);
+      setFormDesignatedOpponentAthleteId("");
+      setFormDesignatedOpponentClubId("");
       setIsCreateModalOpen(false);
 
       alert(language === "en" 
@@ -652,10 +781,34 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
       return;
     }
 
+    // Check if user already requested
+    const alreadyRequested = challenge.joinRequests?.some(r => r.uid === currentUser.uid);
+    if (alreadyRequested) {
+      alert(language === "en"
+        ? "You have already requested to join this challenge! Please wait for the Challenger to approve."
+        : "Bạn đã gửi yêu cầu ứng tuyển kèo này rồi! Vui lòng chờ Chủ kèo phê duyệt."
+      );
+      return;
+    }
+
+    // PIN Verification
+    if (challenge.pin && challenge.pin.trim() !== "") {
+      const enteredPin = prompt(
+        language === "en" 
+          ? "This challenge is protected by a security PIN. Please enter the match PIN to continue:" 
+          : "Kèo đấu này yêu cầu mã PIN bảo mật. Vui lòng nhập mã PIN để tiếp tục:"
+      );
+      if (enteredPin === null) return; // user cancelled
+      if (enteredPin.trim() !== challenge.pin.trim()) {
+        alert(language === "en" ? "Incorrect PIN!" : "Mã PIN không chính xác! Không thể tham gia.");
+        return;
+      }
+    }
+
     const confirmAccept = window.confirm(
       language === "en" 
-        ? `Are you sure you want to accept this challenge from "${challenge.challengerName}"?` 
-        : `Bạn có chắc chắn muốn nhận kèo thách đấu này của "${challenge.challengerName}" không?`
+        ? `Are you sure you want to request to join this challenge from "${challenge.challengerName}"?` 
+        : `Bạn có chắc chắn muốn đăng ký nhận kèo thách đấu này của "${challenge.challengerName}" không?`
     );
     if (!confirmAccept) return;
 
@@ -679,14 +832,54 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
         }
       }
 
+      const requestObj = {
+        uid: currentUser.uid,
+        name: opponentName,
+        avatar: opponentAvatar,
+        athleteId: (challenge.type === "solo_1v1" && loggedInAthlete) ? loggedInAthlete.id : "",
+        requestedAt: new Date().toISOString()
+      };
+
+      const challengeRef = doc(db, "vsc_pk_challenges", challenge.id);
+      await updateDoc(challengeRef, {
+        joinRequests: arrayUnion(requestObj)
+      });
+
+      alert(language === "en" 
+        ? "Successfully submitted join request! Please wait for the Challenger to approve you." 
+        : "Đăng ký ứng tuyển kèo thành công! Hãy đợi Chủ kèo phê duyệt ghép trận."
+      );
+    } catch (err) {
+      console.error("Error accepting challenge:", err);
+      alert("Lỗi khi đăng ký nhận kèo: " + (err as Error).message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Approve Join Request
+  const handleApproveJoinRequest = async (challenge: PKChallenge, request: any) => {
+    if (!currentUser || currentUser.uid !== challenge.challengerUid) return;
+
+    const confirmApprove = window.confirm(
+      language === "en"
+        ? `Are you sure you want to select "${request.name}" as your match opponent?`
+        : `Bạn có chắc chắn muốn đồng ý chọn "${request.name}" làm đối thủ thi đấu không?`
+    );
+    if (!confirmApprove) return;
+
+    setActionLoading(true);
+
+    try {
       const finalSetsCount = challenge.setsCount || 3;
       const finalShotsPerSet = challenge.shotsPerSet || 5;
 
       const challengeRef = doc(db, "vsc_pk_challenges", challenge.id);
       await updateDoc(challengeRef, {
-        opponentUid: currentUser.uid,
-        opponentName: opponentName,
-        opponentAvatar: opponentAvatar,
+        opponentUid: request.uid,
+        opponentName: request.name,
+        opponentAvatar: request.avatar || "",
+        opponentAthleteId: request.athleteId || "",
         status: "accepted",
         scores: {
           challengerScores: Array(finalSetsCount).fill(0),
@@ -695,18 +888,41 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
           opponentShots: JSON.stringify(Array(finalSetsCount).fill(null).map(() => Array(finalShotsPerSet).fill(null))),
           challengerConfirm: false,
           opponentConfirm: false
-        }
+        },
+        joinRequests: [] // Clear all pending requests upon match confirmation
       });
 
       alert(language === "en" 
-        ? "Successfully accepted challenge! The match has been matched." 
-        : "Nhận kèo đấu thành công! Kèo đã được ghép cặp, hãy hẹn giờ ra sân thi đấu."
+        ? "Successfully matched with opponent! Match has started." 
+        : "Ghép cặp thi đấu thành công! Kèo đấu chính thức bắt đầu."
       );
     } catch (err) {
-      console.error("Error accepting challenge:", err);
-      alert("Lỗi khi nhận kèo: " + (err as Error).message);
+      console.error("Error approving request:", err);
+      alert("Lỗi khi phê duyệt đối thủ: " + (err as Error).message);
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  // Decline Join Request
+  const handleDeclineJoinRequest = async (challenge: PKChallenge, request: any) => {
+    if (!currentUser || currentUser.uid !== challenge.challengerUid) return;
+
+    const confirmDecline = window.confirm(
+      language === "en"
+        ? `Are you sure you want to decline "${request.name}"'s request?`
+        : `Bạn có chắc chắn muốn từ chối yêu cầu của "${request.name}" không?`
+    );
+    if (!confirmDecline) return;
+
+    try {
+      const challengeRef = doc(db, "vsc_pk_challenges", challenge.id);
+      await updateDoc(challengeRef, {
+        joinRequests: arrayRemove(request)
+      });
+    } catch (err) {
+      console.error("Error declining request:", err);
+      alert("Lỗi khi từ chối yêu cầu: " + (err as Error).message);
     }
   };
 
@@ -725,6 +941,20 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
     setEditTargetType(challenge.targetType || "bia_muc_tieu");
     setEditTargetTouchShots(challenge.targetTouchShots || 30);
 
+    setEditType(challenge.type || "solo_1v1");
+    setEditTeamSize(challenge.teamSize || 3);
+    setEditPin(challenge.pin || "");
+    setEditDesignateOpponent(!!challenge.opponentName);
+    setEditDesignatedOpponentAthleteId(challenge.opponentAthleteId || "");
+    
+    const matchingClub = systemClubs.find(c => c.name === challenge.opponentName);
+    setEditDesignatedOpponentClubId(matchingClub?.id || "");
+
+    const matchingAthlete = systemAthletes.find(a => a.name === challenge.challengerName);
+    setEditSelectedAthleteId(matchingAthlete?.id || loggedInAthlete?.id || (systemAthletes[0] ? systemAthletes[0].id : ""));
+    const matchingChallengerClub = systemClubs.find(c => c.name === challenge.challengerName);
+    setEditSelectedClubId(matchingChallengerClub?.id || (loggedInClubs[0] ? loggedInClubs[0].id : "") || (systemClubs[0] ? systemClubs[0].id : ""));
+
     const sets = challenge.setsCount || 3;
     if ([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(sets)) {
       setEditSetsCountOption(String(sets));
@@ -736,6 +966,38 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
 
     setIsEditModalOpen(true);
   };
+
+  // Listen to deep linking and redirect props from parent App
+  useEffect(() => {
+    if (initialSubTab) {
+      setActiveSubTab(initialSubTab);
+      onClearInitialSubTab?.();
+    }
+  }, [initialSubTab]);
+
+  useEffect(() => {
+    if (activeChallengeId && challenges.length > 0) {
+      const match = challenges.find((c) => c.id === activeChallengeId);
+      if (match) {
+        if (match.status === "completed") {
+          setSelectedDetailChallenge(match);
+        } else {
+          setActiveArenaChallenge(match);
+        }
+        onClearActiveChallengeId?.();
+      }
+    }
+  }, [activeChallengeId, challenges]);
+
+  useEffect(() => {
+    if (editChallengeId && challenges.length > 0) {
+      const match = challenges.find((c) => c.id === editChallengeId);
+      if (match) {
+        openEditModal(match);
+        onClearEditChallengeId?.();
+      }
+    }
+  }, [editChallengeId, challenges]);
 
   // Submit challenge settings changes
   const handleUpdateChallengeSettings = async (e: React.FormEvent) => {
@@ -749,6 +1011,23 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
         ? (Number(editSetsCountCustom) || 3) 
         : (Number(editSetsCountOption) || 3);
       
+      let creatorName = editingChallenge.challengerName;
+      let creatorAvatar = editingChallenge.challengerAvatar;
+
+      if (editType === "solo_1v1" && editSelectedAthleteId) {
+        const linkedAth = systemAthletes.find(a => a.id === editSelectedAthleteId);
+        if (linkedAth) {
+          creatorName = linkedAth.name;
+          if (linkedAth.avatarUrl) creatorAvatar = linkedAth.avatarUrl;
+        }
+      } else if (editType === "team_vs_team" && editSelectedClubId) {
+        const linkedClub = systemClubs.find(c => c.id === editSelectedClubId);
+        if (linkedClub) {
+          creatorName = linkedClub.name;
+          if (linkedClub.logoUrl) creatorAvatar = linkedClub.logoUrl;
+        }
+      }
+
       const updates: any = {
         title: editTitle.trim(),
         rules: editRules.trim(),
@@ -762,7 +1041,64 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
         winMechanism: editWinMechanism,
         targetType: editTargetType,
         targetTouchShots: Number(editTargetTouchShots) || 30,
+        type: editType,
+        challengerName: creatorName,
+        challengerAvatar: creatorAvatar,
+        pin: editPin.trim() || ""
       };
+
+      if (editType === "team_vs_team") {
+        updates.teamSize = editTeamSize;
+      }
+
+      if (editDesignateOpponent) {
+        let opName = "";
+        let opAvatar = "";
+        let opAthleteId = "";
+
+        if (editType === "solo_1v1" && editDesignatedOpponentAthleteId) {
+          const linkedAth = systemAthletes.find(a => a.id === editDesignatedOpponentAthleteId);
+          if (linkedAth) {
+            opName = linkedAth.name;
+            opAvatar = linkedAth.avatarUrl || "";
+            opAthleteId = linkedAth.id;
+          }
+        } else if (editType === "team_vs_team" && editDesignatedOpponentClubId) {
+          const linkedClub = systemClubs.find(c => c.id === editDesignatedOpponentClubId);
+          if (linkedClub) {
+            opName = linkedClub.name;
+            opAvatar = linkedClub.logoUrl || "";
+          }
+        }
+
+        if (opName) {
+          updates.status = "accepted";
+          updates.opponentName = opName;
+          updates.opponentAvatar = opAvatar;
+          if (opAthleteId) {
+            updates.opponentAthleteId = opAthleteId;
+          } else {
+            updates.opponentAthleteId = "";
+          }
+          if (!editingChallenge.scores) {
+            updates.scores = {
+              challengerScores: Array(finalSetsCount).fill(0),
+              opponentScores: Array(finalSetsCount).fill(0),
+              challengerShots: JSON.stringify(Array(finalSetsCount).fill(null).map(() => Array(Number(editShotsPerSet) || 5).fill(null))),
+              opponentShots: JSON.stringify(Array(finalSetsCount).fill(null).map(() => Array(Number(editShotsPerSet) || 5).fill(null))),
+              challengerConfirm: false,
+              opponentConfirm: false
+            };
+          }
+        }
+      } else {
+        if (editingChallenge.status === "open" || editingChallenge.status === "accepted") {
+          updates.status = "open";
+          updates.opponentName = "";
+          updates.opponentAvatar = "";
+          updates.opponentAthleteId = "";
+        }
+      }
 
       // Recalculate score matrix dimensions if scores already exist
       if (editingChallenge.scores) {
@@ -879,12 +1215,15 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
   }, [currentUser, activeArenaChallenge]);
 
   const isChallengerOfMatch = useMemo(() => {
-    return !!(activeArenaChallenge && currentUser?.uid === activeArenaChallenge.challengerUid);
+    return !!(currentUser?.uid && activeArenaChallenge && currentUser.uid === activeArenaChallenge.challengerUid);
   }, [activeArenaChallenge, currentUser?.uid]);
 
   const isOpponentOfMatch = useMemo(() => {
-    return !!(activeArenaChallenge && currentUser?.uid === activeArenaChallenge.opponentUid);
-  }, [activeArenaChallenge, currentUser?.uid]);
+    if (!currentUser?.uid || !activeArenaChallenge) return false;
+    if (currentUser.uid === activeArenaChallenge.opponentUid) return true;
+    if (activeArenaChallenge.opponentAthleteId && loggedInAthlete && loggedInAthlete.id === activeArenaChallenge.opponentAthleteId) return true;
+    return false;
+  }, [activeArenaChallenge, currentUser?.uid, loggedInAthlete]);
   
   const hasRefereeAssigned = useMemo(() => {
     return !!(activeArenaChallenge?.refereeEmail && activeArenaChallenge.refereeEmail.trim() !== "");
@@ -1291,6 +1630,18 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
 
       {/* Main Tabs Navigation */}
       <div className="flex items-center border-b border-gray-200 mb-6 overflow-x-auto scrollbar-none">
+        <button
+          onClick={() => { setActiveSubTab("dashboard"); setActiveArenaChallenge(null); }}
+          className={`px-5 py-3 font-semibold text-sm transition-all relative border-b-2 whitespace-nowrap flex items-center gap-2 ${
+            activeSubTab === "dashboard" && !activeArenaChallenge
+              ? "border-rose-600 text-rose-600 font-bold"
+              : "border-transparent text-gray-500 hover:text-gray-800"
+          }`}
+        >
+          <Flame className="w-4 h-4 text-rose-500 animate-pulse" />
+          <span>{language === "en" ? "PK Dashboard" : "Trang Chủ Đấu Trường 🏟️"}</span>
+        </button>
+
         <button
           onClick={() => { setActiveSubTab("lobby"); setActiveArenaChallenge(null); }}
           className={`px-5 py-3 font-semibold text-sm transition-all relative border-b-2 whitespace-nowrap flex items-center gap-2 ${
@@ -1883,6 +2234,22 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
             </div>
 
           </motion.div>
+        ) : activeSubTab === "dashboard" ? (
+          /* ========================================================= */
+          /* 🏟️ ARENA DASHBOARD HOME VIEW                             */
+          /* ========================================================= */
+          <PkDashboardHome 
+            challenges={challenges}
+            pkLeaderboard={pkLeaderboard}
+            setActiveSubTab={setActiveSubTab}
+            setActiveArenaChallenge={setActiveArenaChallenge}
+            setSelectedDetailChallenge={setSelectedDetailChallenge}
+            language={language}
+            onViewAthleteProfile={handleViewAthleteProfile}
+            currentUser={currentUser}
+            onAcceptChallenge={handleAcceptChallenge}
+            onOpenAuthModal={onOpenAuthModal}
+          />
         ) : activeSubTab === "lobby" ? (
           /* ========================================================= */
           /* 🏟️ CHALLEGING MATCHES LOBBY LIST VIEW                     */
@@ -1964,20 +2331,28 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                       >
                         {/* Card Header Status Indicator */}
                         <div className="px-5 py-3.5 bg-gray-55/40 border-b border-gray-100 flex items-center justify-between">
-                          <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${
-                            challenge.status === "open"
-                              ? "bg-rose-50 text-rose-600 border border-rose-100 animate-pulse"
-                              : challenge.status === "accepted"
-                              ? "bg-blue-50 text-blue-600 border border-blue-100"
-                              : "bg-amber-50 text-amber-600 border border-amber-100"
-                          }`}>
-                            {challenge.status === "open" 
-                              ? (language === "en" ? "Awaiting Guest" : "Tìm đối thủ 🔍") 
-                              : challenge.status === "accepted"
-                              ? (language === "en" ? "Matched / Pending Arena" : "Đã nhận kèo 🤝")
-                              : (language === "en" ? "Ongoing Battle" : "Đang thi đấu ⚔️")
-                            }
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${
+                              challenge.status === "open"
+                                ? "bg-rose-50 text-rose-600 border border-rose-100 animate-pulse"
+                                : challenge.status === "accepted"
+                                ? "bg-blue-50 text-blue-600 border border-blue-100"
+                                : "bg-amber-50 text-amber-600 border border-amber-100"
+                            }`}>
+                              {challenge.status === "open" 
+                                ? (language === "en" ? "Awaiting Guest" : "Tìm đối thủ 🔍") 
+                                : challenge.status === "accepted"
+                                ? (language === "en" ? "Matched / Pending Arena" : "Đã nhận kèo 🤝")
+                                : (language === "en" ? "Ongoing Battle" : "Đang thi đấu ⚔️")
+                              }
+                            </span>
+                            {challenge.pin && (
+                              <span className="flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-100 text-[9px] font-bold px-1.5 py-0.5 rounded-full" title="Kèo bảo mật bằng PIN">
+                                <Lock className="w-2.5 h-2.5 text-amber-600" />
+                                <span>PIN</span>
+                              </span>
+                            )}
+                          </div>
 
                           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                             {challenge.type === "solo_1v1" ? "Solo 1v1" : `${challenge.teamSize}v${challenge.teamSize} Team`}
@@ -2008,19 +2383,25 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                               </div>
                               <div className="flex items-center gap-2">
                                 <Target className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                                <span className="truncate font-semibold text-gray-700">
+                                <span className="truncate font-medium">
                                   {language === "en" ? "Distance: " : "Cự ly: "} {challenge.distance || "10m"}
                                 </span>
                               </div>
                               <div className="flex items-center gap-2">
+                                <Award className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                                <span className="truncate font-medium">
+                                  {language === "en" ? "Target: " : "Mục tiêu: "} {challenge.targetType === "bia_giay_tinh_diem" ? (language === "en" ? "Paper Target" : "Bia giấy tính điểm") : (language === "en" ? "Target Plate" : "Bia mục tiêu")}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 sm:col-span-2">
                                 <Sword className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                                <span className="truncate font-semibold text-gray-700">
-                                  {language === "en" ? "Setup: " : "Thiết lập: "} {challenge.setsCount || 3} hiệp x {challenge.shotsPerSet || 5} viên
+                                <span className="truncate font-medium">
+                                  {language === "en" ? "Setup: " : "Thiết lập: "} {challenge.setsCount || 3} hiệp x {challenge.shotsPerSet || 5} viên {challenge.winMechanism === "by_target_shots" ? (language === "en" ? `(Chạm ${challenge.targetTouchShots} viên)` : `(Chạm ${challenge.targetTouchShots} viên)`) : ""}
                                 </span>
                               </div>
                               <div className="flex items-center gap-2 sm:col-span-2 border-t border-gray-50 pt-2 mt-1">
                                 <Shield className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                                <span className="font-semibold truncate text-gray-700">
+                                <span className="font-medium truncate">
                                   {language === "en" ? "Rules: " : "Quy định: "} {challenge.rules}
                                 </span>
                               </div>
@@ -2029,7 +2410,14 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
 
                           {/* Contestants Visualization bar */}
                           <div className="flex items-center justify-between border-t border-gray-50 pt-3.5">
-                            <div className="flex items-center gap-2 max-w-[45%]">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleViewAthleteProfile(challenge.challengerName, challenge.challengerEmail, challenge.challengerUid);
+                              }}
+                              className="flex items-center gap-2 max-w-[45%] text-left hover:text-rose-600 transition-colors cursor-pointer focus:outline-none"
+                            >
                               <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-rose-100 bg-gray-50 flex items-center justify-center">
                                 {challenge.challengerAvatar ? (
                                   <img 
@@ -2042,17 +2430,24 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                                   <User className="w-4 h-4 text-gray-400" />
                                 )}
                               </div>
-                              <span className="text-xs font-bold text-gray-900 truncate">
+                              <span className="text-xs font-bold truncate">
                                 {challenge.challengerName}
                               </span>
-                            </div>
+                            </button>
 
                             <span className="text-[10px] italic font-black text-rose-500 shrink-0">VS</span>
 
                             <div className="flex items-center gap-2 max-w-[45%] justify-end text-right">
                               {isMatched ? (
-                                <>
-                                  <span className="text-xs font-bold text-gray-900 truncate">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleViewAthleteProfile(challenge.opponentName || "Đối thủ", challenge.opponentEmail, challenge.opponentUid);
+                                  }}
+                                  className="flex items-center gap-2 text-right justify-end hover:text-rose-600 transition-colors cursor-pointer focus:outline-none"
+                                >
+                                  <span className="text-xs font-bold truncate">
                                     {challenge.opponentName}
                                   </span>
                                   <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-gray-200 bg-gray-50 flex items-center justify-center order-first sm:order-last">
@@ -2067,7 +2462,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                                       <User className="w-4 h-4 text-gray-400" />
                                     )}
                                   </div>
-                                </>
+                                </button>
                               ) : (
                                 <span className="text-xs italic text-gray-400">
                                   {language === "en" ? "Awaiting..." : "Đang chờ đối..."}
@@ -2075,6 +2470,50 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                               )}
                             </div>
                           </div>
+
+                          {/* Host join requests management view */}
+                          {isOwner && challenge.status === "open" && challenge.joinRequests && challenge.joinRequests.length > 0 && (
+                            <div className="mt-3 bg-rose-50/50 rounded-xl p-3 border border-rose-100/50">
+                              <span className="text-[10px] font-bold text-rose-900 uppercase tracking-wide block mb-2 flex items-center gap-1.5">
+                                <UserCheck className="w-3.5 h-3.5 text-rose-500" />
+                                <span>{language === "en" ? `Join Requests (${challenge.joinRequests.length})` : `Yêu cầu ứng tuyển (${challenge.joinRequests.length})`}</span>
+                              </span>
+                              <div className="space-y-1.5 max-h-[140px] overflow-y-auto scrollbar-thin">
+                                {challenge.joinRequests.map((req, idx) => (
+                                  <div key={idx} className="flex items-center justify-between gap-2 bg-white p-2 rounded-lg border border-gray-100 shadow-2xs">
+                                    <div className="flex items-center gap-1.5 truncate">
+                                      <div className="w-5 h-5 rounded-full overflow-hidden shrink-0 border border-gray-150">
+                                        {req.avatar ? (
+                                          <img src={req.avatar} alt={req.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                        ) : (
+                                          <User className="w-3 h-3 text-gray-400 m-auto" />
+                                        )}
+                                      </div>
+                                      <span className="text-[11px] font-bold text-gray-800 truncate" title={req.name}>
+                                        {req.name}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleApproveJoinRequest(challenge, req)}
+                                        className="bg-green-600 hover:bg-green-700 text-white text-[9px] font-bold px-2 py-1 rounded-md transition-all cursor-pointer"
+                                      >
+                                        {language === "en" ? "Approve" : "Duyệt"}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeclineJoinRequest(challenge, req)}
+                                        className="bg-gray-100 hover:bg-gray-200 text-gray-500 text-[9px] font-bold px-1.5 py-1 rounded-md transition-all cursor-pointer"
+                                      >
+                                        ✕
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
 
                         </div>
 
@@ -2186,7 +2625,12 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                     }
 
                     return (
-                      <div key={player.uid} className="p-4 flex items-center justify-between gap-4 hover:bg-gray-50/50 transition-colors">
+                      <button
+                        type="button"
+                        key={player.uid}
+                        onClick={() => handleViewAthleteProfile(player.name, player.email, player.athleteId || player.uid)}
+                        className="w-full text-left p-4 flex items-center justify-between gap-4 hover:bg-slate-50 transition-colors focus:outline-none cursor-pointer"
+                      >
                         <div className="flex items-center gap-3">
                           <div className="w-14 text-center shrink-0">
                             {rankBadge}
@@ -2196,9 +2640,9 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                             {player.avatarUrl ? (
                               <img 
                                 src={player.avatarUrl} 
-                                alt={player.name} 
-                                className="w-full h-full object-cover"
-                                referrerPolicy="no-referrer"
+                                  alt={player.name} 
+                                  className="w-full h-full object-cover"
+                                  referrerPolicy="no-referrer"
                               />
                             ) : (
                               <User className="w-5 h-5 text-gray-300" />
@@ -2233,7 +2677,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                           </div>
                           <span className="text-[9px] text-gray-400 font-medium">Ranked #{(idx + 1)}</span>
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -2291,20 +2735,47 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                         <span>
                           {challenge.type === "solo_1v1" ? "1v1 Solo" : "Club Team"}
                           {" • "}
-                          {isBySets 
+                          {winMechanism === "by_sets" 
                             ? (language === "en" ? "Set-by-Set Format" : "Tính theo Hiệp") 
+                            : winMechanism === "by_target_shots"
+                            ? (language === "en" ? `Touch ${challenge.targetTouchShots || 15} Shots` : `Chạm ${challenge.targetTouchShots || 15} Viên`)
                             : (language === "en" ? "Total Points Format" : "Cộng tổng điểm")}
                         </span>
                       </div>
 
                       {/* Scoreboard block */}
                       <div className="p-6">
-                        <h4 className="text-sm font-bold text-gray-900 text-center mb-5 line-clamp-1">{challenge.title}</h4>
+                        <h4 className="text-sm font-bold text-gray-900 text-center mb-2 line-clamp-1">{challenge.title}</h4>
+                        
+                        {/* Match Specifications subheader */}
+                        <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[10px] text-gray-500 font-extrabold mb-4 bg-slate-100/60 py-1.5 px-3 rounded-xl border border-slate-200/50 max-w-sm mx-auto">
+                          <span className="flex items-center gap-0.5">
+                            <span className="text-rose-600">🎯</span>
+                            <span>{language === "en" ? "Target:" : "Mục tiêu:"}</span>
+                            <span className="text-gray-800">
+                              {challenge.targetType === "bia_giay_tinh_diem" 
+                                ? (language === "en" ? "Paper Target" : "Bia giấy tính điểm") 
+                                : (language === "en" ? "Target Plate" : "Bia mục tiêu")}
+                            </span>
+                          </span>
+                          <span className="text-gray-300">•</span>
+                          <span>
+                            {language === "en" ? "Shots/Set:" : "Số viên/Hiệp:"} <span className="text-gray-800">{challenge.shotsPerSet || 5}</span>
+                          </span>
+                          <span className="text-gray-300">•</span>
+                          <span>
+                            {language === "en" ? "Sets:" : "Số Hiệp:"} <span className="text-gray-800">{challenge.setsCount || 3}</span>
+                          </span>
+                        </div>
                         
                         <div className="flex items-center justify-around gap-4 bg-gray-50 p-4 rounded-xl border border-gray-50">
                           
                           {/* Challenger */}
-                          <div className="flex flex-col items-center text-center w-5/12">
+                          <button
+                            type="button"
+                            onClick={() => handleViewAthleteProfile(challenge.challengerName, challenge.challengerEmail, challenge.challengerUid)}
+                            className="flex flex-col items-center text-center w-5/12 focus:outline-none hover:text-rose-600 transition-colors cursor-pointer"
+                          >
                             <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center shadow-sm">
                               {challenge.challengerAvatar ? (
                                 <img src={challenge.challengerAvatar} alt={challenge.challengerName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -2312,11 +2783,11 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                                 <User className="w-5 h-5 text-gray-300" />
                               )}
                             </div>
-                            <span className="text-xs font-bold text-gray-900 mt-2 truncate max-w-full">{challenge.challengerName}</span>
+                            <span className="text-xs font-bold mt-2 truncate max-w-full">{challenge.challengerName}</span>
                             {challengerWin && (
                               <span className="text-[9px] font-black uppercase text-green-600 bg-green-50 border border-green-100 px-1.5 py-0.2 rounded mt-1">Winner</span>
                             )}
-                          </div>
+                          </button>
 
                           {/* Scores Sum */}
                           <div className="text-center shrink-0 flex flex-col items-center">
@@ -2333,7 +2804,11 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                           </div>
 
                           {/* Opponent */}
-                          <div className="flex flex-col items-center text-center w-5/12">
+                          <button
+                            type="button"
+                            onClick={() => handleViewAthleteProfile(challenge.opponentName || "Đối thủ", challenge.opponentEmail, challenge.opponentUid)}
+                            className="flex flex-col items-center text-center w-5/12 focus:outline-none hover:text-rose-600 transition-colors cursor-pointer"
+                          >
                             <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center shadow-sm">
                               {challenge.opponentAvatar ? (
                                 <img src={challenge.opponentAvatar} alt={challenge.opponentName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -2341,11 +2816,11 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                                 <User className="w-5 h-5 text-gray-300" />
                               )}
                             </div>
-                            <span className="text-xs font-bold text-gray-900 mt-2 truncate max-w-full">{challenge.opponentName || "Guest"}</span>
+                            <span className="text-xs font-bold mt-2 truncate max-w-full">{challenge.opponentName || "Guest"}</span>
                             {opponentWin && (
                               <span className="text-[9px] font-black uppercase text-green-600 bg-green-50 border border-green-100 px-1.5 py-0.2 rounded mt-1">Winner</span>
                             )}
-                          </div>
+                          </button>
 
                         </div>
                       </div>
@@ -2535,6 +3010,101 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                   </select>
                 </div>
               )}
+
+              {/* Direct Opponent Assignment option */}
+              <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-150 space-y-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="designateOpponent"
+                    checked={formDesignateOpponent}
+                    onChange={(e) => {
+                      setFormDesignateOpponent(e.target.checked);
+                      if (e.target.checked) {
+                        if (formType === "solo_1v1") {
+                          const firstOpp = systemAthletes.find(a => a.id !== selectedAthleteId);
+                          setFormDesignatedOpponentAthleteId(firstOpp?.id || "");
+                        } else {
+                          const firstClub = systemClubs.find(c => c.id !== selectedClubId);
+                          setFormDesignatedOpponentClubId(firstClub?.id || "");
+                        }
+                      }
+                    }}
+                    className="w-4 h-4 text-rose-600 focus:ring-rose-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="designateOpponent" className="text-xs font-bold text-gray-700 uppercase tracking-wider cursor-pointer">
+                    {language === "en" ? "Designate Direct Opponent" : "Chỉ định đối thủ trực tiếp ⚔️"}
+                  </label>
+                </div>
+
+                {formDesignateOpponent && (
+                  <div>
+                    {formType === "solo_1v1" ? (
+                      <div>
+                        <label className="block text-[11px] font-semibold text-gray-600 mb-1">
+                          {language === "en" ? "Select Target Opponent Athlete" : "Tìm/Chọn VĐV Đối Thủ chỉ định:"}
+                        </label>
+                        <select
+                          value={formDesignatedOpponentAthleteId}
+                          onChange={(e) => setFormDesignatedOpponentAthleteId(e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                        >
+                          <option value="">-- {language === "en" ? "Select Opponent" : "Chọn đối thủ"} --</option>
+                          {systemAthletes
+                            .filter(a => a.id !== selectedAthleteId)
+                            .map((ath) => (
+                              <option key={ath.id} value={ath.id}>
+                                {ath.name} (VSC-{ath.id})
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-[11px] font-semibold text-gray-600 mb-1">
+                          {language === "en" ? "Select Target Opponent Club" : "Tìm/Chọn CLB Đối Thủ chỉ định:"}
+                        </label>
+                        <select
+                          value={formDesignatedOpponentClubId}
+                          onChange={(e) => setFormDesignatedOpponentClubId(e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                        >
+                          <option value="">-- {language === "en" ? "Select Club" : "Chọn Câu lạc bộ đối thủ"} --</option>
+                          {systemClubs
+                            .filter(c => c.id !== selectedClubId)
+                            .map((club) => (
+                              <option key={club.id} value={club.id}>
+                                {club.name}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
+                    <p className="text-[10px] text-emerald-600 mt-1 font-medium">
+                      💡 {language === "en" ? "Match will start immediately upon posting. No waiting required." : "Ghép trận tự động bắt đầu ngay sau khi đăng kèo, không cần chờ đợi đối thủ nhận."}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Match Security PIN */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span>{language === "en" ? "Set Match Security PIN (Optional)" : "Đặt mã PIN bảo mật cho kèo đấu"}</span>
+                  <span className="text-[10px] text-gray-400 normal-case font-medium">{language === "en" ? "Optional" : "Không bắt buộc"}</span>
+                </label>
+                <div className="relative">
+                  <Key className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    maxLength={10}
+                    placeholder={language === "en" ? "e.g., 1234 (Only players with PIN can join)" : "vd: 1234 (Chỉ đối thủ có PIN mới có thể nhận kèo)"}
+                    value={formPin}
+                    onChange={(e) => setFormPin(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                  />
+                </div>
+              </div>
 
               {/* Dynamic Game Parameters: Distance, Shots per round, Rounds count */}
               <div className="bg-rose-50/30 p-4 rounded-xl border border-rose-100/50 space-y-3.5">
@@ -2789,19 +3359,34 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
             {/* Modal Form */}
             <form onSubmit={handleUpdateChallengeSettings} className="flex-1 overflow-y-auto p-6 space-y-4">
               
-              {/* Challenge Title & Target Type */}
+              {/* Challenge Title */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                  {language === "en" ? "Challenge Title *" : "Tiêu đề kèo thách đấu *"}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-gray-55 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                />
+              </div>
+
+              {/* Form Type, Target Type & Size */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-                    {language === "en" ? "Challenge Title *" : "Tiêu đề kèo thách đấu *"}
+                    {language === "en" ? "Challenge Format *" : "Thể thức thi đấu *"}
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={editTitle}
-                    onChange={(e) => setEditTitle(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-gray-55 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                  />
+                  <select
+                    value={editType}
+                    onChange={(e) => setEditType(e.target.value as any)}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  >
+                    <option value="solo_1v1">{language === "en" ? "Solo 1v1" : "Đấu đơn cá nhân 1v1"}</option>
+                    <option value="team_vs_team">{language === "en" ? "Club / Team vs Team" : "Đấu đồng đội CLB"}</option>
+                  </select>
                 </div>
 
                 <div>
@@ -2816,6 +3401,170 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                     <option value="bia_muc_tieu">{language === "en" ? "Target Plate (Default)" : "Bia mục tiêu (mặc định)"}</option>
                     <option value="bia_giay_tinh_diem">{language === "en" ? "Paper Scoreboard" : "Bia giấy tính điểm"}</option>
                   </select>
+                </div>
+
+                {editType === "team_vs_team" && (
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                      {language === "en" ? "Team size *" : "Số lượng VĐV mỗi bên *"}
+                    </label>
+                    <select
+                      value={editTeamSize}
+                      onChange={(e) => setEditTeamSize(Number(e.target.value))}
+                      className="w-full px-4 py-2.5 bg-gray-55 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    >
+                      <option value={2}>2v2</option>
+                      <option value={3}>3v3</option>
+                      <option value={4}>4v4</option>
+                      <option value={5}>5v5</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Linked Athlete Profile Selection */}
+              {editType === "solo_1v1" && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                    {language === "en" ? "Select Athlete Profile *" : "Đại diện hồ sơ VĐV thi đấu *"}
+                  </label>
+                  <select
+                    value={editSelectedAthleteId}
+                    onChange={(e) => setEditSelectedAthleteId(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    {loggedInAthlete ? (
+                      <option value={loggedInAthlete.id}>
+                        {loggedInAthlete.name} (VSC-{loggedInAthlete.id}) - Linked Account
+                      </option>
+                    ) : (
+                      systemAthletes.map((ath) => (
+                        <option key={ath.id} value={ath.id}>
+                          {ath.name} (VSC-{ath.id})
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+              )}
+
+              {/* Linked Club Selection */}
+              {editType === "team_vs_team" && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                    {language === "en" ? "Select Club *" : "Đại diện Câu lạc bộ thi đấu *"}
+                  </label>
+                  <select
+                    value={editSelectedClubId}
+                    onChange={(e) => setEditSelectedClubId(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    {loggedInClubs.length > 0 ? (
+                      loggedInClubs.map((club) => (
+                        <option key={club.id} value={club.id}>
+                          {club.name} (CLB-{club.id})
+                        </option>
+                      ))
+                    ) : (
+                      systemClubs.map((club) => (
+                        <option key={club.id} value={club.id}>
+                          {club.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+              )}
+
+              {/* Direct Opponent Assignment option */}
+              <div className="bg-gray-50/55 p-4 rounded-xl border border-gray-150 space-y-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="editDesignateOpponent"
+                    checked={editDesignateOpponent}
+                    onChange={(e) => {
+                      setEditDesignateOpponent(e.target.checked);
+                      if (e.target.checked) {
+                        if (editType === "solo_1v1") {
+                          const firstOpp = systemAthletes.find(a => a.id !== editSelectedAthleteId);
+                          setEditDesignatedOpponentAthleteId(firstOpp?.id || "");
+                        } else {
+                          const firstClub = systemClubs.find(c => c.id !== editSelectedClubId);
+                          setEditDesignatedOpponentClubId(firstClub?.id || "");
+                        }
+                      }
+                    }}
+                    className="w-4 h-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="editDesignateOpponent" className="text-xs font-bold text-gray-700 uppercase tracking-wider cursor-pointer">
+                    {language === "en" ? "Designate Direct Opponent" : "Chỉ định đối thủ trực tiếp ⚔️"}
+                  </label>
+                </div>
+
+                {editDesignateOpponent && (
+                  <div>
+                    {editType === "solo_1v1" ? (
+                      <div>
+                        <label className="block text-[11px] font-semibold text-gray-600 mb-1">
+                          {language === "en" ? "Select Target Opponent Athlete" : "Tìm/Chọn VĐV Đối Thủ chỉ định:"}
+                        </label>
+                        <select
+                          value={editDesignatedOpponentAthleteId}
+                          onChange={(e) => setEditDesignatedOpponentAthleteId(e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        >
+                          <option value="">-- {language === "en" ? "Select Opponent" : "Chọn đối thủ"} --</option>
+                          {systemAthletes
+                            .filter(a => a.id !== editSelectedAthleteId)
+                            .map((ath) => (
+                              <option key={ath.id} value={ath.id}>
+                                {ath.name} (VSC-{ath.id})
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-[11px] font-semibold text-gray-600 mb-1">
+                          {language === "en" ? "Select Target Opponent Club" : "Tìm/Chọn CLB Đối Thủ chỉ định:"}
+                        </label>
+                        <select
+                          value={editDesignatedOpponentClubId}
+                          onChange={(e) => setEditDesignatedOpponentClubId(e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        >
+                          <option value="">-- {language === "en" ? "Select Club" : "Chọn Câu lạc bộ đối thủ"} --</option>
+                          {systemClubs
+                            .filter(c => c.id !== editSelectedClubId)
+                            .map((club) => (
+                              <option key={club.id} value={club.id}>
+                                {club.name}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Match Security PIN */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span>{language === "en" ? "Set Match Security PIN (Optional)" : "Đặt mã PIN bảo mật cho kèo đấu"}</span>
+                  <span className="text-[10px] text-gray-400 normal-case font-medium">{language === "en" ? "Optional" : "Không bắt buộc"}</span>
+                </label>
+                <div className="relative">
+                  <Key className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    maxLength={10}
+                    placeholder={language === "en" ? "e.g., 1234 (Only players with PIN can join)" : "vd: 1234 (Chỉ đối thủ có PIN mới có thể nhận kèo)"}
+                    value={editPin}
+                    onChange={(e) => setEditPin(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 bg-gray-55 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  />
                 </div>
               </div>
 
@@ -3648,47 +4397,100 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
                 </div>
 
                 {/* Match Score Summary Card */}
-                <div className="bg-gray-50 rounded-2xl p-4 border border-gray-150 space-y-3">
-                  <div className="text-center text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                    {language === "en" ? "Current Standings" : "Tỉ số ghi nhận"}
+                <div className="bg-gray-50 rounded-2xl p-5 border border-gray-150 space-y-4">
+                  <div className="text-center text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                    {language === "en" ? "CALCULATED SCORE SUMMARY" : "KẾT QUẢ TÍNH TOÁN TỈ SỐ"}
                   </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex-1 text-center">
-                      <span className="block text-xs font-bold text-gray-700 truncate">{activeArenaChallenge.challengerName}</span>
-                      <span className="text-3xl font-black text-indigo-900">
-                        {chScoreDisplay}
-                      </span>
-                      {isBySets && (
-                        <span className="block text-[10px] text-gray-500 font-medium">
-                          ({challengerScoresInput.reduce((a, b) => Number(a) + Number(b), 0)} {language === "en" ? "Total Pts" : "Tổng điểm"})
+                  
+                  <div className="flex items-stretch justify-between gap-4">
+                    {/* Challenger Column */}
+                    <div className="flex-1 text-center bg-white p-3 rounded-xl border border-gray-100 flex flex-col justify-between">
+                      <div>
+                        <span className="block text-xs font-bold text-gray-700 truncate mb-1">
+                          {activeArenaChallenge.challengerName}
                         </span>
-                      )}
+                        <span className="text-3xl font-black text-rose-600 block leading-none">
+                          {chScoreDisplay}
+                        </span>
+                      </div>
+                      
+                      <div className="mt-2 pt-2 border-t border-gray-100">
+                        {isBySets ? (
+                          <span className="inline-block px-2 py-0.5 rounded-md bg-rose-50 text-[10px] font-bold text-rose-700 uppercase">
+                            {language === "en" ? "Sets Won" : "Hiệp Thắng"}
+                          </span>
+                        ) : isByTotal ? (
+                          <span className="inline-block px-2 py-0.5 rounded-md bg-indigo-50 text-[10px] font-bold text-indigo-700 uppercase">
+                            {language === "en" ? "Total Pts" : "Tổng Điểm"}
+                          </span>
+                        ) : (
+                          <span className="inline-block px-2 py-0.5 rounded-md bg-amber-50 text-[10px] font-bold text-amber-700 uppercase">
+                            {language === "en" ? "Hits" : "Số Chạm"}
+                          </span>
+                        )}
+                        {isBySets && (
+                          <span className="block text-[10px] text-gray-400 font-medium mt-1">
+                            {language === "en" ? "Total pts: " : "Tổng điểm: "}
+                            {challengerScoresInput.reduce((a, b) => Number(a) + Number(b), 0)}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-gray-300 font-bold text-xs shrink-0 uppercase tracking-widest">VS</div>
-                    <div className="flex-1 text-center">
-                      <span className="block text-xs font-bold text-gray-700 truncate">
-                        {activeArenaChallenge.opponentName || (language === "en" ? "Opponent" : "Đối thủ")}
-                      </span>
-                      <span className="text-3xl font-black text-indigo-900">
-                        {opScoreDisplay}
-                      </span>
-                      {isBySets && (
-                        <span className="block text-[10px] text-gray-500 font-medium">
-                          ({opponentScoresInput.reduce((a, b) => Number(a) + Number(b), 0)} {language === "en" ? "Total Pts" : "Tổng điểm"})
+
+                    {/* VS Center Divider */}
+                    <div className="flex flex-col items-center justify-center text-gray-300 font-bold text-xs shrink-0 uppercase tracking-widest px-1">
+                      <div className="h-4 w-px bg-gray-200 mb-1"></div>
+                      <span>VS</span>
+                      <div className="h-4 w-px bg-gray-200 mt-1"></div>
+                    </div>
+
+                    {/* Opponent Column */}
+                    <div className="flex-1 text-center bg-white p-3 rounded-xl border border-gray-100 flex flex-col justify-between">
+                      <div>
+                        <span className="block text-xs font-bold text-gray-700 truncate mb-1">
+                          {activeArenaChallenge.opponentName || (language === "en" ? "Opponent" : "Đối thủ")}
                         </span>
-                      )}
+                        <span className="text-3xl font-black text-indigo-600 block leading-none">
+                          {opScoreDisplay}
+                        </span>
+                      </div>
+
+                      <div className="mt-2 pt-2 border-t border-gray-100">
+                        {isBySets ? (
+                          <span className="inline-block px-2 py-0.5 rounded-md bg-rose-50 text-[10px] font-bold text-rose-700 uppercase">
+                            {language === "en" ? "Sets Won" : "Hiệp Thắng"}
+                          </span>
+                        ) : isByTotal ? (
+                          <span className="inline-block px-2 py-0.5 rounded-md bg-indigo-50 text-[10px] font-bold text-indigo-700 uppercase">
+                            {language === "en" ? "Total Pts" : "Tổng Điểm"}
+                          </span>
+                        ) : (
+                          <span className="inline-block px-2 py-0.5 rounded-md bg-amber-50 text-[10px] font-bold text-amber-700 uppercase">
+                            {language === "en" ? "Hits" : "Số Chạm"}
+                          </span>
+                        )}
+                        {isBySets && (
+                          <span className="block text-[10px] text-gray-400 font-medium mt-1">
+                            {language === "en" ? "Total pts: " : "Tổng điểm: "}
+                            {opponentScoresInput.reduce((a, b) => Number(a) + Number(b), 0)}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="border-t border-gray-200/60 pt-2.5 text-center text-[11px] text-gray-500">
-                    <span className="font-semibold uppercase text-gray-400">
-                      {language === "en" ? "Format: " : "Thể thức: "}
+                  {/* Format details bar */}
+                  <div className="border-t border-gray-200/60 pt-3 text-center text-xs text-gray-500">
+                    <span className="font-semibold uppercase text-gray-400 text-[10px] block mb-0.5">
+                      {language === "en" ? "Selected Format" : "Thể thức trận đấu"}
                     </span>
-                    {winMechanism === "by_sets" 
-                      ? (language === "en" ? "Set-by-Set (Số Hiệp Thắng)" : "Tính theo Hiệp đấu (Số Hiệp Thắng)")
-                      : winMechanism === "by_total_points"
-                      ? (language === "en" ? "Total Points (Cộng tổng điểm)" : "Cộng tổng điểm")
-                      : (language === "en" ? `Target Shots (First to ${activeArenaChallenge.targetTouchShots} Hits)` : `Bắn chạm ${activeArenaChallenge.targetTouchShots} viên`)}
+                    <span className="font-bold text-gray-700">
+                      {winMechanism === "by_sets" 
+                        ? (language === "en" ? "🏆 Set-by-Set format (Highest won sets wins)" : "🏆 Đấu theo Hiệp (Đại diện nào thắng nhiều hiệp hơn sẽ thắng)")
+                        : winMechanism === "by_total_points"
+                        ? (language === "en" ? "🎯 Cumulative Points format (Sum of scores across all sets)" : "🎯 Đấu Cộng Tổng Điểm (Cộng dồn điểm số của tất cả các hiệp)")
+                        : (language === "en" ? `🎯 Target Shots format (First to ${activeArenaChallenge.targetTouchShots} Hits)` : `🎯 Đấu Bắn Chạm (Đấu thủ chạm mốc ${activeArenaChallenge.targetTouchShots} viên trước sẽ thắng)`)}
+                    </span>
                   </div>
                 </div>
 
@@ -3765,6 +4567,18 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
           document.body
         );
       })()}
+
+      {/* Athlete System Profile Details Modal */}
+      <AthleteProfileModal
+        isOpen={selectedProfileAthlete !== null}
+        onClose={() => setSelectedProfileAthlete(null)}
+        athlete={selectedProfileAthlete}
+        history={[]}
+        onlineTournaments={onlineTournaments}
+        currentUser={currentUser}
+        isGlobalAdmin={false}
+        language={language}
+      />
 
     </div>
   );
