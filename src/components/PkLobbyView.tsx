@@ -911,6 +911,12 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
   // Dynamically add a new round (set) to the active arena challenge
   const handleAddRound = async () => {
     if (!currentUser || !activeArenaChallenge) return;
+
+    if (!isChallengerOfMatch && !isRefereeOfMatch) {
+      alert(language === "en" ? "Only Challenger or Referee can add a round!" : "Chỉ người mở kèo (Challenger) hoặc Trọng tài mới được quyền thêm hiệp đấu!");
+      return;
+    }
+
     const currentSetsCount = activeArenaChallenge.setsCount || 3;
     const newSetsCount = currentSetsCount + 1;
     const shotsPerSet = activeArenaChallenge.shotsPerSet || 5;
@@ -1780,7 +1786,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
               </div>
 
               {/* Dynamic Add Round Trigger */}
-              {activeArenaChallenge.status !== "completed" && (
+              {activeArenaChallenge.status !== "completed" && (isChallengerOfMatch || isRefereeOfMatch) && (
                 <div className="flex justify-center mb-6">
                   <button
                     type="button"
@@ -3588,109 +3594,177 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ currentUser, onOpenAut
       {/* ========================================================= */}
       {/* ✍️ SIGNATURE / LOCK SCORE CONFIRMATION MODAL               */}
       {/* ========================================================= */}
-      {isSignConfirmModalOpen && activeArenaChallenge && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[100001] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-gray-100"
-          >
-            {/* Modal Header */}
-            <div className="bg-green-700 text-white px-6 py-5 flex items-center justify-between">
-              <h3 className="font-bold text-base flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-green-200 shrink-0" />
-                <span>{language === "en" ? "Sign & Lock Scoreboard" : "Ký Xác Nhận Tỉ Số"}</span>
-              </h3>
-              <button 
-                onClick={() => setIsSignConfirmModalOpen(false)}
-                className="text-white/80 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {isSignConfirmModalOpen && activeArenaChallenge && typeof document !== "undefined" && (() => {
+        const winMechanism = activeArenaChallenge.winMechanism || "by_sets";
+        const isBySets = winMechanism === "by_sets";
+        const isByTotal = winMechanism === "by_total_points";
+        const isByTarget = winMechanism === "by_target_shots";
 
-            {/* Modal Body */}
-            <div className="p-6 space-y-5">
-              <div className="text-center">
-                <p className="text-sm text-gray-600 leading-relaxed">
-                  {language === "en" 
-                    ? "Please review the scoreboard. Once you sign and confirm, you CANNOT modify any scores or shot ticks anymore." 
-                    : "Vui lòng kiểm tra kỹ điểm số trước khi ký. Sau khi ký xác nhận, hệ thống sẽ KHÓA toàn bộ bảng điểm của bạn và không cho phép chỉnh sửa hay tích trúng trượt nữa."}
-                </p>
+        let chScoreDisplay = 0;
+        let opScoreDisplay = 0;
+
+        if (isBySets) {
+          const len = Math.max(challengerScoresInput.length, opponentScoresInput.length);
+          for (let i = 0; i < len; i++) {
+            const chS = Number(challengerScoresInput[i]) || 0;
+            const opS = Number(opponentScoresInput[i]) || 0;
+            if (chS > opS) chScoreDisplay++;
+            else if (opS > chS) opScoreDisplay++;
+          }
+        } else {
+          chScoreDisplay = challengerScoresInput.reduce((a, b) => Number(a) + Number(b), 0);
+          opScoreDisplay = opponentScoresInput.reduce((a, b) => Number(a) + Number(b), 0);
+        }
+
+        return createPortal(
+          <div className="fixed inset-0 z-[100001] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-gray-100"
+            >
+              {/* Modal Header */}
+              <div className="bg-green-700 text-white px-6 py-5 flex items-center justify-between">
+                <h3 className="font-bold text-base flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-green-200 shrink-0" />
+                  <span>{language === "en" ? "Sign & Lock Scoreboard" : "Ký Xác Nhận Tỉ Số"}</span>
+                </h3>
+                <button 
+                  onClick={() => setIsSignConfirmModalOpen(false)}
+                  className="text-white/80 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              {/* Match Score Summary Card */}
-              <div className="bg-gray-50 rounded-2xl p-4 border border-gray-150 space-y-3">
-                <div className="text-center text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                  {language === "en" ? "Current Standings" : "Tỉ số ghi nhận"}
+              {/* Modal Body */}
+              <div className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+                <div className="text-center">
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    {language === "en" 
+                      ? "Please review the scoreboard. Once you sign and confirm, you CANNOT modify any scores or shot ticks anymore." 
+                      : "Vui lòng kiểm tra kỹ điểm số trước khi ký. Sau khi ký xác nhận, hệ thống sẽ KHÓA toàn bộ bảng điểm của bạn và không cho phép chỉnh sửa hay tích trúng trượt nữa."}
+                  </p>
                 </div>
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex-1 text-center">
-                    <span className="block text-xs font-bold text-gray-700 truncate">{activeArenaChallenge.challengerName}</span>
-                    <span className="text-2xl font-black text-indigo-900">
-                      {challengerScoresInput.reduce((a, b) => Number(a) + Number(b), 0)}
-                    </span>
+
+                {/* Match Score Summary Card */}
+                <div className="bg-gray-50 rounded-2xl p-4 border border-gray-150 space-y-3">
+                  <div className="text-center text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                    {language === "en" ? "Current Standings" : "Tỉ số ghi nhận"}
                   </div>
-                  <div className="text-gray-300 font-bold text-xs shrink-0 uppercase tracking-widest">VS</div>
-                  <div className="flex-1 text-center">
-                    <span className="block text-xs font-bold text-gray-700 truncate">
-                      {activeArenaChallenge.opponentName || (language === "en" ? "Opponent" : "Đối thủ")}
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex-1 text-center">
+                      <span className="block text-xs font-bold text-gray-700 truncate">{activeArenaChallenge.challengerName}</span>
+                      <span className="text-3xl font-black text-indigo-900">
+                        {chScoreDisplay}
+                      </span>
+                      {isBySets && (
+                        <span className="block text-[10px] text-gray-500 font-medium">
+                          ({challengerScoresInput.reduce((a, b) => Number(a) + Number(b), 0)} {language === "en" ? "Total Pts" : "Tổng điểm"})
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-gray-300 font-bold text-xs shrink-0 uppercase tracking-widest">VS</div>
+                    <div className="flex-1 text-center">
+                      <span className="block text-xs font-bold text-gray-700 truncate">
+                        {activeArenaChallenge.opponentName || (language === "en" ? "Opponent" : "Đối thủ")}
+                      </span>
+                      <span className="text-3xl font-black text-indigo-900">
+                        {opScoreDisplay}
+                      </span>
+                      {isBySets && (
+                        <span className="block text-[10px] text-gray-500 font-medium">
+                          ({opponentScoresInput.reduce((a, b) => Number(a) + Number(b), 0)} {language === "en" ? "Total Pts" : "Tổng điểm"})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-gray-200/60 pt-2.5 text-center text-[11px] text-gray-500">
+                    <span className="font-semibold uppercase text-gray-400">
+                      {language === "en" ? "Format: " : "Thể thức: "}
                     </span>
-                    <span className="text-2xl font-black text-indigo-900">
-                      {opponentScoresInput.reduce((a, b) => Number(a) + Number(b), 0)}
-                    </span>
+                    {winMechanism === "by_sets" 
+                      ? (language === "en" ? "Set-by-Set (Số Hiệp Thắng)" : "Tính theo Hiệp đấu (Số Hiệp Thắng)")
+                      : winMechanism === "by_total_points"
+                      ? (language === "en" ? "Total Points (Cộng tổng điểm)" : "Cộng tổng điểm")
+                      : (language === "en" ? `Target Shots (First to ${activeArenaChallenge.targetTouchShots} Hits)` : `Bắn chạm ${activeArenaChallenge.targetTouchShots} viên`)}
                   </div>
                 </div>
 
-                <div className="border-t border-gray-200/60 pt-2.5 text-center text-[11px] text-gray-500">
-                  <span className="font-semibold uppercase text-gray-400">
-                    {language === "en" ? "Format: " : "Thể thức: "}
-                  </span>
-                  {activeArenaChallenge.winMechanism === "by_sets" 
-                    ? (language === "en" ? "Set-by-Set" : "Tính theo Hiệp đấu")
-                    : activeArenaChallenge.winMechanism === "by_total_points"
-                    ? (language === "en" ? "Total Points" : "Cộng tổng điểm")
-                    : (language === "en" ? `Target Shots (${activeArenaChallenge.targetTouchShots} Hits)` : `Bắn chạm ${activeArenaChallenge.targetTouchShots} viên`)}
+                {/* Detailed Set Breakdown List */}
+                <div className="space-y-2">
+                  <div className="text-xs font-bold text-gray-400 uppercase tracking-wider px-1">
+                    {language === "en" ? "Set Details Breakdown" : "Chi tiết điểm số từng hiệp"}
+                  </div>
+                  <div className="bg-white border border-gray-150 rounded-xl divide-y divide-gray-100 overflow-hidden max-h-40 overflow-y-auto">
+                    {Array.from({ length: Math.max(challengerScoresInput.length, opponentScoresInput.length) }).map((_, idx) => {
+                      const chS = Number(challengerScoresInput[idx]) || 0;
+                      const opS = Number(opponentScoresInput[idx]) || 0;
+                      let winnerLabel = "";
+                      if (chS > opS) {
+                        winnerLabel = `🏆 ${activeArenaChallenge.challengerName}`;
+                      } else if (opS > chS) {
+                        winnerLabel = `🏆 ${activeArenaChallenge.opponentName || (language === "en" ? "Opponent" : "Đối thủ")}`;
+                      } else {
+                        winnerLabel = language === "en" ? "Draw" : "Hòa";
+                      }
+
+                      return (
+                        <div key={idx} className="p-3 flex items-center justify-between text-xs gap-2 hover:bg-gray-50/50">
+                          <span className="font-bold text-gray-400">H{idx + 1}</span>
+                          <div className="flex items-center gap-1.5 font-semibold text-gray-800">
+                            <span className={chS > opS ? "text-indigo-600 font-black" : ""}>{chS}</span>
+                            <span className="text-gray-300">-</span>
+                            <span className={opS > chS ? "text-indigo-600 font-black" : ""}>{opS}</span>
+                          </div>
+                          <span className="text-[10px] text-gray-500 font-medium truncate max-w-[150px]">
+                            {winnerLabel}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Directives Checklist */}
+                <div className="space-y-2 text-xs text-gray-600 bg-amber-50/60 border border-amber-100 rounded-xl p-3">
+                  <div className="flex items-start gap-2">
+                    <Check className="w-3.5 h-3.5 text-green-600 mt-0.5 shrink-0" />
+                    <span>{language === "en" ? "Accuracy of all sets verified" : "Xác nhận điểm số các hiệp chính xác"}</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Check className="w-3.5 h-3.5 text-green-600 mt-0.5 shrink-0" />
+                    <span>{language === "en" ? "Recalculate ELO on final signature match" : "Cập nhật bảng xếp hạng ELO sau khi khớp"}</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Directives Checklist */}
-              <div className="space-y-2 text-xs text-gray-600 bg-amber-50/60 border border-amber-100 rounded-xl p-3">
-                <div className="flex items-start gap-2">
-                  <Check className="w-3.5 h-3.5 text-green-600 mt-0.5 shrink-0" />
-                  <span>{language === "en" ? "Accuracy of all sets verified" : "Xác nhận điểm số các hiệp chính xác"}</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <Check className="w-3.5 h-3.5 text-green-600 mt-0.5 shrink-0" />
-                  <span>{language === "en" ? "Recalculate ELO on final signature match" : "Cập nhật bảng xếp hạng ELO sau khi khớp"}</span>
-                </div>
+              {/* Modal Footer */}
+              <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsSignConfirmModalOpen(false)}
+                  className="w-full sm:w-auto border border-gray-200 hover:bg-gray-100 text-gray-700 text-xs font-bold px-5 py-2.5 rounded-xl cursor-pointer transition-colors text-center"
+                >
+                  {language === "en" ? "Cancel" : "Quay lại kiểm tra"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSignConfirmModalOpen(false);
+                    handleUpdateScores(true);
+                  }}
+                  className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-md cursor-pointer transition-colors text-center"
+                >
+                  {language === "en" ? "Agree & Sign ✍️" : "Đồng ý Ký & Khóa kết quả ✍️"}
+                </button>
               </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setIsSignConfirmModalOpen(false)}
-                className="w-full sm:w-auto border border-gray-200 hover:bg-gray-100 text-gray-700 text-xs font-bold px-5 py-2.5 rounded-xl cursor-pointer transition-colors text-center"
-              >
-                {language === "en" ? "Cancel" : "Quay lại kiểm tra"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsSignConfirmModalOpen(false);
-                  handleUpdateScores(true);
-                }}
-                className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-md cursor-pointer transition-colors text-center"
-              >
-                {language === "en" ? "Agree & Sign ✍️" : "Đồng ý Ký & Khóa kết quả ✍️"}
-              </button>
-            </div>
-          </motion.div>
-        </div>,
-        document.body
-      )}
+            </motion.div>
+          </div>,
+          document.body
+        );
+      })()}
 
     </div>
   );
