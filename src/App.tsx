@@ -534,7 +534,7 @@ export default function App() {
 
   // Keep non-logged in guests restricted to public-facing viewing tabs
   useEffect(() => {
-    if (!currentUser && !["home", "dashboard", "leaderboard", "teams", "vsc_system_directory", "vsc_clubs_directory"].includes(activeTab)) {
+    if (!currentUser && !["home", "dashboard", "leaderboard", "teams", "vsc_system_directory", "vsc_clubs_directory", "pk_lobby"].includes(activeTab)) {
       setActiveTab("home");
     }
   }, [currentUser, activeTab]);
@@ -3790,6 +3790,7 @@ export default function App() {
               editChallengeId={pkChallengeToEditId}
               onClearEditChallengeId={() => setPkChallengeToEditId(null)}
               onViewClubHub={(club) => setGlobalSelectedClub(club)}
+              onSubTabChange={(subTab) => setActivePkSubTab(subTab)}
             />
           )}
 
@@ -4084,6 +4085,8 @@ export default function App() {
         setIsUnsavedModalOpen={setIsUnsavedModalOpen}
         setIsAuthModalOpen={setIsAuthModalOpen}
         setShowMobileRankingSelection={setShowMobileRankingSelection}
+        activePkSubTab={activePkSubTab}
+        setActivePkSubTab={setActivePkSubTab}
       />
 
     </div>

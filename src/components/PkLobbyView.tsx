@@ -61,6 +61,7 @@ interface PkLobbyViewProps {
   editChallengeId?: string | null;
   onClearEditChallengeId?: () => void;
   onViewClubHub?: (club: any) => void;
+  onSubTabChange?: (subTab: "dashboard" | "lobby" | "leaderboard" | "history") => void;
 }
 
 export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ 
@@ -72,7 +73,8 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
   onClearInitialSubTab,
   editChallengeId,
   onClearEditChallengeId,
-  onViewClubHub
+  onViewClubHub,
+  onSubTabChange
 }) => {
   const { language } = useLanguage();
   const [activeSubTab, setActiveSubTab] = useState<"dashboard" | "lobby" | "leaderboard" | "history">("dashboard");
@@ -231,6 +233,94 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
   const [editDesignatedOpponentAthleteId, setEditDesignatedOpponentAthleteId] = useState("");
   const [editDesignatedOpponentClubId, setEditDesignatedOpponentClubId] = useState("");
   const [editPin, setEditPin] = useState("");
+
+  // Opponent/Referee search & suggestion states
+  const [formOpponentSearch, setFormOpponentSearch] = useState("");
+  const [showFormOpponentSuggestions, setShowFormOpponentSuggestions] = useState(false);
+  const [editOpponentSearch, setEditOpponentSearch] = useState("");
+  const [showEditOpponentSuggestions, setShowEditOpponentSuggestions] = useState(false);
+
+  const [formRefereeSearch, setFormRefereeSearch] = useState("");
+  const [showFormRefereeSuggestions, setShowFormRefereeSuggestions] = useState(false);
+  const [editRefereeSearch, setEditRefereeSearch] = useState("");
+  const [showEditRefereeSuggestions, setShowEditRefereeSuggestions] = useState(false);
+
+  // Filtered lists for suggestions
+  const filteredFormAthletes = useMemo(() => {
+    if (!formOpponentSearch) return [];
+    const queryStr = formOpponentSearch.trim().toLowerCase();
+    
+    const selectedAth = systemAthletes.find(a => a.id === formDesignatedOpponentAthleteId);
+    if (selectedAth && `${selectedAth.name} (vsc-${selectedAth.id})`.toLowerCase() === queryStr) {
+      return [];
+    }
+
+    return systemAthletes
+      .filter(a => a.id !== selectedAthleteId)
+      .filter((a) => {
+        const idStr = String(a.id || "").toLowerCase();
+        const nameStr = String(a.name || "").toLowerCase();
+        return idStr.includes(queryStr) || nameStr.includes(queryStr);
+      })
+      .slice(0, 8);
+  }, [formOpponentSearch, systemAthletes, selectedAthleteId, formDesignatedOpponentAthleteId]);
+
+  const filteredEditAthletes = useMemo(() => {
+    if (!editOpponentSearch) return [];
+    const queryStr = editOpponentSearch.trim().toLowerCase();
+
+    const selectedAth = systemAthletes.find(a => a.id === editDesignatedOpponentAthleteId);
+    if (selectedAth && `${selectedAth.name} (vsc-${selectedAth.id})`.toLowerCase() === queryStr) {
+      return [];
+    }
+
+    return systemAthletes
+      .filter(a => a.id !== editSelectedAthleteId)
+      .filter((a) => {
+        const idStr = String(a.id || "").toLowerCase();
+        const nameStr = String(a.name || "").toLowerCase();
+        return idStr.includes(queryStr) || nameStr.includes(queryStr);
+      })
+      .slice(0, 8);
+  }, [editOpponentSearch, systemAthletes, editSelectedAthleteId, editDesignatedOpponentAthleteId]);
+
+  const filteredFormReferees = useMemo(() => {
+    if (!formRefereeSearch) return [];
+    const queryStr = formRefereeSearch.trim().toLowerCase();
+
+    const selectedRef = systemAthletes.find(a => a.email?.toLowerCase().trim() === formRefereeEmail.toLowerCase().trim());
+    if (selectedRef && `${selectedRef.name} (${selectedRef.email || selectedRef.id})`.toLowerCase() === queryStr) {
+      return [];
+    }
+
+    return systemAthletes
+      .filter((a) => {
+        const idStr = String(a.id || "").toLowerCase();
+        const nameStr = String(a.name || "").toLowerCase();
+        const emailStr = String(a.email || "").toLowerCase();
+        return idStr.includes(queryStr) || nameStr.includes(queryStr) || emailStr.includes(queryStr);
+      })
+      .slice(0, 8);
+  }, [formRefereeSearch, systemAthletes, formRefereeEmail]);
+
+  const filteredEditReferees = useMemo(() => {
+    if (!editRefereeSearch) return [];
+    const queryStr = editRefereeSearch.trim().toLowerCase();
+
+    const selectedRef = systemAthletes.find(a => a.email?.toLowerCase().trim() === editRefereeEmail.toLowerCase().trim());
+    if (selectedRef && `${selectedRef.name} (${selectedRef.email || selectedRef.id})`.toLowerCase() === queryStr) {
+      return [];
+    }
+
+    return systemAthletes
+      .filter((a) => {
+        const idStr = String(a.id || "").toLowerCase();
+        const nameStr = String(a.name || "").toLowerCase();
+        const emailStr = String(a.email || "").toLowerCase();
+        return idStr.includes(queryStr) || nameStr.includes(queryStr) || emailStr.includes(queryStr);
+      })
+      .slice(0, 8);
+  }, [editRefereeSearch, systemAthletes, editRefereeEmail]);
 
   const handleWinMechanismChange = (val: "by_sets" | "by_total_points" | "by_target_shots", currentTouchShots = 5) => {
     setFormWinMechanism(val);
@@ -436,6 +526,42 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
 
     return () => unsubscribe();
   }, [currentUser]);
+
+  // Auto cleanup expired/stale challenges based on criteria:
+  // - Deletes "open" challenges 24h after the scheduled match time if not accepted.
+  // - Deletes "accepted" or "ongoing" challenges 48h after the scheduled match time if not completed.
+  useEffect(() => {
+    if (challenges.length === 0) return;
+    const now = Date.now();
+    const toDelete: string[] = [];
+
+    challenges.forEach((challenge) => {
+      if (!challenge.id) return;
+      const matchTime = challenge.dateTime ? new Date(challenge.dateTime).getTime() : null;
+      if (!matchTime || isNaN(matchTime)) return;
+
+      if (challenge.status === "open") {
+        if (now - matchTime > 24 * 60 * 60 * 1000) {
+          toDelete.push(challenge.id);
+        }
+      } else if (challenge.status === "accepted" || challenge.status === "ongoing") {
+        if (now - matchTime > 48 * 60 * 60 * 1000) {
+          toDelete.push(challenge.id);
+        }
+      }
+    });
+
+    if (toDelete.length > 0) {
+      toDelete.forEach(async (id) => {
+        try {
+          await deleteDoc(doc(db, "vsc_pk_challenges", id));
+          console.log(`Auto deleted expired/stale challenge: ${id}`);
+        } catch (err) {
+          console.error(`Error auto-deleting challenge ${id}:`, err);
+        }
+      });
+    }
+  }, [challenges]);
 
   // Subscribe to System Athletes to link profiles
   useEffect(() => {
@@ -1095,6 +1221,22 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
     setEditDesignateOpponent(!!challenge.opponentName);
     setEditDesignatedOpponentAthleteId(challenge.opponentAthleteId || "");
     
+    const targetAth = systemAthletes.find(a => a.id === challenge.opponentAthleteId);
+    if (targetAth) {
+      setEditOpponentSearch(`${targetAth.name} (VSC-${targetAth.id})`);
+    } else if (challenge.opponentName) {
+      setEditOpponentSearch(challenge.opponentName);
+    } else {
+      setEditOpponentSearch("");
+    }
+
+    const targetRef = systemAthletes.find(a => a.email?.toLowerCase().trim() === challenge.refereeEmail?.toLowerCase().trim());
+    if (targetRef) {
+      setEditRefereeSearch(`${targetRef.name} (${targetRef.email || targetRef.id})`);
+    } else {
+      setEditRefereeSearch(challenge.refereeEmail || "");
+    }
+    
     const matchingClub = systemClubs.find(c => c.name === challenge.opponentName);
     setEditDesignatedOpponentClubId(matchingClub?.id || "");
 
@@ -1122,6 +1264,10 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
       onClearInitialSubTab?.();
     }
   }, [initialSubTab]);
+
+  useEffect(() => {
+    onSubTabChange?.(activeSubTab);
+  }, [activeSubTab, onSubTabChange]);
 
   useEffect(() => {
     if (activeChallengeId && challenges.length > 0) {
@@ -1765,6 +1911,8 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
               if (!currentUser) {
                 onOpenAuthModal();
               } else {
+                setFormOpponentSearch("");
+                setFormRefereeSearch("");
                 setIsCreateModalOpen(true);
               }
             }}
@@ -2050,6 +2198,10 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-3 w-full">
                       {/* Challenger Set Score & Shot Checks */}
                       <div className="flex flex-col items-center sm:items-end gap-1.5 w-full sm:w-5/12">
+                        <span className="text-[11px] font-extrabold text-rose-600 truncate max-w-full flex items-center gap-1 mb-0.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0"></span>
+                          {activeArenaChallenge.challengerName}
+                        </span>
                         {activeArenaChallenge.targetType === "bia_giay_tinh_diem" ? (
                           <div className="w-full">
                             <label className="block text-[10px] text-gray-400 font-bold uppercase mb-1 text-right">
@@ -2167,6 +2319,10 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
  
                       {/* Opponent Set Score & Shot Checks */}
                       <div className="flex flex-col items-center sm:items-start gap-1.5 w-full sm:w-5/12">
+                        <span className="text-[11px] font-extrabold text-indigo-600 truncate max-w-full flex items-center gap-1 mb-0.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0"></span>
+                          {activeArenaChallenge.opponentName || (language === "en" ? "Opponent" : "Đối thủ")}
+                        </span>
                         {activeArenaChallenge.targetType === "bia_giay_tinh_diem" ? (
                           <div className="w-full">
                             <label className="block text-[10px] text-gray-400 font-bold uppercase mb-1 text-left">
@@ -3248,24 +3404,61 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                 {formDesignateOpponent && (
                   <div>
                     {formType === "solo_1v1" ? (
-                      <div>
+                      <div className="relative">
                         <label className="block text-[11px] font-semibold text-gray-600 mb-1">
                           {language === "en" ? "Select Target Opponent Athlete" : "Tìm/Chọn VĐV Đối Thủ chỉ định:"}
                         </label>
-                        <select
-                          value={formDesignatedOpponentAthleteId}
-                          onChange={(e) => setFormDesignatedOpponentAthleteId(e.target.value)}
-                          className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20"
-                        >
-                          <option value="">-- {language === "en" ? "Select Opponent" : "Chọn đối thủ"} --</option>
-                          {systemAthletes
-                            .filter(a => a.id !== selectedAthleteId)
-                            .map((ath) => (
-                              <option key={ath.id} value={ath.id}>
-                                {ath.name} (VSC-{ath.id})
-                              </option>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            placeholder={language === "en" ? "Search opponent by ID or Name..." : "Gõ tìm đối thủ theo ID hoặc Tên..."}
+                            value={formOpponentSearch}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setFormOpponentSearch(val);
+                              setShowFormOpponentSuggestions(true);
+                              if (!val) {
+                                setFormDesignatedOpponentAthleteId("");
+                              }
+                            }}
+                            onFocus={() => setShowFormOpponentSuggestions(true)}
+                            onBlur={() => {
+                              setTimeout(() => setShowFormOpponentSuggestions(false), 200);
+                            }}
+                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20 pr-8"
+                          />
+                          {formOpponentSearch && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFormOpponentSearch("");
+                                setFormDesignatedOpponentAthleteId("");
+                              }}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+
+                        {showFormOpponentSuggestions && filteredFormAthletes.length > 0 && (
+                          <div className="absolute z-50 left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+                            {filteredFormAthletes.map((ath) => (
+                              <div
+                                key={ath.id}
+                                onMouseDown={() => {
+                                  setFormDesignatedOpponentAthleteId(ath.id);
+                                  setFormOpponentSearch(`${ath.name} (VSC-${ath.id})`);
+                                  setShowFormOpponentSuggestions(false);
+                                }}
+                                className="px-3 py-2 text-sm hover:bg-rose-50 cursor-pointer flex items-center justify-between border-b border-gray-50 last:border-0"
+                              >
+                                <span className="font-semibold text-gray-800">{ath.name}</span>
+                                <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">VSC-{ath.id}</span>
+                              </div>
                             ))}
-                        </select>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div>
@@ -3482,17 +3675,66 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
               </div>
 
               {/* Optional Referee */}
-              <div>
+              <div className="relative">
                 <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-                  {language === "en" ? "Referee Email (Optional)" : "Email Trọng tài chỉ định (Không bắt buộc)"}
+                  {language === "en" ? "Referee (Optional - ID, Name, or Email)" : "Trọng tài chỉ định (ID, Tên hoặc Email - Không bắt buộc)"}
                 </label>
-                <input
-                  type="email"
-                  placeholder="referee@example.com"
-                  value={formRefereeEmail}
-                  onChange={(e) => setFormRefereeEmail(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder={language === "en" ? "Type ID, Name or Email..." : "Nhập ID, tên hoặc email trọng tài..."}
+                    value={formRefereeSearch}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFormRefereeSearch(val);
+                      setShowFormRefereeSuggestions(true);
+                      if (val.includes("@")) {
+                        setFormRefereeEmail(val.trim().toLowerCase());
+                      } else if (!val) {
+                        setFormRefereeEmail("");
+                      }
+                    }}
+                    onFocus={() => setShowFormRefereeSuggestions(true)}
+                    onBlur={() => {
+                      setTimeout(() => setShowFormRefereeSuggestions(false), 200);
+                    }}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 pr-8 transition-all"
+                  />
+                  {formRefereeSearch && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormRefereeSearch("");
+                        setFormRefereeEmail("");
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {showFormRefereeSuggestions && filteredFormReferees.length > 0 && (
+                  <div className="absolute z-50 left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+                    {filteredFormReferees.map((ath) => (
+                      <div
+                        key={ath.id}
+                        onMouseDown={() => {
+                          setFormRefereeEmail(ath.email || "");
+                          setFormRefereeSearch(`${ath.name} (${ath.email || 'VSC-' + ath.id})`);
+                          setShowFormRefereeSuggestions(false);
+                        }}
+                        className="px-3 py-2 text-sm hover:bg-rose-50 cursor-pointer flex flex-col border-b border-gray-50 last:border-0"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-gray-800">{ath.name}</span>
+                          <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">VSC-{ath.id}</span>
+                        </div>
+                        {ath.email && <span className="text-xs text-gray-400 mt-0.5">{ath.email}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Challenge Description / Notes */}
@@ -3713,24 +3955,61 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                 {editDesignateOpponent && (
                   <div>
                     {editType === "solo_1v1" ? (
-                      <div>
+                      <div className="relative">
                         <label className="block text-[11px] font-semibold text-gray-600 mb-1">
                           {language === "en" ? "Select Target Opponent Athlete" : "Tìm/Chọn VĐV Đối Thủ chỉ định:"}
                         </label>
-                        <select
-                          value={editDesignatedOpponentAthleteId}
-                          onChange={(e) => setEditDesignatedOpponentAthleteId(e.target.value)}
-                          className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                        >
-                          <option value="">-- {language === "en" ? "Select Opponent" : "Chọn đối thủ"} --</option>
-                          {systemAthletes
-                            .filter(a => a.id !== editSelectedAthleteId)
-                            .map((ath) => (
-                              <option key={ath.id} value={ath.id}>
-                                {ath.name} (VSC-{ath.id})
-                              </option>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            placeholder={language === "en" ? "Search opponent by ID or Name..." : "Gõ tìm đối thủ theo ID hoặc Tên..."}
+                            value={editOpponentSearch}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setEditOpponentSearch(val);
+                              setShowEditOpponentSuggestions(true);
+                              if (!val) {
+                                setEditDesignatedOpponentAthleteId("");
+                              }
+                            }}
+                            onFocus={() => setShowEditOpponentSuggestions(true)}
+                            onBlur={() => {
+                              setTimeout(() => setShowEditOpponentSuggestions(false), 200);
+                            }}
+                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 pr-8"
+                          />
+                          {editOpponentSearch && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditOpponentSearch("");
+                                setEditDesignatedOpponentAthleteId("");
+                              }}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+
+                        {showEditOpponentSuggestions && filteredEditAthletes.length > 0 && (
+                          <div className="absolute z-50 left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+                            {filteredEditAthletes.map((ath) => (
+                              <div
+                                key={ath.id}
+                                onMouseDown={() => {
+                                  setEditDesignatedOpponentAthleteId(ath.id);
+                                  setEditOpponentSearch(`${ath.name} (VSC-${ath.id})`);
+                                  setShowEditOpponentSuggestions(false);
+                                }}
+                                className="px-3 py-2 text-sm hover:bg-blue-50 cursor-pointer flex items-center justify-between border-b border-gray-50 last:border-0"
+                              >
+                                <span className="font-semibold text-gray-800">{ath.name}</span>
+                                <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">VSC-{ath.id}</span>
+                              </div>
                             ))}
-                        </select>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div>
@@ -3943,17 +4222,66 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
               </div>
 
               {/* Optional Referee */}
-              <div>
+              <div className="relative">
                 <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-                  {language === "en" ? "Referee Email (Optional)" : "Email Trọng tài chỉ định (Không bắt buộc)"}
+                  {language === "en" ? "Referee (Optional - ID, Name, or Email)" : "Trọng tài chỉ định (ID, Tên hoặc Email - Không bắt buộc)"}
                 </label>
-                <input
-                  type="email"
-                  placeholder="referee@example.com"
-                  value={editRefereeEmail}
-                  onChange={(e) => setEditRefereeEmail(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-gray-55 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder={language === "en" ? "Type ID, Name or Email..." : "Nhập ID, tên hoặc email trọng tài..."}
+                    value={editRefereeSearch}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEditRefereeSearch(val);
+                      setShowEditRefereeSuggestions(true);
+                      if (val.includes("@")) {
+                        setEditRefereeEmail(val.trim().toLowerCase());
+                      } else if (!val) {
+                        setEditRefereeEmail("");
+                      }
+                    }}
+                    onFocus={() => setShowEditRefereeSuggestions(true)}
+                    onBlur={() => {
+                      setTimeout(() => setShowEditRefereeSuggestions(false), 200);
+                    }}
+                    className="w-full px-4 py-2.5 bg-gray-55 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 pr-8 transition-all"
+                  />
+                  {editRefereeSearch && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditRefereeSearch("");
+                        setEditRefereeEmail("");
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {showEditRefereeSuggestions && filteredEditReferees.length > 0 && (
+                  <div className="absolute z-50 left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+                    {filteredEditReferees.map((ath) => (
+                      <div
+                        key={ath.id}
+                        onMouseDown={() => {
+                          setEditRefereeEmail(ath.email || "");
+                          setEditRefereeSearch(`${ath.name} (${ath.email || 'VSC-' + ath.id})`);
+                          setShowEditRefereeSuggestions(false);
+                        }}
+                        className="px-3 py-2 text-sm hover:bg-blue-50 cursor-pointer flex flex-col border-b border-gray-50 last:border-0"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-gray-800">{ath.name}</span>
+                          <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">VSC-{ath.id}</span>
+                        </div>
+                        {ath.email && <span className="text-xs text-gray-400 mt-0.5">{ath.email}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Challenge Description / Notes */}
