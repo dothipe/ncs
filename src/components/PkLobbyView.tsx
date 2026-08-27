@@ -101,6 +101,10 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
   const notifiedRequestsRef = useRef<Set<string>>(new Set());
   const [newApplicantNotification, setNewApplicantNotification] = useState<{ challenge: PKChallenge; applicant: any } | null>(null);
 
+  // Live "Modal nổ" rejection notifications when an application is declined or someone else is approved
+  const [rejectionNotification, setRejectionNotification] = useState<{ challengeTitle: string; challengerName: string } | null>(null);
+  const appliedChallengesRef = useRef<Record<string, { title: string; challengerName: string }>>({});
+
   // Club Hub modal state
   const [selectedClubHub, setSelectedClubHub] = useState<SystemClub | null>(null);
 
@@ -518,6 +522,56 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
             });
           }
         });
+
+        // Real-time application rejection checking
+        const prevApplied = { ...appliedChallengesRef.current };
+        const currentlyApplied: Record<string, { title: string; challengerName: string }> = {};
+
+        list.forEach((challenge) => {
+          const userApplied = challenge.joinRequests?.some(r => r.uid === currentUser.uid);
+          if (userApplied && challenge.status === "open") {
+            currentlyApplied[challenge.id] = {
+              title: challenge.title || "Kèo đấu PK",
+              challengerName: challenge.challengerName || "Chủ kèo"
+            };
+          }
+        });
+
+        if (isFirstLoadRef.current) {
+          appliedChallengesRef.current = currentlyApplied;
+        } else {
+          Object.entries(prevApplied).forEach(([challengeId, infoVal]) => {
+            const info = infoVal as { title: string; challengerName: string };
+            if (!currentlyApplied[challengeId]) {
+              const updatedChallenge = list.find(c => c.id === challengeId);
+
+              if (!updatedChallenge) {
+                // Challenge deleted or cancelled
+                setRejectionNotification({
+                  challengeTitle: info.title,
+                  challengerName: info.challengerName
+                });
+              } else if (updatedChallenge.status === "accepted") {
+                // If it transitioned to accepted, check if currentUser was chosen
+                if (updatedChallenge.opponentUid !== currentUser.uid) {
+                  // Challenger chose someone else!
+                  setRejectionNotification({
+                    challengeTitle: info.title,
+                    challengerName: info.challengerName
+                  });
+                }
+              } else {
+                // Challenge still open but currentUser removed from requests (decline)
+                setRejectionNotification({
+                  challengeTitle: info.title,
+                  challengerName: info.challengerName
+                });
+              }
+            }
+          });
+
+          appliedChallengesRef.current = currentlyApplied;
+        }
       }
       isFirstLoadRef.current = false;
 
@@ -752,8 +806,35 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
     challenges.forEach((challenge) => {
       if (challenge.status !== "completed" || !challenge.scores) return;
 
-      const challengerKey = challenge.type === "solo_1v1" ? challenge.challengerUid : `club-${challenge.challengerUid}`;
-      const opponentKey = challenge.type === "solo_1v1" ? challenge.opponentUid : `club-${challenge.opponentUid}`;
+      let challengerKey = challenge.challengerUid;
+      let opponentKey = challenge.opponentUid;
+      let finalChallengerName = challenge.challengerName;
+      let finalChallengerAvatar = challenge.challengerAvatar || "";
+      let finalOpponentName = challenge.opponentName || "Đối thủ";
+      let finalOpponentAvatar = challenge.opponentAvatar || "";
+
+      if (challenge.type === "team_vs_team") {
+        const cleanChName = challenge.challengerName?.trim().toLowerCase();
+        const cleanOpName = challenge.opponentName?.trim().toLowerCase();
+
+        const matchChClub = systemClubs.find(c => c.name?.trim().toLowerCase() === cleanChName);
+        const matchOpClub = systemClubs.find(c => c.name?.trim().toLowerCase() === cleanOpName);
+
+        challengerKey = matchChClub ? `club-${matchChClub.id}` : `club-${challenge.challengerUid}`;
+        opponentKey = matchOpClub ? `club-${matchOpClub.id}` : `club-${challenge.opponentUid}`;
+
+        if (matchChClub) {
+          finalChallengerName = matchChClub.name;
+          if (matchChClub.logoUrl) finalChallengerAvatar = matchChClub.logoUrl;
+        }
+        if (matchOpClub) {
+          finalOpponentName = matchOpClub.name;
+          if (matchOpClub.logoUrl) finalOpponentAvatar = matchOpClub.logoUrl;
+        }
+      } else {
+        challengerKey = challenge.challengerUid;
+        opponentKey = challenge.opponentUid;
+      }
 
       if (!challengerKey || !opponentKey) return;
 
@@ -762,8 +843,8 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         stats[challengerKey] = { 
           id: challengerKey,
           uid: challenge.challengerUid, 
-          name: challenge.challengerName, 
-          avatarUrl: challenge.challengerAvatar || "", 
+          name: finalChallengerName, 
+          avatarUrl: finalChallengerAvatar, 
           wins: 0, 
           losses: 0, 
           draws: 0, 
@@ -776,8 +857,8 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         stats[opponentKey] = { 
           id: opponentKey,
           uid: challenge.opponentUid!, 
-          name: challenge.opponentName || "Đối thủ", 
-          avatarUrl: challenge.opponentAvatar || "", 
+          name: finalOpponentName, 
+          avatarUrl: finalOpponentAvatar, 
           wins: 0, 
           losses: 0, 
           draws: 0, 
@@ -5396,6 +5477,49 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
               >
                 <span>Xem và Duyệt ngay</span>
                 <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Live Applicant "Modal nổ" Rejection Notification */}
+      {rejectionNotification && createPortal(
+        <div className="fixed inset-0 z-[10030] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-md w-full border border-amber-100 dark:border-amber-950/50 shadow-2xl text-slate-800 dark:text-slate-101 text-center animate-bounceIn relative overflow-hidden">
+            {/* Top flashing decoration */}
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-500 via-rose-500 to-amber-500 animate-pulse" />
+
+            <div className="w-16 h-16 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center mx-auto mb-4 border border-amber-100 dark:border-amber-900 shadow-sm animate-pulse">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+
+            <h3 className="font-black text-base uppercase text-amber-600 tracking-wide mb-1">
+              ⚡ KÈO ĐẤU BỊ TỪ CHỐI
+            </h3>
+            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-4">
+              {rejectionNotification.challengeTitle}
+            </p>
+
+            <div className="flex flex-col items-center bg-slate-50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/60 mb-5">
+              <span className="font-black text-sm text-slate-900 dark:text-white">
+                {rejectionNotification.challengerName}
+              </span>
+              <span className="text-[10px] font-bold text-slate-500 text-center mt-2 leading-relaxed">
+                {language === "en" 
+                  ? "The challenger has declined your application or matched with another player for this challenge." 
+                  : "Chủ kèo đã từ chối yêu cầu ứng tuyển của bạn hoặc đã duyệt đối thủ khác."}
+              </span>
+            </div>
+
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => setRejectionNotification(null)}
+                className="px-6 py-2.5 text-xs font-black bg-amber-500 hover:bg-amber-600 text-white rounded-xl transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+              >
+                <span>{language === "en" ? "Close" : "Đã hiểu"}</span>
               </button>
             </div>
           </div>

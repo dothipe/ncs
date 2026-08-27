@@ -376,7 +376,7 @@ const getDetailedClubStats = (club: SystemClub, tournamentsList: any[]) => {
   };
 };
 
-const getPkPerformanceStats = (club: SystemClub, challengesList: any[]) => {
+const getPkPerformanceStats = (club: SystemClub, challengesList: any[], allClubsList: SystemClub[]) => {
   const stats: Record<string, { 
     id: string;
     uid: string; 
@@ -392,8 +392,31 @@ const getPkPerformanceStats = (club: SystemClub, challengesList: any[]) => {
   challengesList.forEach((challenge) => {
     if (challenge.status !== "completed" || !challenge.scores) return;
 
-    const challengerKey = challenge.type === "solo_1v1" ? challenge.challengerUid : `club-${challenge.challengerUid}`;
-    const opponentKey = challenge.type === "solo_1v1" ? challenge.opponentUid : `club-${challenge.opponentUid}`;
+    let challengerKey = challenge.challengerUid;
+    let opponentKey = challenge.opponentUid;
+    let finalChallengerName = challenge.challengerName;
+    let finalOpponentName = challenge.opponentName || "Đối thủ";
+
+    if (challenge.type === "team_vs_team") {
+      const cleanChName = challenge.challengerName?.trim().toLowerCase();
+      const cleanOpName = challenge.opponentName?.trim().toLowerCase();
+
+      const matchChClub = allClubsList.find(c => c.name?.trim().toLowerCase() === cleanChName);
+      const matchOpClub = allClubsList.find(c => c.name?.trim().toLowerCase() === cleanOpName);
+
+      challengerKey = matchChClub ? `club-${matchChClub.id}` : `club-${challenge.challengerUid}`;
+      opponentKey = matchOpClub ? `club-${matchOpClub.id}` : `club-${challenge.opponentUid}`;
+
+      if (matchChClub) {
+        finalChallengerName = matchChClub.name;
+      }
+      if (matchOpClub) {
+        finalOpponentName = matchOpClub.name;
+      }
+    } else {
+      challengerKey = challenge.challengerUid;
+      opponentKey = challenge.opponentUid;
+    }
 
     if (!challengerKey || !opponentKey) return;
 
@@ -401,7 +424,7 @@ const getPkPerformanceStats = (club: SystemClub, challengesList: any[]) => {
       stats[challengerKey] = { 
         id: challengerKey,
         uid: challenge.challengerUid, 
-        name: challenge.challengerName, 
+        name: finalChallengerName, 
         wins: 0, 
         losses: 0, 
         draws: 0, 
@@ -414,7 +437,7 @@ const getPkPerformanceStats = (club: SystemClub, challengesList: any[]) => {
       stats[opponentKey] = { 
         id: opponentKey,
         uid: challenge.opponentUid!, 
-        name: challenge.opponentName || "Đối thủ", 
+        name: finalOpponentName, 
         wins: 0, 
         losses: 0, 
         draws: 0, 
@@ -1382,7 +1405,7 @@ export const VscSystemClubsDirectory: React.FC<VscSystemClubsDirectoryProps> = (
 
                   {/* PK PERFORMANCE INDICATORS */}
                   {(() => {
-                    const pkStats = getPkPerformanceStats(club, challenges);
+                    const pkStats = getPkPerformanceStats(club, challenges, clubs);
                     return (
                       <div className="grid grid-cols-2 gap-2 bg-rose-50/20 dark:bg-slate-900/40 p-2.5 rounded-xl border border-rose-100/30 dark:border-slate-800/60 text-center text-[10px]">
                         <div className="border-r border-slate-100 dark:border-slate-850 pr-1">
@@ -1880,7 +1903,7 @@ export const VscSystemClubsDirectory: React.FC<VscSystemClubsDirectoryProps> = (
 
                       {/* PK Matchmaking Performance Indicators */}
                       {(() => {
-                        const pkStats = getPkPerformanceStats(club, challenges);
+                        const pkStats = getPkPerformanceStats(club, challenges, clubs);
                         return (
                           <div>
                             <h4 className="text-[10px] uppercase font-black text-rose-500 tracking-wider mb-3 flex items-center gap-1.5">
