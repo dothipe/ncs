@@ -11,6 +11,9 @@ import {
 } from "firebase/auth";
 import { 
   initializeFirestore, 
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  memoryLocalCache,
   doc, 
   getDoc, 
   setDoc, 
@@ -23,8 +26,7 @@ import {
   query,
   where,
   orderBy,
-  serverTimestamp,
-  enableIndexedDbPersistence
+  serverTimestamp
 } from "firebase/firestore";
 
 import firebaseConfig from "../firebase-applet-config.json";
@@ -36,23 +38,25 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
-// Initialize Firestore targeting the custom Database ID with long-polling enabled to stay persistent in sandboxed iframes
-export const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
-}, firebaseConfig.firestoreDatabaseId);
+// Initialize Firestore targeting the custom Database ID with modern multi-tab cache and auto-detect long polling
+let localCacheSetting;
+try {
+  localCacheSetting = persistentLocalCache({
+    tabManager: persistentMultipleTabManager()
+  });
+} catch (e) {
+  console.warn("Falling back to memory cache for Firestore:", e);
+  localCacheSetting = memoryLocalCache();
+}
 
-// Enable Offline Persistence for robust network-resilient scoring
-enableIndexedDbPersistence(db).catch((err) => {
-  if (err.code === "failed-precondition") {
-    // Multiple tabs open, persistence can only be enabled in one tab at a time.
-    console.warn("Firestore offline persistence failed-precondition: Multiple tabs open.");
-  } else if (err.code === "unimplemented") {
-    // The current browser does not support all of the features required to enable persistence.
-    console.warn("Firestore offline persistence unimplemented: Browser not supported.");
-  } else {
-    console.warn("Firestore offline persistence could not be enabled:", err);
-  }
-});
+export const db = initializeFirestore(
+  app,
+  {
+    localCache: localCacheSetting,
+    experimentalAutoDetectLongPolling: true,
+  },
+  firebaseConfig.firestoreDatabaseId
+);
 
 export {
   signInWithPopup,

@@ -56,7 +56,10 @@ import {
   Sword,
   X,
   Key,
-  Target
+  Target,
+  Tv,
+  Video,
+  ExternalLink
 } from "lucide-react";
 import { Athlete, DistanceConfig, SystemClub, PKChallenge, TrainingSession } from "../types";
 import { getHitCount } from "../utils/qualification";
@@ -277,6 +280,49 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
   // State for Club Hub Modal
   const [selectedClubHub, setSelectedClubHub] = useState<SystemClub | null>(null);
+
+  // States for Video Links Update Modal
+  const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
+  const [videoTargetChallenge, setVideoTargetChallenge] = useState<PKChallenge | null>(null);
+  const [videoChallengerUrl, setVideoChallengerUrl] = useState("");
+  const [videoOpponentUrl, setVideoOpponentUrl] = useState("");
+  const [videoSaving, setVideoSaving] = useState(false);
+
+  const openUpdateVideoModal = (challenge: PKChallenge) => {
+    setVideoTargetChallenge(challenge);
+    setVideoChallengerUrl(challenge.challengerLiveUrl || "");
+    setVideoOpponentUrl(challenge.opponentLiveUrl || "");
+    setIsVideoModalOpen(true);
+  };
+
+  const handleUpdateVideo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!videoTargetChallenge) return;
+    setVideoSaving(true);
+    try {
+      const challengeRef = doc(db, "pk_challenges", videoTargetChallenge.id);
+      await updateDoc(challengeRef, {
+        challengerLiveUrl: videoChallengerUrl.trim() || null,
+        opponentLiveUrl: videoOpponentUrl.trim() || null
+      });
+
+      if (selectedDetailChallenge && selectedDetailChallenge.id === videoTargetChallenge.id) {
+        setSelectedDetailChallenge({
+          ...selectedDetailChallenge,
+          challengerLiveUrl: videoChallengerUrl.trim() || null,
+          opponentLiveUrl: videoOpponentUrl.trim() || null
+        });
+      }
+
+      setIsVideoModalOpen(false);
+      setVideoTargetChallenge(null);
+    } catch (err) {
+      console.error("Error updating video URLs:", err);
+      alert(language === "en" ? "Failed to update video links. Please try again." : "Không thể cập nhật liên kết video. Vui lòng thử lại.");
+    } finally {
+      setVideoSaving(false);
+    }
+  };
 
   const loggedInAthlete = useMemo(() => {
     if (!currentUser || !vscSystemAthletes) return null;
@@ -3408,18 +3454,38 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
                               {/* Footer details */}
                               <div className="px-4 py-2 bg-slate-50/50 dark:bg-slate-950/30 border-t border-slate-100 dark:border-slate-800/40 text-[10px] text-slate-500 flex items-center justify-between">
-                                <span className="truncate max-w-[60%] font-medium">
+                                <span className="truncate max-w-[45%] font-medium">
                                   <span className="text-slate-400">{language === "en" ? "Loc: " : "Địa điểm: "}</span>{match.location}
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedDetailChallenge(match);
-                                  }}
-                                  className="text-[9px] font-black text-rose-600 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-300 transition-colors cursor-pointer bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-900/40 px-2.5 py-1 rounded border border-rose-200 dark:border-rose-900/40 shadow-xs"
-                                >
-                                  {language === "en" ? "View Details 👁️" : "Chi tiết 👁️"}
-                                </button>
+                                <div className="flex items-center gap-1.5">
+                                  {(currentUser?.uid === match.challengerUid || currentUser?.uid === match.opponentUid || isGlobalAdmin) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => openUpdateVideoModal(match)}
+                                      className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 transition-colors cursor-pointer bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-800"
+                                    >
+                                      {language === "en" ? "Video 📹" : "Video 📹"}
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedDetailChallenge(match);
+                                    }}
+                                    className="text-[9px] font-black text-rose-600 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-300 transition-colors cursor-pointer bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-900/40 px-2.5 py-1 rounded border border-rose-200 dark:border-rose-900/40 shadow-xs"
+                                  >
+                                    {language === "en" ? "Details 👁️" : "Chi tiết 👁️"}
+                                  </button>
+                                  {isGlobalAdmin && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCancelPkChallenge(match.id)}
+                                      className="text-[9px] font-bold text-rose-600 hover:text-rose-800 transition-colors cursor-pointer bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded border border-rose-200"
+                                    >
+                                      {language === "en" ? "Delete 🗑️" : "Xóa 🗑️"}
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           );
@@ -4419,6 +4485,71 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 );
               })()}
 
+              {/* Videos and Proofs */}
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-xs text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                    <Video className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    <span>{language === "en" ? "Match Video Streams / Proofs" : "Video Minh Chứng Trận Đấu"}</span>
+                  </span>
+                  {(currentUser?.uid === selectedDetailChallenge.challengerUid || currentUser?.uid === selectedDetailChallenge.opponentUid || isGlobalAdmin) && (
+                    <button
+                      type="button"
+                      onClick={() => openUpdateVideoModal(selectedDetailChallenge)}
+                      className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 px-2.5 py-1 rounded border border-emerald-200 dark:border-emerald-800 transition-colors"
+                    >
+                      {language === "en" ? "Edit Video 📹" : "Cập nhật Video 📹"}
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  {/* Challenger live/video */}
+                  <div className="bg-white dark:bg-slate-900 p-3 rounded-lg border border-slate-150 dark:border-slate-800">
+                    <div className="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider mb-1 truncate">
+                      {selectedDetailChallenge.challengerName}
+                    </div>
+                    {selectedDetailChallenge.challengerLiveUrl ? (
+                      <a
+                        href={selectedDetailChallenge.challengerLiveUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 break-all"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                        <span className="line-clamp-1">{selectedDetailChallenge.challengerLiveUrl}</span>
+                      </a>
+                    ) : (
+                      <span className="text-[11px] text-slate-400 italic">
+                        {language === "en" ? "No video link provided" : "Chưa cập nhật link video"}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Opponent live/video */}
+                  <div className="bg-white dark:bg-slate-900 p-3 rounded-lg border border-slate-150 dark:border-slate-800">
+                    <div className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1 truncate">
+                      {selectedDetailChallenge.opponentName || "Đối thủ"}
+                    </div>
+                    {selectedDetailChallenge.opponentLiveUrl ? (
+                      <a
+                        href={selectedDetailChallenge.opponentLiveUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 break-all"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                        <span className="line-clamp-1">{selectedDetailChallenge.opponentLiveUrl}</span>
+                      </a>
+                    ) : (
+                      <span className="text-[11px] text-slate-400 italic">
+                        {language === "en" ? "No video link provided" : "Chưa cập nhật link video"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* Referee email and system stats */}
               {selectedDetailChallenge.refereeEmail && (
                 <div className="bg-amber-50 dark:bg-amber-950/20 rounded-xl p-3 border border-amber-100 dark:border-amber-900 text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between">
@@ -4516,6 +4647,88 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           onCloseExternalSelectedClub={() => setSelectedClubHub(null)}
           hideDirectoryList={true}
         />
+      )}
+
+      {/* Modal: Update Video URLs */}
+      {isVideoModalOpen && videoTargetChallenge && createPortal(
+        <div className="fixed inset-0 z-[10030] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-lg w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h4 className="text-sm font-black uppercase text-indigo-900 dark:text-indigo-400 tracking-wider flex items-center gap-2">
+                <Video className="w-5 h-5 text-indigo-600" />
+                <span>{language === "en" ? "Update Match Video Proofs" : "Cập Nhật Video Minh Chứng Kèo Đấu"}</span>
+              </h4>
+              <button
+                type="button"
+                onClick={() => { setIsVideoModalOpen(false); setVideoTargetChallenge(null); }}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+              {language === "en" 
+                ? "Provide Facebook livestream, reel, post, YouTube, or Google Drive video links for verification."
+                : "Dán link video Livestream Facebook / Reel / Bài viết / YouTube làm tư liệu đối chứng."}
+            </p>
+
+            <form onSubmit={handleUpdateVideo} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  🔴 {language === "en" ? `Challenger: ${videoTargetChallenge.challengerName}` : `Kênh VĐV Thách Đấu: ${videoTargetChallenge.challengerName}`}
+                </label>
+                <input
+                  type="url"
+                  value={videoChallengerUrl}
+                  onChange={(e) => setVideoChallengerUrl(e.target.value)}
+                  placeholder="https://www.facebook.com/..."
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  🔵 {language === "en" ? `Opponent: ${videoTargetChallenge.opponentName || "Guest"}` : `Kênh VĐV Nhận Kèo: ${videoTargetChallenge.opponentName || "Đối thủ"}`}
+                </label>
+                <input
+                  type="url"
+                  value={videoOpponentUrl}
+                  onChange={(e) => setVideoOpponentUrl(e.target.value)}
+                  placeholder="https://www.facebook.com/..."
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setIsVideoModalOpen(false); setVideoTargetChallenge(null); }}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
+                >
+                  {language === "en" ? "Cancel" : "Hủy"}
+                </button>
+                <button
+                  type="submit"
+                  disabled={videoSaving}
+                  className="px-5 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+                >
+                  {videoSaving ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Save className="w-3.5 h-3.5" />
+                  )}
+                  <span>{language === "en" ? "Save Videos" : "Lưu Video"}</span>
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>,
+        document.body
       )}
 
     </div>
