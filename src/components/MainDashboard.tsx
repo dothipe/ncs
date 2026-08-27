@@ -5,6 +5,7 @@ import { VSCLogo, SlingshotIcon } from "./VSCLogo";
 import { Trophy, Medal, Award, Star, Users, Target, Zap, Shield, TrendingUp, Tv, Share2 } from "lucide-react";
 import { AVATAR_MALE } from "./AthleteManagement";
 import { calculateRounds, getHitCount } from "../utils/qualification";
+import { ChatWidget } from "./ChatWidget";
 
 interface MainDashboardProps {
   athletes: Athlete[];
@@ -24,6 +25,13 @@ interface MainDashboardProps {
   clubs?: Club[];
   onOpenLiveBoard?: () => void;
   onOpenExportModal?: () => void;
+  currentTournamentDoc?: any;
+  activeHistoryId?: string;
+  currentUser?: any;
+  onOpenAuthModal?: () => void;
+  userRole?: string;
+  systemClubs?: any[];
+  systemAthletes?: any[];
 }
 
 export const MainDashboard: React.FC<MainDashboardProps> = ({ 
@@ -43,7 +51,14 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
   tournamentType = "combined",
   clubs,
   onOpenLiveBoard,
-  onOpenExportModal
+  onOpenExportModal,
+  currentTournamentDoc,
+  activeHistoryId,
+  currentUser,
+  onOpenAuthModal,
+  userRole,
+  systemClubs,
+  systemAthletes
 }) => {
   const { language, t } = useLanguage();
   // Resolve active source variables based on tournamentType
@@ -2069,6 +2084,32 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* 💬 TOURNAMENT LIVE CHAT ROOM (BTC ANNOUNCEMENTS & ATHLETE LIVE CHAT) */}
+      <ChatWidget
+        roomId={
+          activeHistoryId 
+            ? `tournament_${activeHistoryId}` 
+            : currentTournamentDoc?.id 
+            ? `tournament_${currentTournamentDoc.id}` 
+            : `tournament_${(matchName || "vsc_championship").toLowerCase().replace(/[^a-z0-9]/g, "_")}`
+        }
+        roomType="tournament_live"
+        currentUser={currentUser}
+        language={language}
+        onOpenAuthModal={onOpenAuthModal}
+        isBtcOrAdmin={
+          userRole === "admin" ||
+          (currentUser?.email && (
+            currentTournamentDoc?.creatorEmail?.toLowerCase() === currentUser?.email?.toLowerCase() ||
+            ["vscvietnamslingshot@gmail.com", "nahnatofficial@gmail.com"].includes(currentUser?.email?.toLowerCase())
+          ))
+        }
+        systemClubs={clubs || systemClubs}
+        systemAthletes={systemAthletes}
+        defaultExpanded={true}
+        className="mb-2 shadow-sm"
+      />
 
       {/* Overview Stats highlight bars */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

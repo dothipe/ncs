@@ -20,7 +20,7 @@ import {
   orderBy,
   serverTimestamp
 } from "../firebase";
-import { Athlete, DistanceConfig, MatchHistoryItem, Club, VSC_DEFAULT_LOGO, SystemClub } from "../types";
+import { Athlete, DistanceConfig, MatchHistoryItem, Club, VSC_DEFAULT_LOGO, SystemClub, ChatMessage } from "../types";
 
 export interface TournamentData {
   id: string;
@@ -1667,4 +1667,197 @@ export async function updateClubProfile(
     }
   }
 }
+
+/**
+ * ==========================================
+ * 💬 REAL-TIME CHAT SERVICE (TOURNAMENTS & PK)
+ * ==========================================
+ */
+
+/**
+ * Subscribes to real-time chat messages for a specific room.
+ * roomIds: "pk_lobby" | `pk_match_${challengeId}` | `tournament_${tournamentId}`
+ */
+export function subscribeChatMessages(
+  roomId: string,
+  callback: (messages: ChatMessage[]) => void,
+  limitCount: number = 80
+): () => void {
+  try {
+    const chatColl = collection(db, "vsc_chat_messages");
+    const q = query(
+      chatColl,
+      where("roomId", "==", roomId)
+    );
+
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const msgs: ChatMessage[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          let createdAtMs = 0;
+          if (data.createdAt?.toMillis) {
+            createdAtMs = data.createdAt.toMillis();
+          } else if (typeof data.createdAt === "number") {
+            createdAtMs = data.createdAt;
+          } else if (data.createdAt) {
+            createdAtMs = new Date(data.createdAt).getTime() || 0;
+          }
+
+          msgs.push({
+            id: docSnap.id,
+            roomId: data.roomId,
+            senderUid: data.senderUid || "",
+            senderName: data.senderName || "Ẩn danh",
+            senderEmail: data.senderEmail,
+            senderAvatar: data.senderAvatar,
+            senderRole: data.senderRole || "user",
+            senderBadge: data.senderBadge,
+            senderClub: data.senderClub,
+            content: data.content || "",
+            createdAt: createdAtMs || Date.now(),
+            isPinned: Boolean(data.isPinned),
+            pinnedBy: data.pinnedBy,
+            reactions: data.reactions || {},
+            replyTo: data.replyTo
+          });
+        });
+
+        // Sort chronologically (oldest to newest)
+        msgs.sort((a, b) => {
+          const tA = typeof a.createdAt === "number" ? a.createdAt : 0;
+          const tB = typeof b.createdAt === "number" ? b.createdAt : 0;
+          return tA - tB;
+        });
+
+        // Limit to latest limitCount messages
+        const sliced = msgs.length > limitCount ? msgs.slice(msgs.length - limitCount) : msgs;
+        callback(sliced);
+      },
+      (error) => {
+        console.warn(`[Firestore] Chat error for room ${roomId}:`, error);
+        callback([]);
+      }
+    );
+  } catch (err) {
+    console.error(`Failed to subscribe to chat room ${roomId}:`, err);
+    return () => {};
+  }
+}
+
+/**
+ * Sends a new chat message to Firestore.
+ */
+export async function sendChatMessage(
+  message: {
+    roomId: string;
+    senderUid: string;
+    senderName: string;
+    senderEmail?: string;
+    senderAvatar?: string;
+    senderRole?: "admin" | "btc" | "referee" | "athlete" | "user";
+    senderBadge?: string;
+    senderClub?: string;
+    content: string;
+    replyTo?: {
+      id: string;
+      senderName: string;
+      content: string;
+    };
+  }
+): Promise<string> {
+  const cleanContent = (message.content || "").trim();
+  if (!cleanContent) {
+    throw new Error("Tin nhắn không được để trống");
+  }
+
+  const chatColl = collection(db, "vsc_chat_messages");
+  const docRef = doc(chatColl);
+
+  const payload: Record<string, any> = {
+    roomId: message.roomId,
+    senderUid: message.senderUid,
+    senderName: message.senderName || "Xạ thủ",
+    senderEmail: message.senderEmail || "",
+    senderAvatar: message.senderAvatar || "",
+    senderRole: message.senderRole || "user",
+    senderBadge: message.senderBadge || "",
+    senderClub: message.senderClub || "",
+    content: cleanContent,
+    createdAt: serverTimestamp(),
+    isPinned: false,
+    reactions: {}
+  };
+
+  if (message.replyTo) {
+    payload.replyTo = message.replyTo;
+  }
+
+  await setDoc(docRef, sanitizeFirestoreData(payload)).catch((err) => {
+    handleFirestoreError(err, OperationType.CREATE, `vsc_chat_messages/${docRef.id}`);
+  });
+
+  return docRef.id;
+}
+
+/**
+ * Pins or unpins a chat message in a room.
+ */
+export async function togglePinChatMessage(
+  messageId: string,
+  isPinned: boolean,
+  pinnedByName?: string
+): Promise<void> {
+  const msgRef = doc(db, "vsc_chat_messages", messageId);
+  await updateDoc(msgRef, {
+    isPinned,
+    pinnedBy: isPinned ? (pinnedByName || "BTC") : null
+  }).catch((err) => {
+    handleFirestoreError(err, OperationType.UPDATE, `vsc_chat_messages/${messageId}`);
+  });
+}
+
+/**
+ * Toggles an emoji reaction on a message.
+ */
+export async function toggleMessageReaction(
+  messageId: string,
+  emoji: string,
+  userUid: string
+): Promise<void> {
+  const msgRef = doc(db, "vsc_chat_messages", messageId);
+  const snap = await getDoc(msgRef);
+  if (!snap.exists()) return;
+
+  const data = snap.data();
+  const reactions: Record<string, string[]> = data.reactions || {};
+  const currentUids: string[] = reactions[emoji] || [];
+
+  if (currentUids.includes(userUid)) {
+    reactions[emoji] = currentUids.filter((u) => u !== userUid);
+    if (reactions[emoji].length === 0) {
+      delete reactions[emoji];
+    }
+  } else {
+    reactions[emoji] = [...currentUids, userUid];
+  }
+
+  await updateDoc(msgRef, {
+    reactions
+  }).catch((err) => {
+    handleFirestoreError(err, OperationType.UPDATE, `vsc_chat_messages/${messageId}`);
+  });
+}
+
+/**
+ * Deletes a chat message.
+ */
+export async function deleteChatMessage(messageId: string): Promise<void> {
+  const msgRef = doc(db, "vsc_chat_messages", messageId);
+  await deleteDoc(msgRef).catch((err) => {
+    handleFirestoreError(err, OperationType.DELETE, `vsc_chat_messages/${messageId}`);
+  });
+}
+
 

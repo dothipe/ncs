@@ -3524,6 +3524,13 @@ export default function App() {
               clubs={clubs}
               setIsLiveBoardOpen={setIsLiveBoardOpen}
               setIsExportModalOpen={setIsExportModalOpen}
+              currentTournamentDoc={currentTournamentDoc}
+              activeHistoryId={activeHistoryId}
+              currentUser={currentUser}
+              onOpenAuthModal={() => setIsAuthModalOpen(true)}
+              userRole={userRole}
+              systemClubs={clubs}
+              systemAthletes={vscSystemAthletes}
             />
           )}
 

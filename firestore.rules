@@ -184,6 +184,14 @@ service cloud.firestore {
       allow write: if isEmailVerified() && isValidId(challengeId);
     }
 
+    // --- VSC Real-time Chat Messages ---
+    match /vsc_chat_messages/{messageId} {
+      allow read: if true;
+      allow create: if isEmailVerified() && isValidId(messageId);
+      allow update: if isEmailVerified() && isValidId(messageId);
+      allow delete: if isEmailVerified() && isValidId(messageId);
+    }
+
     // --- VSC Training Sessions ---
     match /vsc_training_sessions/{sessionId} {
       allow read: if isEmailVerified() && resource.data.userId == request.auth.uid;
@@ -192,3 +200,4 @@ service cloud.firestore {
     }
   }
 }
+

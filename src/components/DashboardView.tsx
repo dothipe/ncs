@@ -19,6 +19,13 @@ interface DashboardViewProps {
   clubs: any[];
   setIsLiveBoardOpen: (open: boolean) => void;
   setIsExportModalOpen: (open: boolean) => void;
+  currentTournamentDoc?: any;
+  activeHistoryId?: string;
+  currentUser?: any;
+  onOpenAuthModal?: () => void;
+  userRole?: string;
+  systemClubs?: any[];
+  systemAthletes?: any[];
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -39,6 +46,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   clubs,
   setIsLiveBoardOpen,
   setIsExportModalOpen,
+  currentTournamentDoc,
+  activeHistoryId,
+  currentUser,
+  onOpenAuthModal,
+  userRole,
+  systemClubs,
+  systemAthletes,
 }) => {
   return (
     <div className="animate-fadeIn" id="dashboard-view-container">
@@ -60,6 +74,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         clubs={clubs}
         onOpenLiveBoard={() => setIsLiveBoardOpen(true)}
         onOpenExportModal={() => setIsExportModalOpen(true)}
+        currentTournamentDoc={currentTournamentDoc}
+        activeHistoryId={activeHistoryId}
+        currentUser={currentUser}
+        onOpenAuthModal={onOpenAuthModal}
+        userRole={userRole}
+        systemClubs={systemClubs}
+        systemAthletes={systemAthletes}
       />
     </div>
   );

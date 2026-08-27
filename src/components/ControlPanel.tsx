@@ -67,6 +67,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { Club } from "../types";
 import { VscSystemClubsDirectory } from "./VscSystemClubsDirectory";
 import TrainingTracker from "./TrainingTracker";
+import { ChatWidget } from "./ChatWidget";
 
 interface ControlPanelProps {
   isGlobalAdmin?: boolean;
@@ -4723,6 +4724,28 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   <span className="font-medium bg-amber-100/50 dark:bg-amber-900/50 px-2.5 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800">{selectedDetailChallenge.refereeEmail}</span>
                 </div>
               )}
+
+              {/* 💬 PK MATCH ROOM CHAT */}
+              <div className="mt-4 pt-4 border-t border-gray-150 dark:border-slate-800">
+                <ChatWidget
+                  roomId={`pk_match_${selectedDetailChallenge.id}`}
+                  roomType="pk_match"
+                  title={language === "en" ? `Match Room Chat: ${selectedDetailChallenge.title}` : `Phòng Giao Lưu Kèo Đấu: ${selectedDetailChallenge.title}`}
+                  currentUser={currentUser}
+                  language={language}
+                  onOpenAuthModal={onOpenAuthModal}
+                  isReferee={Boolean(
+                    (selectedDetailChallenge.refereeEmail && currentUser?.email && selectedDetailChallenge.refereeEmail.toLowerCase() === currentUser.email.toLowerCase()) ||
+                    isGlobalAdmin
+                  )}
+                  challengerUid={selectedDetailChallenge.challengerUid}
+                  opponentUid={selectedDetailChallenge.opponentUid}
+                  systemClubs={systemClubs}
+                  systemAthletes={vscSystemAthletes}
+                  defaultExpanded={false}
+                  className="shadow-sm"
+                />
+              </div>
             </div>
 
             {/* Modal Footer */}

@@ -189,5 +189,28 @@ export interface TrainingSession {
   createdAt: any;
 }
 
+export interface ChatMessage {
+  id: string;
+  roomId: string; // e.g. "pk_lobby" | `pk_match_${challengeId}` | `tournament_${tournamentId}`
+  senderUid: string;
+  senderName: string;
+  senderEmail?: string;
+  senderAvatar?: string;
+  senderRole?: "admin" | "btc" | "referee" | "athlete" | "user";
+  senderBadge?: string;
+  senderClub?: string;
+  content: string;
+  createdAt: any;
+  isPinned?: boolean;
+  pinnedBy?: string;
+  reactions?: Record<string, string[]>;
+  replyTo?: {
+    id: string;
+    senderName: string;
+    content: string;
+  };
+}
+
+
 
 

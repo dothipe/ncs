@@ -20,6 +20,7 @@ import {
   Tv
 } from "lucide-react";
 import { PKChallenge } from "../types";
+import { ChatWidget } from "./ChatWidget";
 
 interface PkDashboardHomeProps {
   challenges: PKChallenge[];
@@ -226,6 +227,21 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
           </div>
         </motion.div>
       </div>
+
+      {/* 💬 SẢNH CHAT CHUNG (PK LOBBY CHAT) */}
+      <ChatWidget
+        roomId="pk_lobby"
+        roomType="pk_lobby"
+        currentUser={currentUser}
+        language={language}
+        onOpenAuthModal={onOpenAuthModal}
+        isBtcOrAdmin={isAdmin}
+        systemClubs={systemClubs}
+        systemAthletes={systemAthletes}
+        onViewAthleteProfile={onViewAthleteProfile}
+        defaultExpanded={true}
+        className="shadow-sm"
+      />
 
       {/* ⚔️ Section 2: Open Challenges Queue (Kèo Đấu Đang Chờ Tìm Đối Thủ) with full detailed info boxes */}
       <div className="space-y-4">

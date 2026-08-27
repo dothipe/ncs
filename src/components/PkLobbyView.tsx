@@ -39,6 +39,7 @@ import { PKChallenge, Athlete, SystemClub } from "../types";
 import { PkDashboardHome } from "./PkDashboardHome";
 import { AthleteProfileModal } from "./AthleteProfileModal";
 import { VscSystemClubsDirectory } from "./VscSystemClubsDirectory";
+import { ChatWidget } from "./ChatWidget";
 import { db } from "../firebase";
 import { 
   collection, 
@@ -3106,6 +3107,26 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                     : "Cả 2 bên Challenger và Opponent cần cùng bấm 'Ký xác nhận tỉ số' để khớp kết quả trước khi hệ thống ghi nhận. Trọng tài được chỉ định hoặc Admin hệ thống có đặc quyền ký duyệt đơn phương."}
                 </div>
               </div>
+
+              {/* 💬 REAL-TIME MATCH ROOM CHAT IN ARENA */}
+              <div className="mt-6">
+                <ChatWidget
+                  roomId={`pk_match_${activeArenaChallenge.id}`}
+                  roomType="pk_match"
+                  title={language === "en" ? `Match Live Chat: ${activeArenaChallenge.title}` : `Phòng Giao Lưu Kèo Đấu: ${activeArenaChallenge.title}`}
+                  currentUser={currentUser}
+                  language={language}
+                  onOpenAuthModal={onOpenAuthModal}
+                  isReferee={isRefereeOfMatch}
+                  challengerUid={activeArenaChallenge.challengerUid}
+                  opponentUid={activeArenaChallenge.opponentUid}
+                  systemClubs={systemClubs}
+                  systemAthletes={systemAthletes}
+                  onViewAthleteProfile={handleViewAthleteProfile}
+                  defaultExpanded={true}
+                  className="shadow-sm"
+                />
+              </div>
             </div>
 
           </motion.div>
@@ -5782,6 +5803,29 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                   <span className="font-medium bg-amber-100/50 px-2.5 py-0.5 rounded-lg border border-amber-200/50">{selectedDetailChallenge.refereeEmail}</span>
                 </div>
               )}
+
+              {/* 💬 PK MATCH ROOM CHAT */}
+              <div className="mt-4 pt-4 border-t border-gray-150">
+                <ChatWidget
+                  roomId={`pk_match_${selectedDetailChallenge.id}`}
+                  roomType="pk_match"
+                  title={language === "en" ? `Match Room Chat: ${selectedDetailChallenge.title}` : `Phòng Giao Lưu Kèo Đấu: ${selectedDetailChallenge.title}`}
+                  currentUser={currentUser}
+                  language={language}
+                  onOpenAuthModal={onOpenAuthModal}
+                  isReferee={Boolean(
+                    (selectedDetailChallenge.refereeEmail && currentUser?.email && selectedDetailChallenge.refereeEmail.toLowerCase() === currentUser.email.toLowerCase()) ||
+                    (currentUser?.email && ["vscvietnamslingshot@gmail.com", "nahnatofficial@gmail.com"].includes(currentUser.email.toLowerCase()))
+                  )}
+                  challengerUid={selectedDetailChallenge.challengerUid}
+                  opponentUid={selectedDetailChallenge.opponentUid}
+                  systemClubs={systemClubs}
+                  systemAthletes={systemAthletes}
+                  onViewAthleteProfile={handleViewAthleteProfile}
+                  defaultExpanded={false}
+                  className="shadow-sm"
+                />
+              </div>
             </div>
 
             {/* Modal Footer */}
