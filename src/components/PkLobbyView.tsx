@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { 
@@ -56,12 +56,11 @@ interface PkLobbyViewProps {
   onOpenAuthModal: () => void;
   activeChallengeId?: string | null;
   onClearActiveChallengeId?: () => void;
-  initialSubTab?: "dashboard" | "lobby" | "leaderboard" | "history" | null;
-  onClearInitialSubTab?: () => void;
+  activeSubTab?: "dashboard" | "lobby" | "leaderboard" | "history" | null;
+  onSubTabChange?: (subTab: "dashboard" | "lobby" | "leaderboard" | "history") => void;
   editChallengeId?: string | null;
   onClearEditChallengeId?: () => void;
   onViewClubHub?: (club: any) => void;
-  onSubTabChange?: (subTab: "dashboard" | "lobby" | "leaderboard" | "history") => void;
 }
 
 export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ 
@@ -69,15 +68,20 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
   onOpenAuthModal,
   activeChallengeId,
   onClearActiveChallengeId,
-  initialSubTab,
-  onClearInitialSubTab,
+  activeSubTab: controlledActiveSubTab,
+  onSubTabChange,
   editChallengeId,
   onClearEditChallengeId,
-  onViewClubHub,
-  onSubTabChange
+  onViewClubHub
 }) => {
   const { language } = useLanguage();
-  const [activeSubTab, setActiveSubTab] = useState<"dashboard" | "lobby" | "leaderboard" | "history">("dashboard");
+  const [internalSubTab, setInternalSubTab] = useState<"dashboard" | "lobby" | "leaderboard" | "history">("dashboard");
+  const activeSubTab = controlledActiveSubTab || internalSubTab;
+
+  const setActiveSubTab = useCallback((tab: "dashboard" | "lobby" | "leaderboard" | "history") => {
+    setInternalSubTab(tab);
+    onSubTabChange?.(tab);
+  }, [onSubTabChange]);
   const [challenges, setChallenges] = useState<PKChallenge[]>([]);
   const [systemAthletes, setSystemAthletes] = useState<Athlete[]>([]);
   const [systemClubs, setSystemClubs] = useState<SystemClub[]>([]);
@@ -1256,18 +1260,6 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
 
     setIsEditModalOpen(true);
   };
-
-  // Listen to deep linking and redirect props from parent App
-  useEffect(() => {
-    if (initialSubTab) {
-      setActiveSubTab(initialSubTab);
-      onClearInitialSubTab?.();
-    }
-  }, [initialSubTab]);
-
-  useEffect(() => {
-    onSubTabChange?.(activeSubTab);
-  }, [activeSubTab, onSubTabChange]);
 
   useEffect(() => {
     if (activeChallengeId && challenges.length > 0) {

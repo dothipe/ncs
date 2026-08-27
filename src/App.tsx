@@ -530,7 +530,7 @@ export default function App() {
   // PK Challenge redirect and deep linking states
   const [activePkChallengeId, setActivePkChallengeId] = useState<string | null>(null);
   const [pkChallengeToEditId, setPkChallengeToEditId] = useState<string | null>(null);
-  const [activePkSubTab, setActivePkSubTab] = useState<"dashboard" | "lobby" | "leaderboard" | "history" | null>(null);
+  const [activePkSubTab, setActivePkSubTab] = useState<"dashboard" | "lobby" | "leaderboard" | "history">("dashboard");
 
   // Keep non-logged in guests restricted to public-facing viewing tabs
   useEffect(() => {
@@ -3785,12 +3785,11 @@ export default function App() {
               onOpenAuthModal={() => setIsAuthModalOpen(true)}
               activeChallengeId={activePkChallengeId}
               onClearActiveChallengeId={() => setActivePkChallengeId(null)}
-              initialSubTab={activePkSubTab}
-              onClearInitialSubTab={() => setActivePkSubTab(null)}
+              activeSubTab={activePkSubTab}
+              onSubTabChange={setActivePkSubTab}
               editChallengeId={pkChallengeToEditId}
               onClearEditChallengeId={() => setPkChallengeToEditId(null)}
               onViewClubHub={(club) => setGlobalSelectedClub(club)}
-              onSubTabChange={(subTab) => setActivePkSubTab(subTab)}
             />
           )}
 
