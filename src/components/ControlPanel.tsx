@@ -58,18 +58,19 @@ import {
   Key,
   Target
 } from "lucide-react";
-import { Athlete, DistanceConfig, SystemClub, PKChallenge } from "../types";
+import { Athlete, DistanceConfig, SystemClub, PKChallenge, TrainingSession } from "../types";
 import { getHitCount } from "../utils/qualification";
 import { useLanguage } from "../context/LanguageContext";
 import { Club } from "../types";
 import { VscSystemClubsDirectory } from "./VscSystemClubsDirectory";
+import TrainingTracker from "./TrainingTracker";
 
 interface ControlPanelProps {
   isGlobalAdmin?: boolean;
   onSelectTournament: (id: string, tournament: TournamentData) => void;
   activeHistoryId: string | null;
   onOpenAuthModal: () => void;
-  forceSubTab?: "profile" | "club" | "created" | "referee" | "pk_challenges";
+  forceSubTab?: "profile" | "club" | "created" | "referee" | "pk_challenges" | "training";
   systemClubs?: SystemClub[];
   vscSystemAthletes?: Athlete[];
   onlineTournaments?: TournamentData[];
@@ -721,8 +722,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
     }
   };
 
-  // Tab can be profile (hồ sơ của tôi), club (câu lạc bộ), created (giải tôi tạo), referee (giải tôi trọng tài), pk_challenges (thách đấu PK)
-  const [subTab, setSubTab] = useState<"profile" | "club" | "created" | "referee" | "pk_challenges">("profile");
+  // Tab can be profile (hồ sơ của tôi), club (câu lạc bộ), created (giải tôi tạo), referee (giải tôi trọng tài), pk_challenges (thách đấu PK), training (tiến trình tập luyện)
+  const [subTab, setSubTab] = useState<"profile" | "club" | "created" | "referee" | "pk_challenges" | "training">("profile");
 
   // Sync subtab if forceSubTab changes
   useEffect(() => {
@@ -1675,10 +1676,21 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 <Award className="w-4 h-4" />
                 {language === "en" ? `Referee Tournaments (${myRefereeTournaments.length})` : `Giải tôi làm Trọng tài (${myRefereeTournaments.length})`}
               </button>
+              <button
+                onClick={() => setSubTab("training")}
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap ${
+                  subTab === "training"
+                    ? "bg-white dark:bg-slate-800 shadow-xs text-indigo-700 dark:text-indigo-400 border border-slate-200/40 dark:border-slate-700/40"
+                    : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
+                }`}
+              >
+                <Target className="w-4 h-4 text-emerald-500" />
+                {language === "en" ? "Practice Progress" : "Tiến Trình Tập Luyện"}
+              </button>
             </div>
 
             {/* Quick search (Only show when viewing tournament lists) */}
-            {subTab !== "profile" && subTab !== "pk_challenges" && (
+            {subTab !== "profile" && subTab !== "pk_challenges" && subTab !== "training" && (
               <div className="relative w-full sm:w-64">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
@@ -3416,6 +3428,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     )}
                   </div>
                 </div>
+              )}
+
+              {subTab === "training" && (
+                <TrainingTracker currentUser={currentUser} />
               )}
             </>
           )}

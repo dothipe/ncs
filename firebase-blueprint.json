@@ -90,6 +90,28 @@
         "opponentMembers": { "type": "array" }
       },
       "required": ["id", "type", "title", "status", "challengerUid", "challengerName"]
+    },
+    "TrainingSession": {
+      "title": "TrainingSession",
+      "description": "Store a user's local slingshot practice history sessions (Target and Paper targets)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "date": { "type": "string" },
+        "targetType": { "type": "string" },
+        "distance": { "type": "number" },
+        "targetShots": { "type": "number" },
+        "shots": { "type": "array" },
+        "hitsCount": { "type": "number" },
+        "missesCount": { "type": "number" },
+        "score": { "type": "number" },
+        "maxScore": { "type": "number" },
+        "accuracy": { "type": "number" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date" }
+      },
+      "required": ["id", "userId", "date", "targetType", "distance", "targetShots", "accuracy"]
     }
   },
   "firestore": {
@@ -112,6 +134,10 @@
     "vsc_pk_challenges/{challengeId}": {
       "schema": "#/entities/PKChallenge",
       "description": "List of active and historical PK match challenges"
+    },
+    "vsc_training_sessions/{sessionId}": {
+      "schema": "#/entities/TrainingSession",
+      "description": "User specific personal slingshot training logs"
     }
   }
 }

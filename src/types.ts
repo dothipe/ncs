@@ -169,5 +169,22 @@ export interface PKChallenge {
   }[];
 }
 
+export interface TrainingSession {
+  id: string;
+  userId: string;
+  date: string; // YYYY-MM-DD
+  targetType: "bia_muc_tieu" | "bia_giay"; // Bia mục tiêu (Hit/Miss) or Bia giấy (Score)
+  distance: number; // in meters
+  targetShots: number; // e.g. 5, 10, 15, 20, 30
+  shots?: boolean[]; // For bia_muc_tieu (true = hit, false = miss)
+  hitsCount?: number; // For bia_muc_tieu
+  missesCount?: number; // For bia_muc_tieu
+  score?: number; // For bia_giay (scored points)
+  maxScore?: number; // For bia_giay (targetShots * 10)
+  accuracy: number; // accuracy percentage (0 to 100)
+  notes?: string;
+  createdAt: any;
+}
+
 
 

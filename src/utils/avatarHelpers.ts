@@ -152,3 +152,34 @@ export const isTournamentEndedPast30Days = (endDateStr?: string, startDateStr?: 
   const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
   return (now.getTime() - dateObj.getTime()) > thirtyDaysInMs;
 };
+
+export const getLatestAvatar = (
+  name: string,
+  defaultAvatar: string,
+  systemAthletes: Athlete[],
+  clubs?: any[]
+): string => {
+  if (!name) return defaultAvatar;
+  const cleanName = name.trim().toLowerCase();
+  
+  // 1. Check in systemAthletes
+  if (systemAthletes && Array.isArray(systemAthletes)) {
+    const ath = systemAthletes.find(a => a && a.name && a.name.trim().toLowerCase() === cleanName);
+    if (ath && ath.avatarUrl) return ath.avatarUrl;
+  }
+
+  // 2. Check in clubs
+  if (clubs && Array.isArray(clubs)) {
+    const club = clubs.find(c => c && c.name && c.name.trim().toLowerCase() === cleanName);
+    if (club && (club.logoUrl || club.avatarUrl)) return club.logoUrl || club.avatarUrl;
+  }
+
+  // 3. Fallback to global window helper if present
+  if (typeof window !== "undefined" && (window as any).getVscSystemAthleteAvatar) {
+    const globalAv = (window as any).getVscSystemAthleteAvatar(name);
+    if (globalAv) return globalAv;
+  }
+
+  return defaultAvatar;
+};
+

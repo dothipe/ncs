@@ -183,5 +183,12 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isEmailVerified() && isValidId(challengeId);
     }
+
+    // --- VSC Training Sessions ---
+    match /vsc_training_sessions/{sessionId} {
+      allow read: if isEmailVerified() && resource.data.userId == request.auth.uid;
+      allow create, update: if isEmailVerified() && isValidId(sessionId) && request.resource.data.userId == request.auth.uid;
+      allow delete: if isEmailVerified() && isValidId(sessionId) && resource.data.userId == request.auth.uid;
+    }
   }
 }

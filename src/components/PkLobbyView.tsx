@@ -50,6 +50,7 @@ import {
   arrayRemove
 } from "firebase/firestore";
 import { subscribeToVscSystemAthletes, subscribeToVscSystemClubs, subscribeToTournamentsList } from "../lib/firebaseService";
+import { getLatestAvatar } from "../utils/avatarHelpers";
 
 interface PkLobbyViewProps {
   currentUser: any;
@@ -98,11 +99,12 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
 
   // Live "Modal nổ" popup notifications when someone joins the current user's challenge
   const isFirstLoadRef = useRef(true);
-  const notifiedRequestsRef = useRef<Set<string>>(new Set());
-  const [newApplicantNotification, setNewApplicantNotification] = useState<{ challenge: PKChallenge; applicant: any } | null>(null);
+  const prevActiveRequestsRef = useRef<Record<string, string[]>>({});
+  const [newApplicantNotification, setNewApplicantNotification] = useState<{ challenge: PKChallenge; applicants: any[] } | null>(null);
 
-  // Live "Modal nổ" rejection notifications when an application is declined or someone else is approved
-  const [rejectionNotification, setRejectionNotification] = useState<{ challengeTitle: string; challengerName: string } | null>(null);
+  // Live "Modal nổ" rejection and approval notifications
+  const [rejectionNotification, setRejectionNotification] = useState<{ items: { challengeTitle: string; challengerName: string }[] } | null>(null);
+  const [approvedNotification, setApprovedNotification] = useState<{ items: { challengeTitle: string; challengerName: string; challengeId: string }[] } | null>(null);
   const appliedChallengesRef = useRef<Record<string, { title: string; challengerName: string }>>({});
 
   // Club Hub modal state
@@ -501,6 +503,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
 
       // Check for new join requests to trigger "Modal nổ" for Challenger
       if (currentUser) {
+        const currentRequestsMap: Record<string, string[]> = {};
         list.forEach((challenge) => {
           if (
             challenge.challengerUid === currentUser.uid &&
@@ -508,20 +511,34 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
             challenge.joinRequests &&
             challenge.joinRequests.length > 0
           ) {
-            challenge.joinRequests.forEach((req) => {
-              const uniqueKey = `${challenge.id}-${req.uid}`;
-              if (isFirstLoadRef.current) {
-                notifiedRequestsRef.current.add(uniqueKey);
-              } else {
-                if (!notifiedRequestsRef.current.has(uniqueKey)) {
-                  notifiedRequestsRef.current.add(uniqueKey);
-                  // Trigger the Modal nổ!
-                  setNewApplicantNotification({ challenge, applicant: req });
-                }
-              }
-            });
+            currentRequestsMap[challenge.id] = challenge.joinRequests.map(r => r.uid);
           }
         });
+
+        if (!isFirstLoadRef.current) {
+          list.forEach((challenge) => {
+            if (
+              challenge.challengerUid === currentUser.uid &&
+              challenge.status === "open" &&
+              challenge.joinRequests &&
+              challenge.joinRequests.length > 0
+            ) {
+              const prevUids = prevActiveRequestsRef.current[challenge.id] || [];
+              const currentUids = currentRequestsMap[challenge.id] || [];
+              
+              // Did anyone NEW request? OR is any uid present now that wasn't in prevUids?
+              const hasNewRequest = currentUids.some(uid => !prevUids.includes(uid));
+              if (hasNewRequest) {
+                // Trigger modal with ALL current joinRequests for this challenge
+                setNewApplicantNotification({
+                  challenge,
+                  applicants: challenge.joinRequests
+                });
+              }
+            }
+          });
+        }
+        prevActiveRequestsRef.current = currentRequestsMap;
 
         // Real-time application rejection checking
         const prevApplied = { ...appliedChallengesRef.current };
@@ -540,6 +557,9 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         if (isFirstLoadRef.current) {
           appliedChallengesRef.current = currentlyApplied;
         } else {
+          const rejectionsThisTime: { challengeTitle: string; challengerName: string }[] = [];
+          const approvalsThisTime: { challengeTitle: string; challengerName: string; challengeId: string }[] = [];
+
           Object.entries(prevApplied).forEach(([challengeId, infoVal]) => {
             const info = infoVal as { title: string; challengerName: string };
             if (!currentlyApplied[challengeId]) {
@@ -547,28 +567,46 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
 
               if (!updatedChallenge) {
                 // Challenge deleted or cancelled
-                setRejectionNotification({
+                rejectionsThisTime.push({
                   challengeTitle: info.title,
                   challengerName: info.challengerName
                 });
               } else if (updatedChallenge.status === "accepted") {
                 // If it transitioned to accepted, check if currentUser was chosen
-                if (updatedChallenge.opponentUid !== currentUser.uid) {
+                if (updatedChallenge.opponentUid === currentUser.uid) {
+                  approvalsThisTime.push({
+                    challengeTitle: info.title,
+                    challengerName: info.challengerName,
+                    challengeId: updatedChallenge.id
+                  });
+                } else {
                   // Challenger chose someone else!
-                  setRejectionNotification({
+                  rejectionsThisTime.push({
                     challengeTitle: info.title,
                     challengerName: info.challengerName
                   });
                 }
               } else {
                 // Challenge still open but currentUser removed from requests (decline)
-                setRejectionNotification({
+                rejectionsThisTime.push({
                   challengeTitle: info.title,
                   challengerName: info.challengerName
                 });
               }
             }
           });
+
+          if (rejectionsThisTime.length > 0) {
+            setRejectionNotification(prev => ({
+              items: [...(prev?.items || []), ...rejectionsThisTime]
+            }));
+          }
+
+          if (approvalsThisTime.length > 0) {
+            setApprovedNotification(prev => ({
+              items: [...(prev?.items || []), ...approvalsThisTime]
+            }));
+          }
 
           appliedChallengesRef.current = currentlyApplied;
         }
@@ -3363,11 +3401,14 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                             className="flex flex-col items-center text-center w-5/12 focus:outline-none hover:text-rose-600 transition-colors cursor-pointer"
                           >
                             <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center shadow-sm">
-                              {challenge.challengerAvatar ? (
-                                <img src={challenge.challengerAvatar} alt={challenge.challengerName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                              ) : (
-                                <User className="w-5 h-5 text-gray-300" />
-                              )}
+                              {(() => {
+                                const resolvedChallengerAvatar = getLatestAvatar(challenge.challengerName, challenge.challengerAvatar || "", systemAthletes, systemClubs);
+                                return resolvedChallengerAvatar ? (
+                                  <img src={resolvedChallengerAvatar} alt={challenge.challengerName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                ) : (
+                                  <User className="w-5 h-5 text-gray-300" />
+                                );
+                              })()}
                             </div>
                             <span className="text-xs font-bold mt-2 truncate max-w-full">{challenge.challengerName}</span>
                             {challengerWin && (
@@ -3396,11 +3437,14 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                             className="flex flex-col items-center text-center w-5/12 focus:outline-none hover:text-rose-600 transition-colors cursor-pointer"
                           >
                             <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center shadow-sm">
-                              {challenge.opponentAvatar ? (
-                                <img src={challenge.opponentAvatar} alt={challenge.opponentName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                              ) : (
-                                <User className="w-5 h-5 text-gray-300" />
-                              )}
+                              {(() => {
+                                const resolvedOpponentAvatar = getLatestAvatar(challenge.opponentName || "", challenge.opponentAvatar || "", systemAthletes, systemClubs);
+                                return resolvedOpponentAvatar ? (
+                                  <img src={resolvedOpponentAvatar} alt={challenge.opponentName || "Opponent"} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                ) : (
+                                  <User className="w-5 h-5 text-gray-300" />
+                                );
+                              })()}
                             </div>
                             <span className="text-xs font-bold mt-2 truncate max-w-full">{challenge.opponentName || "Guest"}</span>
                             {opponentWin && (
@@ -5439,25 +5483,52 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
             <h3 className="font-black text-base uppercase text-rose-600 tracking-wide mb-1">
               ⚡ ĐÃ CÓ YÊU CẦU ỨNG TUYỂN MỚI!
             </h3>
-            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-4">
+            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-4 truncate">
               {newApplicantNotification.challenge.title}
             </p>
 
-            <div className="flex flex-col items-center bg-slate-50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/60 mb-5">
-              <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-rose-100 shrink-0 mb-2 shadow-sm bg-slate-100">
-                {newApplicantNotification.applicant.avatar ? (
-                  <img src={newApplicantNotification.applicant.avatar} alt={newApplicantNotification.applicant.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                ) : (
-                  <User className="w-6 h-6 text-gray-400 m-auto" />
-                )}
+            {newApplicantNotification.applicants.length > 1 ? (
+              <div className="max-h-48 overflow-y-auto space-y-2 mb-5 pr-1 text-left">
+                {newApplicantNotification.applicants.map((app: any, idx: number) => {
+                  const resolvedAvatar = getLatestAvatar(app.name, app.avatar, systemAthletes, systemClubs);
+                  return (
+                    <div key={idx} className="flex items-center gap-3 bg-slate-50 dark:bg-slate-950/40 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800/60">
+                      <div className="w-9 h-9 rounded-full overflow-hidden shrink-0 bg-slate-100 border border-rose-100 flex items-center justify-center">
+                        {resolvedAvatar ? (
+                          <img src={resolvedAvatar} alt={app.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <User className="w-4 h-4 text-gray-400" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-xs text-slate-900 dark:text-white truncate">{app.name}</div>
+                        <div className="text-[10px] text-rose-500 font-bold">{language === "en" ? "Wants to Join" : "Yêu cầu ứng tuyển"}</div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <span className="font-black text-sm text-slate-900 dark:text-white">
-                {newApplicantNotification.applicant.name}
-              </span>
-              <span className="text-[9px] font-bold text-slate-400 italic mt-0.5">
-                Vừa gửi yêu cầu nhận kèo thách đấu của bạn
-              </span>
-            </div>
+            ) : (
+              <div className="flex flex-col items-center bg-slate-50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/60 mb-5">
+                <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-rose-100 shrink-0 mb-2 shadow-sm bg-slate-100 flex items-center justify-center">
+                  {(() => {
+                    const firstApp = newApplicantNotification.applicants[0];
+                    const resolvedAvatar = firstApp ? getLatestAvatar(firstApp.name, firstApp.avatar, systemAthletes, systemClubs) : "";
+                    return resolvedAvatar ? (
+                      <img src={resolvedAvatar} alt={firstApp?.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <User className="w-6 h-6 text-gray-400" />
+                    );
+                  })()}
+                </div>
+                <span className="font-black text-sm text-slate-900 dark:text-white">
+                  {newApplicantNotification.applicants[0]?.name}
+                </span>
+                <span className="text-[9px] font-bold text-slate-400 italic mt-0.5">
+                  Vừa gửi yêu cầu nhận kèo thách đấu của bạn
+                </span>
+              </div>
+            )}
 
             <div className="flex gap-2 justify-center">
               <button
@@ -5498,20 +5569,42 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
             <h3 className="font-black text-base uppercase text-amber-600 tracking-wide mb-1">
               ⚡ KÈO ĐẤU BỊ TỪ CHỐI
             </h3>
-            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-4">
-              {rejectionNotification.challengeTitle}
-            </p>
+            {rejectionNotification.items ? (
+              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-4 truncate">
+                {rejectionNotification.items[0]?.challengeTitle}
+              </p>
+            ) : null}
 
-            <div className="flex flex-col items-center bg-slate-50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/60 mb-5">
-              <span className="font-black text-sm text-slate-900 dark:text-white">
-                {rejectionNotification.challengerName}
-              </span>
-              <span className="text-[10px] font-bold text-slate-500 text-center mt-2 leading-relaxed">
-                {language === "en" 
-                  ? "The challenger has declined your application or matched with another player for this challenge." 
-                  : "Chủ kèo đã từ chối yêu cầu ứng tuyển của bạn hoặc đã duyệt đối thủ khác."}
-              </span>
-            </div>
+            {rejectionNotification.items && rejectionNotification.items.length > 1 ? (
+              <div className="max-h-48 overflow-y-auto space-y-2 mb-5 pr-1 text-left">
+                {rejectionNotification.items.map((item, idx) => (
+                  <div key={idx} className="bg-slate-50 dark:bg-slate-950/40 p-3 rounded-xl border border-slate-100 dark:border-slate-800/60 flex flex-col">
+                    <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider truncate">
+                      {item.challengeTitle}
+                    </span>
+                    <span className="text-xs font-bold text-slate-900 dark:text-white mt-1">
+                      Chủ kèo: {item.challengerName}
+                    </span>
+                  </div>
+                ))}
+                <p className="text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/20 p-2.5 rounded-lg border border-amber-100 dark:border-amber-900 mt-2 text-center leading-normal">
+                  {language === "en"
+                    ? "These challenges have been cancelled or the challengers matched with other opponents."
+                    : "Các kèo đấu này đã bị hủy hoặc chủ kèo đã duyệt đối thủ khác."}
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center bg-slate-50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/60 mb-5">
+                <span className="font-black text-sm text-slate-900 dark:text-white">
+                  {rejectionNotification.items ? rejectionNotification.items[0]?.challengerName : ""}
+                </span>
+                <span className="text-[10px] font-bold text-slate-500 text-center mt-2 leading-relaxed">
+                  {language === "en" 
+                    ? "The challenger has declined your application or matched with another player for this challenge." 
+                    : "Chủ kèo đã từ chối yêu cầu ứng tuyển của bạn hoặc đã duyệt đối thủ khác."}
+                </span>
+              </div>
+            )}
 
             <div className="flex justify-center">
               <button
@@ -5520,6 +5613,71 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                 className="px-6 py-2.5 text-xs font-black bg-amber-500 hover:bg-amber-600 text-white rounded-xl transition-all shadow-md cursor-pointer flex items-center gap-1.5"
               >
                 <span>{language === "en" ? "Close" : "Đã hiểu"}</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Live Applicant "Modal nổ" Approval Notification */}
+      {approvedNotification && createPortal(
+        <div className="fixed inset-0 z-[10030] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-md w-full border border-emerald-100 dark:border-emerald-950/50 shadow-2xl text-slate-800 dark:text-slate-101 text-center animate-bounceIn relative overflow-hidden">
+            {/* Top flashing decoration */}
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-500 animate-pulse" />
+
+            <div className="w-16 h-16 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center mx-auto mb-4 border border-emerald-100 dark:border-emerald-900 shadow-sm animate-pulse">
+              <CheckCircle className="w-8 h-8" />
+            </div>
+
+            <h3 className="font-black text-base uppercase text-emerald-600 tracking-wide mb-1">
+              🎉 KÈO ĐẤU ĐÃ ĐƯỢC DUYỆT!
+            </h3>
+
+            {approvedNotification.items.length > 1 ? (
+              <div className="max-h-48 overflow-y-auto space-y-2 mb-5 pr-1 text-left">
+                {approvedNotification.items.map((item, idx) => (
+                  <div key={idx} className="bg-slate-50 dark:bg-slate-950/40 p-3 rounded-xl border border-slate-100 dark:border-slate-800/60 flex flex-col">
+                    <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider truncate">
+                      {item.challengeTitle}
+                    </span>
+                    <span className="text-xs font-bold text-slate-900 dark:text-white mt-1">
+                      Chủ kèo: {item.challengerName}
+                    </span>
+                  </div>
+                ))}
+                <p className="text-[10px] font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/20 p-2.5 rounded-lg border border-emerald-100 dark:border-emerald-900 mt-2 text-center leading-normal">
+                  {language === "en"
+                    ? "You have been approved! Please coordinate the match details."
+                    : "Bạn đã được phê duyệt làm đối thủ! Hãy liên hệ chủ kèo sắp xếp thời gian thi đấu nhé."}
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-4 truncate">
+                  {approvedNotification.items[0]?.challengeTitle}
+                </p>
+                <div className="flex flex-col items-center bg-slate-50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/60 mb-5">
+                  <span className="font-black text-sm text-slate-900 dark:text-white">
+                    {approvedNotification.items[0]?.challengerName}
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-600 text-center mt-2 leading-relaxed">
+                    {language === "en" 
+                      ? "Congratulations! The challenger has approved your application. Please connect to arrange the match time." 
+                      : "Chúc mừng! Chủ kèo đã phê duyệt yêu cầu của bạn. Hãy liên hệ và sắp xếp thời gian thi đấu."}
+                  </span>
+                </div>
+              </>
+            )}
+
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => setApprovedNotification(null)}
+                className="px-6 py-2.5 text-xs font-black bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+              >
+                <span>{language === "en" ? "Close" : "Tuyệt vời"}</span>
               </button>
             </div>
           </div>
