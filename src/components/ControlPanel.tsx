@@ -83,6 +83,34 @@ interface ControlPanelProps {
   onViewClubHub?: (club: SystemClub) => void;
 }
 
+const cleanFacebookUrlForEmbed = (url: string): string => {
+  if (!url) return "";
+  let clean = url.trim();
+
+  // Pattern 1: facebook.com/share/v/ID or facebook.com/share/r/ID
+  const shareVRRegex = /facebook\.com\/share\/[vr]\/([^/?#\s]+)/i;
+  const matchVR = clean.match(shareVRRegex);
+  if (matchVR && matchVR[1]) {
+    return `https://www.facebook.com/watch/?v=${matchVR[1]}`;
+  }
+
+  // Pattern 2: facebook.com/share/ID (without v or r)
+  const shareRegex = /facebook\.com\/share\/([^/?#\s]+)/i;
+  const matchShare = clean.match(shareRegex);
+  if (matchShare && matchShare[1]) {
+    return `https://www.facebook.com/watch/?v=${matchShare[1]}`;
+  }
+
+  // Pattern 3: fb.watch/ID
+  const fbWatchRegex = /fb\.watch\/([^/?#\s]+)/i;
+  const matchFbWatch = clean.match(fbWatchRegex);
+  if (matchFbWatch && matchFbWatch[1]) {
+    return `https://www.facebook.com/watch/?v=${matchFbWatch[1]}`;
+  }
+
+  return clean;
+};
+
 export const resolveTournamentType = (tour: TournamentData): "individual" | "team" | "combined" => {
   if (tour.tournamentType) return tour.tournamentType;
   if (tour.competitionMode === "team") return "team";
@@ -287,6 +315,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   const [videoChallengerUrl, setVideoChallengerUrl] = useState("");
   const [videoOpponentUrl, setVideoOpponentUrl] = useState("");
   const [videoSaving, setVideoSaving] = useState(false);
+
+  // Aspect ratio and collapse state for details modal
+  const [detailChallengerRatio, setDetailChallengerRatio] = useState<"9:16" | "16:9">("9:16");
+  const [detailOpponentRatio, setDetailOpponentRatio] = useState<"9:16" | "16:9">("9:16");
+  const [showDetailedVideos, setShowDetailedVideos] = useState(false);
 
   const openUpdateVideoModal = (challenge: PKChallenge) => {
     setVideoTargetChallenge(challenge);
@@ -4485,70 +4518,203 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 );
               })()}
 
-              {/* Videos and Proofs */}
-              <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                    <Video className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                    <span>{language === "en" ? "Match Video Streams / Proofs" : "Video Minh Chứng Trận Đấu"}</span>
-                  </span>
-                  {(currentUser?.uid === selectedDetailChallenge.challengerUid || currentUser?.uid === selectedDetailChallenge.opponentUid || isGlobalAdmin) && (
-                    <button
-                      type="button"
-                      onClick={() => openUpdateVideoModal(selectedDetailChallenge)}
-                      className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 px-2.5 py-1 rounded border border-emerald-200 dark:border-emerald-800 transition-colors"
-                    >
-                      {language === "en" ? "Edit Video 📹" : "Cập nhật Video 📹"}
-                    </button>
-                  )}
-                </div>
+              {/* Embedded Videos section with 15-day / empty-video collapse logic matching PkLobbyView */}
+              {(() => {
+                const isOlderThan15Days = (() => {
+                  const matchDateStr = selectedDetailChallenge.completedAt || selectedDetailChallenge.dateTime || selectedDetailChallenge.createdAt;
+                  if (!matchDateStr) return false;
+                  try {
+                    const matchTime = new Date(matchDateStr).getTime();
+                    const fifteenDaysInMs = 15 * 24 * 60 * 60 * 1000;
+                    return (Date.now() - matchTime) > fifteenDaysInMs;
+                  } catch (e) {
+                    return false;
+                  }
+                })();
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  {/* Challenger live/video */}
-                  <div className="bg-white dark:bg-slate-900 p-3 rounded-lg border border-slate-150 dark:border-slate-800">
-                    <div className="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider mb-1 truncate">
-                      {selectedDetailChallenge.challengerName}
+                const hasNoVideoAtAll = !selectedDetailChallenge.challengerLiveUrl && !selectedDetailChallenge.opponentLiveUrl;
+                const shouldCollapseVideos = isOlderThan15Days || hasNoVideoAtAll;
+
+                const getCollapseButtonText = () => {
+                  if (hasNoVideoAtAll) {
+                    return language === "en" 
+                      ? "Show Match Videos (No proof video links provided yet)" 
+                      : "Xem Video Trận Đấu (Cả 2 VĐV chưa cập nhật video minh chứng)";
+                  }
+                  return language === "en" 
+                    ? "Show Match Videos (Completed > 15 days ago)" 
+                    : "Xem Video Trận Đấu (Đã xong > 15 ngày)";
+                };
+
+                const renderVideosContent = () => (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Challenger Feed */}
+                    <div className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-gray-150 dark:border-slate-800 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-rose-800 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-100 dark:border-rose-900/50 px-2 py-0.5 rounded-md">
+                            {language === "en" ? "Challenger Feed" : "Kênh VĐV Thách Đấu"}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {/* Ratio Selector */}
+                            <div className="flex bg-gray-100 dark:bg-slate-800 p-0.5 rounded-md text-[9px] font-bold">
+                              <button
+                                type="button"
+                                onClick={() => setDetailChallengerRatio("9:16")}
+                                className={`px-1.5 py-0.5 rounded transition-all ${detailChallengerRatio === "9:16" ? "bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-3xs" : "text-gray-500 dark:text-slate-400"}`}
+                              >
+                                9:16
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDetailChallengerRatio("16:9")}
+                                className={`px-1.5 py-0.5 rounded transition-all ${detailChallengerRatio === "16:9" ? "bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-3xs" : "text-gray-500 dark:text-slate-400"}`}
+                              >
+                                16:9
+                              </button>
+                            </div>
+
+                            {selectedDetailChallenge.challengerLiveUrl && (
+                              <a 
+                                href={selectedDetailChallenge.challengerLiveUrl} 
+                                target="_blank" 
+                                rel="noreferrer" 
+                                className="text-[10px] text-blue-600 hover:text-blue-800 dark:text-blue-400 font-bold flex items-center"
+                              >
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                        <span className="block text-[11px] font-bold text-gray-700 dark:text-slate-200 mb-2 truncate">
+                          👤 {selectedDetailChallenge.challengerName}
+                        </span>
+
+                        {selectedDetailChallenge.challengerLiveUrl ? (
+                          <div className={`${detailChallengerRatio === "9:16" ? "aspect-[9/16]" : "aspect-video"} w-full bg-black rounded-lg overflow-hidden border border-gray-200 dark:border-slate-700 transition-all duration-300`}>
+                            <iframe 
+                              src={`https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(cleanFacebookUrlForEmbed(selectedDetailChallenge.challengerLiveUrl))}&show_text=0&width=560`}
+                              width="100%"
+                              height="100%"
+                              style={{ border: "none", overflow: "hidden" }}
+                              scrolling="no"
+                              frameBorder="0"
+                              allowFullScreen={true}
+                              allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+                            />
+                          </div>
+                        ) : (
+                          <div className="aspect-[9/16] w-full bg-gray-50 dark:bg-slate-800/40 rounded-lg border border-dashed border-gray-200 dark:border-slate-700 flex flex-col items-center justify-center text-center p-4">
+                            <Tv className="w-6 h-6 text-gray-300 dark:text-slate-600 mb-1" />
+                            <span className="text-[9px] text-gray-400 dark:text-slate-500 font-bold leading-tight block">
+                              {language === "en" ? "No video mapped" : "Chưa cấu hình video"}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    {selectedDetailChallenge.challengerLiveUrl ? (
-                      <a
-                        href={selectedDetailChallenge.challengerLiveUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 break-all"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-                        <span className="line-clamp-1">{selectedDetailChallenge.challengerLiveUrl}</span>
-                      </a>
+
+                    {/* Opponent Feed */}
+                    <div className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-gray-150 dark:border-slate-800 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-indigo-800 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 px-2 py-0.5 rounded-md">
+                            {language === "en" ? "Opponent Feed" : "Kênh VĐV Nhận Kèo"}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {/* Ratio Selector */}
+                            <div className="flex bg-gray-100 dark:bg-slate-800 p-0.5 rounded-md text-[9px] font-bold">
+                              <button
+                                type="button"
+                                onClick={() => setDetailOpponentRatio("9:16")}
+                                className={`px-1.5 py-0.5 rounded transition-all ${detailOpponentRatio === "9:16" ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-3xs" : "text-gray-500 dark:text-slate-400"}`}
+                              >
+                                9:16
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDetailOpponentRatio("16:9")}
+                                className={`px-1.5 py-0.5 rounded transition-all ${detailOpponentRatio === "16:9" ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-3xs" : "text-gray-500 dark:text-slate-400"}`}
+                              >
+                                16:9
+                              </button>
+                            </div>
+
+                            {selectedDetailChallenge.opponentLiveUrl && (
+                              <a 
+                                href={selectedDetailChallenge.opponentLiveUrl} 
+                                target="_blank" 
+                                rel="noreferrer" 
+                                className="text-[10px] text-blue-600 hover:text-blue-800 dark:text-blue-400 font-bold flex items-center"
+                              >
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                        <span className="block text-[11px] font-bold text-gray-700 dark:text-slate-200 mb-2 truncate">
+                          👤 {selectedDetailChallenge.opponentName || "Guest"}
+                        </span>
+
+                        {selectedDetailChallenge.opponentLiveUrl ? (
+                          <div className={`${detailOpponentRatio === "9:16" ? "aspect-[9/16]" : "aspect-video"} w-full bg-black rounded-lg overflow-hidden border border-gray-200 dark:border-slate-700 transition-all duration-300`}>
+                            <iframe 
+                              src={`https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(cleanFacebookUrlForEmbed(selectedDetailChallenge.opponentLiveUrl))}&show_text=0&width=560`}
+                              width="100%"
+                              height="100%"
+                              style={{ border: "none", overflow: "hidden" }}
+                              scrolling="no"
+                              frameBorder="0"
+                              allowFullScreen={true}
+                              allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+                            />
+                          </div>
+                        ) : (
+                          <div className="aspect-[9/16] w-full bg-gray-50 dark:bg-slate-800/40 rounded-lg border border-dashed border-gray-200 dark:border-slate-700 flex flex-col items-center justify-center text-center p-4">
+                            <Tv className="w-6 h-6 text-gray-300 dark:text-slate-600 mb-1" />
+                            <span className="text-[9px] text-gray-400 dark:text-slate-500 font-bold leading-tight block">
+                              {language === "en" ? "No video mapped" : "Chưa cấu hình video"}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+
+                return (
+                  <div className="mt-6 border-t border-gray-100 dark:border-slate-800 pt-5">
+                    {shouldCollapseVideos ? (
+                      <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden bg-gray-50/30 dark:bg-slate-900/40">
+                        <button
+                          type="button"
+                          onClick={() => setShowDetailedVideos(!showDetailedVideos)}
+                          className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100/80 dark:hover:bg-slate-750 text-xs font-bold text-gray-700 dark:text-slate-200 transition-colors cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Tv className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                            <span>{getCollapseButtonText()}</span>
+                          </div>
+                          <span className="text-gray-400 dark:text-slate-500">{showDetailedVideos ? "▲ Thu gọn" : "▼ Mở rộng"}</span>
+                        </button>
+                        {showDetailedVideos && (
+                          <div className="p-4 bg-white dark:bg-slate-900 border-t border-gray-150 dark:border-slate-800 space-y-4">
+                            {renderVideosContent()}
+                          </div>
+                        )}
+                      </div>
                     ) : (
-                      <span className="text-[11px] text-slate-400 italic">
-                        {language === "en" ? "No video link provided" : "Chưa cập nhật link video"}
-                      </span>
+                      <div className="border border-indigo-100 dark:border-indigo-900/40 bg-indigo-50/10 dark:bg-indigo-950/20 rounded-xl p-4 space-y-4">
+                        <h5 className="font-bold text-xs text-indigo-950 dark:text-indigo-300 uppercase tracking-wider flex items-center gap-2">
+                          <Tv className="w-4 h-4 text-indigo-600 dark:text-indigo-400 animate-pulse" />
+                          <span>{language === "en" ? "Match Replay Videos" : "Video Livestream & Minh Chứng Trận Đấu"}</span>
+                        </h5>
+                        {renderVideosContent()}
+                      </div>
                     )}
                   </div>
-
-                  {/* Opponent live/video */}
-                  <div className="bg-white dark:bg-slate-900 p-3 rounded-lg border border-slate-150 dark:border-slate-800">
-                    <div className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1 truncate">
-                      {selectedDetailChallenge.opponentName || "Đối thủ"}
-                    </div>
-                    {selectedDetailChallenge.opponentLiveUrl ? (
-                      <a
-                        href={selectedDetailChallenge.opponentLiveUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 break-all"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-                        <span className="line-clamp-1">{selectedDetailChallenge.opponentLiveUrl}</span>
-                      </a>
-                    ) : (
-                      <span className="text-[11px] text-slate-400 italic">
-                        {language === "en" ? "No video link provided" : "Chưa cập nhật link video"}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Referee email and system stats */}
               {selectedDetailChallenge.refereeEmail && (
