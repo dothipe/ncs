@@ -158,8 +158,11 @@ export interface PKChallenge {
   };
   refereeEmail?: string;
   createdAt: string;
+  completedAt?: string;
   pin?: string;
   opponentAthleteId?: string;
+  challengerLiveUrl?: string;
+  opponentLiveUrl?: string;
   joinRequests?: {
     uid: string;
     name: string;

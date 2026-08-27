@@ -28,7 +28,9 @@ import {
   Eye,
   Lock,
   Key,
-  UserCheck
+  UserCheck,
+  Tv,
+  ExternalLink
 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import { PKChallenge, Athlete, SystemClub } from "../types";
@@ -51,6 +53,35 @@ import {
 } from "firebase/firestore";
 import { subscribeToVscSystemAthletes, subscribeToVscSystemClubs, subscribeToTournamentsList } from "../lib/firebaseService";
 import { getLatestAvatar } from "../utils/avatarHelpers";
+
+// Helper function to convert Facebook short share/video links to standard formats
+const cleanFacebookUrlForEmbed = (url: string): string => {
+  if (!url) return "";
+  let clean = url.trim();
+
+  // Pattern 1: facebook.com/share/v/ID or facebook.com/share/r/ID
+  const shareVRRegex = /facebook\.com\/share\/[vr]\/([^/?#\s]+)/i;
+  const matchVR = clean.match(shareVRRegex);
+  if (matchVR && matchVR[1]) {
+    return `https://www.facebook.com/watch/?v=${matchVR[1]}`;
+  }
+
+  // Pattern 2: facebook.com/share/ID (without v or r)
+  const shareRegex = /facebook\.com\/share\/([^/?#\s]+)/i;
+  const matchShare = clean.match(shareRegex);
+  if (matchShare && matchShare[1]) {
+    return `https://www.facebook.com/watch/?v=${matchShare[1]}`;
+  }
+
+  // Pattern 3: fb.watch/ID
+  const fbWatchRegex = /fb\.watch\/([^/?#\s]+)/i;
+  const matchFbWatch = clean.match(fbWatchRegex);
+  if (matchFbWatch && matchFbWatch[1]) {
+    return `https://www.facebook.com/watch/?v=${matchFbWatch[1]}`;
+  }
+
+  return clean;
+};
 
 interface PkLobbyViewProps {
   currentUser: any;
@@ -252,6 +283,29 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
   const [editDesignatedOpponentAthleteId, setEditDesignatedOpponentAthleteId] = useState("");
   const [editDesignatedOpponentClubId, setEditDesignatedOpponentClubId] = useState("");
   const [editPin, setEditPin] = useState("");
+
+  // Live URL inputs and states
+  const [formChallengerLiveUrl, setFormChallengerLiveUrl] = useState("");
+  const [editChallengerLiveUrl, setEditChallengerLiveUrl] = useState("");
+  const [editOpponentLiveUrl, setEditOpponentLiveUrl] = useState("");
+  const [challengerUrlInput, setChallengerUrlInput] = useState("");
+  const [opponentUrlInput, setOpponentUrlInput] = useState("");
+
+  // Aspect ratio selectors for active Arena
+  const [challengerRatio, setChallengerRatio] = useState<"9:16" | "16:9">("9:16");
+  const [opponentRatio, setOpponentRatio] = useState<"9:16" | "16:9">("9:16");
+
+  // Aspect ratio selectors for details modal
+  const [detailChallengerRatio, setDetailChallengerRatio] = useState<"9:16" | "16:9">("9:16");
+  const [detailOpponentRatio, setDetailOpponentRatio] = useState<"9:16" | "16:9">("9:16");
+
+  // State variables for direct video link update popup in HISTORY tab
+  const [updatingVideoChallenge, setUpdatingVideoChallenge] = useState<PKChallenge | null>(null);
+  const [tempChallengerUrl, setTempChallengerUrl] = useState("");
+  const [tempOpponentUrl, setTempOpponentUrl] = useState("");
+
+  // Control collapse state for videos older than 15 days in details modal
+  const [showDetailedVideos, setShowDetailedVideos] = useState(false);
 
   // Opponent/Referee search & suggestion states
   const [formOpponentSearch, setFormOpponentSearch] = useState("");
@@ -728,11 +782,17 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
     setOpponentScoresInput([]);
     setChallengerShotsInput([]);
     setOpponentShotsInput([]);
+    setChallengerUrlInput(activeArenaChallenge?.challengerLiveUrl || "");
+    setOpponentUrlInput(activeArenaChallenge?.opponentLiveUrl || "");
   }, [activeArenaChallenge?.id]);
 
   // Sync arena input score states with the active arena data in real-time
   useEffect(() => {
     if (!activeArenaChallenge) return;
+
+    // Sync live URLs
+    setChallengerUrlInput(activeArenaChallenge.challengerLiveUrl || "");
+    setOpponentUrlInput(activeArenaChallenge.opponentLiveUrl || "");
 
     const scores = activeArenaChallenge.scores;
     const finalSetsCount = scores?.challengerScores?.length || activeArenaChallenge.setsCount || 3;
@@ -1034,6 +1094,8 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         winMechanism: formWinMechanism,
         targetType: formTargetType,
         targetTouchShots: Number(formTargetTouchShots) || 30,
+        challengerLiveUrl: formChallengerLiveUrl.trim() || "",
+        opponentLiveUrl: ""
       };
 
       if (formPin.trim()) {
@@ -1097,6 +1159,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
       setFormDesignateOpponent(false);
       setFormDesignatedOpponentAthleteId("");
       setFormDesignatedOpponentClubId("");
+      setFormChallengerLiveUrl("");
       setIsCreateModalOpen(false);
 
       alert(language === "en" 
@@ -1357,6 +1420,8 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
     setEditWinMechanism(challenge.winMechanism || "by_sets");
     setEditTargetType(challenge.targetType || "bia_muc_tieu");
     setEditTargetTouchShots(challenge.targetTouchShots || 30);
+    setEditChallengerLiveUrl(challenge.challengerLiveUrl || "");
+    setEditOpponentLiveUrl(challenge.opponentLiveUrl || "");
 
     setEditType(challenge.type || "solo_1v1");
     setEditTeamSize(challenge.teamSize || 3);
@@ -1469,7 +1534,9 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         type: editType,
         challengerName: creatorName,
         challengerAvatar: creatorAvatar,
-        pin: editPin.trim() || ""
+        pin: editPin.trim() || "",
+        challengerLiveUrl: editChallengerLiveUrl.trim(),
+        opponentLiveUrl: editOpponentLiveUrl.trim()
       };
 
       if (editType === "team_vs_team") {
@@ -1588,6 +1655,56 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
     } catch (err) {
       console.error("Error updating challenge settings:", err);
       alert("Lỗi khi cập nhật cài đặt: " + (err as Error).message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Update Livestream/Video link for an active match
+  const handleUpdateLiveUrl = async (role: "challenger" | "opponent", url: string) => {
+    if (!activeArenaChallenge) return;
+    try {
+      const challengeRef = doc(db, "vsc_pk_challenges", activeArenaChallenge.id);
+      const updateData: any = {};
+      if (role === "challenger") {
+        updateData.challengerLiveUrl = url.trim();
+      } else {
+        updateData.opponentLiveUrl = url.trim();
+      }
+      await updateDoc(challengeRef, updateData);
+      
+      // Update local state so UI reacts immediately
+      setActiveArenaChallenge(prev => prev ? { ...prev, ...updateData } : null);
+      
+      alert(language === "en" ? "Livestream link updated successfully!" : "Cập nhật link Livestream thành công!");
+    } catch (err) {
+      console.error("Error updating livestream link:", err);
+      alert("Lỗi cập nhật link livestream: " + (err as Error).message);
+    }
+  };
+
+  // Open direct video link update popup in HISTORY tab
+  const openUpdateVideoModal = (challenge: PKChallenge) => {
+    setUpdatingVideoChallenge(challenge);
+    setTempChallengerUrl(challenge.challengerLiveUrl || "");
+    setTempOpponentUrl(challenge.opponentLiveUrl || "");
+  };
+
+  // Save the updated video urls for a historical challenge match
+  const handleSaveVideoUrls = async () => {
+    if (!updatingVideoChallenge) return;
+    setActionLoading(true);
+    try {
+      const challengeRef = doc(db, "vsc_pk_challenges", updatingVideoChallenge.id);
+      await updateDoc(challengeRef, {
+        challengerLiveUrl: tempChallengerUrl.trim(),
+        opponentLiveUrl: tempOpponentUrl.trim()
+      });
+      alert(language === "en" ? "Match video links updated successfully!" : "Cập nhật link video minh chứng thành công!");
+      setUpdatingVideoChallenge(null);
+    } catch (err) {
+      console.error("Error saving historical video urls:", err);
+      alert("Lỗi khi cập nhật video: " + (err as Error).message);
     } finally {
       setActionLoading(false);
     }
@@ -1946,10 +2063,15 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
       const bothConfirmed = updatedScores.challengerConfirm && updatedScores.opponentConfirm;
       const newStatus = (bothConfirmed || isRefConfirm) ? "completed" : "ongoing";
 
-      await updateDoc(challengeRef, {
+      const updates: any = {
         status: newStatus,
         scores: updatedScores
-      });
+      };
+      if (newStatus === "completed") {
+        updates.completedAt = new Date().toISOString();
+      }
+
+      await updateDoc(challengeRef, updates);
 
       alert(language === "en" 
         ? "Scoreboard updated successfully!" 
@@ -1973,7 +2095,17 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
   const filteredChallenges = useMemo(() => {
     return challenges.filter((c) => {
       // Filter tab
-      if (activeSubTab === "lobby" && c.status === "completed") return false;
+      if (activeSubTab === "lobby" && c.status === "completed") {
+        if (c.completedAt) {
+          const compTime = new Date(c.completedAt).getTime();
+          const diffHours = (Date.now() - compTime) / (1000 * 60 * 60);
+          if (diffHours >= 6) {
+            return false;
+          }
+        } else {
+          return false;
+        }
+      }
       if (activeSubTab === "history" && c.status !== "completed") return false;
 
       // Filter input search query
@@ -2297,6 +2429,211 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                 </div>
               </div>
 
+            </div>
+
+            {/* ========================================================= */}
+            {/* 📺 BATTLE LIVESTREAM & REPLAY INTEGRATION                 */}
+            {/* ========================================================= */}
+            <div className="p-6 border-t border-gray-100 bg-slate-50/50">
+              <h4 className="text-sm font-bold text-gray-800 uppercase tracking-wider text-center mb-5 flex items-center justify-center gap-2">
+                <Tv className="w-4 h-4 text-rose-500" />
+                <span>{language === "en" ? "Arena Livestream & Battle VoD" : "Livestream Trực Tiếp & Video Minh Chứng"}</span>
+              </h4>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto mb-4">
+                {/* Challenger Feed Player Card */}
+                <div className="bg-white p-4 rounded-xl border border-gray-150 shadow-3xs flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-rose-800 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md">
+                        {language === "en" ? "Challenger Feed" : "Kênh VĐV Thách Đấu"}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {/* Ratio Switcher */}
+                        <div className="flex bg-gray-100 p-0.5 rounded-md text-[9px] font-bold">
+                          <button
+                            type="button"
+                            onClick={() => setChallengerRatio("9:16")}
+                            className={`px-1.5 py-0.5 rounded transition-all ${challengerRatio === "9:16" ? "bg-white text-rose-600 shadow-3xs" : "text-gray-500"}`}
+                          >
+                            9:16
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setChallengerRatio("16:9")}
+                            className={`px-1.5 py-0.5 rounded transition-all ${challengerRatio === "16:9" ? "bg-white text-rose-600 shadow-3xs" : "text-gray-500"}`}
+                          >
+                            16:9
+                          </button>
+                        </div>
+
+                        {activeArenaChallenge.challengerLiveUrl && (
+                          <a 
+                            href={activeArenaChallenge.challengerLiveUrl} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            className="text-[10px] text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1"
+                          >
+                            <span>{language === "en" ? "External" : "Xem trên FB"}</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                    <span className="block text-xs font-bold text-gray-800 mb-2 truncate">
+                      👤 {activeArenaChallenge.challengerName}
+                    </span>
+
+                    {activeArenaChallenge.challengerLiveUrl ? (
+                      <div className={`${challengerRatio === "9:16" ? "aspect-[9/16] max-w-[240px] mx-auto" : "aspect-video"} w-full bg-black rounded-lg overflow-hidden border border-gray-200 transition-all duration-300`}>
+                        <iframe 
+                          src={`https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(cleanFacebookUrlForEmbed(activeArenaChallenge.challengerLiveUrl))}&show_text=0&width=560`}
+                          width="100%"
+                          height="100%"
+                          style={{ border: "none", overflow: "hidden" }}
+                          scrolling="no"
+                          frameBorder="0"
+                          allowFullScreen={true}
+                          allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+                        />
+                      </div>
+                    ) : (
+                      <div className="aspect-[9/16] max-w-[240px] mx-auto w-full bg-gray-50 rounded-lg border border-dashed border-gray-200 flex flex-col items-center justify-center text-center p-4">
+                        <Tv className="w-8 h-8 text-gray-300 mb-2 animate-pulse" />
+                        <span className="text-[10px] text-gray-400 font-bold block max-w-[180px]">
+                          {language === "en" ? "No livestream feed URL mapped yet" : "Chưa cấu hình Link Livestream / Video"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Challenger Live URL Modifier Section */}
+                  {(isChallengerOfMatch || isRefereeOfMatch) && (
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                        {language === "en" ? "Update Challenger Link" : "Cập nhật Link Thách Đấu"}
+                      </label>
+                      <div className="flex gap-2">
+                        <input 
+                          type="text"
+                          placeholder={language === "en" ? "Paste public Facebook Video/Live URL..." : "Dán link video/live Facebook công khai..."}
+                          value={challengerUrlInput}
+                          onChange={(e) => setChallengerUrlInput(e.target.value)}
+                          className="flex-1 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-rose-500 focus:bg-white transition-all"
+                        />
+                        <button 
+                          type="button"
+                          onClick={() => handleUpdateLiveUrl("challenger", challengerUrlInput)}
+                          className="bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer shrink-0 shadow-3xs"
+                        >
+                          {language === "en" ? "Save" : "Cập Nhật"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Opponent Feed Player Card */}
+                <div className="bg-white p-4 rounded-xl border border-gray-150 shadow-3xs flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-indigo-800 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md">
+                        {language === "en" ? "Opponent Feed" : "Kênh VĐV Nhận Kèo"}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {/* Ratio Switcher */}
+                        <div className="flex bg-gray-100 p-0.5 rounded-md text-[9px] font-bold">
+                          <button
+                            type="button"
+                            onClick={() => setOpponentRatio("9:16")}
+                            className={`px-1.5 py-0.5 rounded transition-all ${opponentRatio === "9:16" ? "bg-white text-indigo-600 shadow-3xs" : "text-gray-500"}`}
+                          >
+                            9:16
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setOpponentRatio("16:9")}
+                            className={`px-1.5 py-0.5 rounded transition-all ${opponentRatio === "16:9" ? "bg-white text-indigo-600 shadow-3xs" : "text-gray-500"}`}
+                          >
+                            16:9
+                          </button>
+                        </div>
+
+                        {activeArenaChallenge.opponentLiveUrl && (
+                          <a 
+                            href={activeArenaChallenge.opponentLiveUrl} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            className="text-[10px] text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1"
+                          >
+                            <span>{language === "en" ? "External" : "Xem trên FB"}</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                    <span className="block text-xs font-bold text-gray-800 mb-2 truncate">
+                      👤 {activeArenaChallenge.opponentName || (language === "en" ? "Awaiting Guest..." : "Đang chờ đối...")}
+                    </span>
+
+                    {activeArenaChallenge.opponentLiveUrl ? (
+                      <div className={`${opponentRatio === "9:16" ? "aspect-[9/16] max-w-[240px] mx-auto" : "aspect-video"} w-full bg-black rounded-lg overflow-hidden border border-gray-200 transition-all duration-300`}>
+                        <iframe 
+                          src={`https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(cleanFacebookUrlForEmbed(activeArenaChallenge.opponentLiveUrl))}&show_text=0&width=560`}
+                          width="100%"
+                          height="100%"
+                          style={{ border: "none", overflow: "hidden" }}
+                          scrolling="no"
+                          frameBorder="0"
+                          allowFullScreen={true}
+                          allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+                        />
+                      </div>
+                    ) : (
+                      <div className="aspect-[9/16] max-w-[240px] mx-auto w-full bg-gray-50 rounded-lg border border-dashed border-gray-200 flex flex-col items-center justify-center text-center p-4">
+                        <Tv className="w-8 h-8 text-gray-300 mb-2 animate-pulse" />
+                        <span className="text-[10px] text-gray-400 font-bold block max-w-[180px]">
+                          {language === "en" ? "No livestream feed URL mapped yet" : "Chưa cấu hình Link Livestream / Video"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Opponent Live URL Modifier Section */}
+                  {(isOpponentOfMatch || isRefereeOfMatch) && (
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                        {language === "en" ? "Update Opponent Link" : "Cập nhật Link Nhận Kèo"}
+                      </label>
+                      <div className="flex gap-2">
+                        <input 
+                          type="text"
+                          placeholder={language === "en" ? "Paste public Facebook Video/Live URL..." : "Dán link video/live Facebook công khai..."}
+                          value={opponentUrlInput}
+                          onChange={(e) => setOpponentUrlInput(e.target.value)}
+                          className="flex-1 px-3 py-1.5 bg-gray-55 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white transition-all"
+                        />
+                        <button 
+                          type="button"
+                          onClick={() => handleUpdateLiveUrl("opponent", opponentUrlInput)}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer shrink-0 shadow-3xs"
+                        >
+                          {language === "en" ? "Save" : "Cập Nhật"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-amber-50/60 rounded-xl p-3 border border-amber-100 max-w-2xl mx-auto flex gap-2">
+                <Clock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <span className="text-[10px] text-amber-900 leading-relaxed font-medium">
+                  {language === "en" 
+                    ? "VĐV can assign and update their Facebook Livestream or Post-match VoD video anytime. Spectators can follow matches and reviews directly on the PK arena. Matches persist on the arena 6 hours post-completion for review." 
+                    : "Hội viên có thể gán & cập nhật link Livestream Facebook trực tiếp lúc đang bắn hoặc gán video lưu trữ sau thi đấu làm minh chứng. Khán giả xem trực tiếp & xem lại VoD ngay tại Khán Đài PK. Trận đấu hoàn thành sẽ lưu lại 6 giờ để cập nhật video minh chứng."}
+                </span>
+              </div>
             </div>
 
             {/* Scoreboard Editor Card */}
@@ -2778,12 +3115,16 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                                 ? "bg-rose-50 text-rose-600 border border-rose-100 animate-pulse"
                                 : challenge.status === "accepted"
                                 ? "bg-blue-50 text-blue-600 border border-blue-100"
+                                : challenge.status === "completed"
+                                ? "bg-green-50 text-green-700 border border-green-150"
                                 : "bg-amber-50 text-amber-600 border border-amber-100"
                             }`}>
                               {challenge.status === "open" 
                                 ? (language === "en" ? "Awaiting Guest" : "Tìm đối thủ 🔍") 
                                 : challenge.status === "accepted"
                                 ? (language === "en" ? "Matched / Pending Arena" : "Đã nhận kèo 🤝")
+                                : challenge.status === "completed"
+                                ? (language === "en" ? "Finished (VoD)" : "Đã hoàn thành 🏁")
                                 : (language === "en" ? "Ongoing Battle" : "Đang thi đấu ⚔️")
                               }
                             </span>
@@ -3461,6 +3802,20 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                           <span className="font-medium text-gray-600">{language === "en" ? "Location: " : "Địa điểm: "}</span>{challenge.location}
                         </div>
                         <div className="flex items-center gap-2">
+                          {(() => {
+                            const isChallenger = currentUser?.uid === challenge.challengerUid;
+                            const isOpponent = currentUser?.uid === challenge.opponentUid;
+                            const canUpdate = isChallenger || isOpponent;
+                            return canUpdate && (
+                              <button
+                                type="button"
+                                onClick={() => openUpdateVideoModal(challenge)}
+                                className="text-xs font-bold text-emerald-700 hover:text-emerald-900 transition-colors cursor-pointer bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded border border-emerald-200"
+                              >
+                                {language === "en" ? "Update Video 📹" : "Cập nhật Video 📹"}
+                              </button>
+                            );
+                          })()}
                           <button
                             type="button"
                             onClick={() => setSelectedDetailChallenge(challenge)}
@@ -4013,7 +4368,22 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                   placeholder="vd: Kèo bia giao lưu trà đá chia tiền sân vui vẻ..."
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                  className="w-full px-4 py-2.5 bg-gray-55 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                />
+              </div>
+
+              {/* Optional Challenger Livestream/Video link */}
+              <div className="border-t border-gray-100 pt-4">
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span>{language === "en" ? "Challenger Live/Video URL (Optional)" : "Đường dẫn Livestream / Video Thách Đấu (Không bắt buộc)"}</span>
+                  <span className="text-[10px] text-gray-400 normal-case font-medium">{language === "en" ? "Optional" : "Tùy chọn"}</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="https://facebook.com/..."
+                  value={formChallengerLiveUrl}
+                  onChange={(e) => setFormChallengerLiveUrl(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-gray-55 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
                 />
               </div>
 
@@ -4563,6 +4933,35 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                 />
               </div>
 
+              {/* Livestream & Video URLs (Edit) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-gray-100 pt-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                    {language === "en" ? "Challenger Live/Video URL" : "Link Live/Video Thách Đấu"}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="https://facebook.com/..."
+                    value={editChallengerLiveUrl}
+                    onChange={(e) => setEditChallengerLiveUrl(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-gray-55 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                    {language === "en" ? "Opponent Live/Video URL" : "Link Live/Video Nhận Kèo"}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="https://facebook.com/..."
+                    value={editOpponentLiveUrl}
+                    onChange={(e) => setEditOpponentLiveUrl(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-gray-55 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  />
+                </div>
+              </div>
+
               {/* Buttons */}
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
                 <button
@@ -5052,6 +5451,186 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                         })}
                       </div>
                     </div>
+
+                    {/* Embedded Videos section */}
+                    {(() => {
+                      const isOlderThan15Days = (() => {
+                        const matchDateStr = selectedDetailChallenge.completedAt || selectedDetailChallenge.dateTime || selectedDetailChallenge.createdAt;
+                        if (!matchDateStr) return false;
+                        const matchTime = new Date(matchDateStr).getTime();
+                        const fifteenDaysInMs = 15 * 24 * 60 * 60 * 1000;
+                        return (Date.now() - matchTime) > fifteenDaysInMs;
+                      })();
+
+                      const renderVideosContent = () => (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {/* Challenger Feed */}
+                          <div className="bg-white p-3.5 rounded-xl border border-gray-150 flex flex-col justify-between">
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-[10px] font-black uppercase tracking-wider text-rose-800 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md">
+                                  {language === "en" ? "Challenger Feed" : "Kênh VĐV Thách Đấu"}
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  {/* Ratio Selector */}
+                                  <div className="flex bg-gray-100 p-0.5 rounded-md text-[9px] font-bold">
+                                    <button
+                                      type="button"
+                                      onClick={() => setDetailChallengerRatio("9:16")}
+                                      className={`px-1.5 py-0.5 rounded transition-all ${detailChallengerRatio === "9:16" ? "bg-white text-rose-600 shadow-3xs" : "text-gray-500"}`}
+                                    >
+                                      9:16
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setDetailChallengerRatio("16:9")}
+                                      className={`px-1.5 py-0.5 rounded transition-all ${detailChallengerRatio === "16:9" ? "bg-white text-rose-600 shadow-3xs" : "text-gray-500"}`}
+                                    >
+                                      16:9
+                                    </button>
+                                  </div>
+
+                                  {selectedDetailChallenge.challengerLiveUrl && (
+                                    <a 
+                                      href={selectedDetailChallenge.challengerLiveUrl} 
+                                      target="_blank" 
+                                      rel="noreferrer" 
+                                      className="text-[10px] text-blue-600 hover:text-blue-850 font-bold flex items-center"
+                                    >
+                                      <ExternalLink className="w-2.5 h-2.5" />
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                              <span className="block text-[11px] font-bold text-gray-750 mb-2 truncate">
+                                👤 {selectedDetailChallenge.challengerName}
+                              </span>
+
+                              {selectedDetailChallenge.challengerLiveUrl ? (
+                                <div className={`${detailChallengerRatio === "9:16" ? "aspect-[9/16] max-w-[200px] mx-auto" : "aspect-video"} w-full bg-black rounded-lg overflow-hidden border border-gray-200 transition-all duration-300`}>
+                                  <iframe 
+                                    src={`https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(cleanFacebookUrlForEmbed(selectedDetailChallenge.challengerLiveUrl))}&show_text=0&width=560`}
+                                    width="100%"
+                                    height="100%"
+                                    style={{ border: "none", overflow: "hidden" }}
+                                    scrolling="no"
+                                    frameBorder="0"
+                                    allowFullScreen={true}
+                                    allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+                                  />
+                                </div>
+                              ) : (
+                                <div className="aspect-[9/16] max-w-[200px] mx-auto w-full bg-gray-50 rounded-lg border border-dashed border-gray-200 flex flex-col items-center justify-center text-center p-4">
+                                  <Tv className="w-6 h-6 text-gray-300 mb-1" />
+                                  <span className="text-[9px] text-gray-400 font-bold leading-tight block">
+                                    {language === "en" ? "No video mapped" : "Chưa cấu hình video"}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Opponent Feed */}
+                          <div className="bg-white p-3.5 rounded-xl border border-gray-150 flex flex-col justify-between">
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-[10px] font-black uppercase tracking-wider text-indigo-800 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md">
+                                  {language === "en" ? "Opponent Feed" : "Kênh VĐV Nhận Kèo"}
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  {/* Ratio Selector */}
+                                  <div className="flex bg-gray-100 p-0.5 rounded-md text-[9px] font-bold">
+                                    <button
+                                      type="button"
+                                      onClick={() => setDetailOpponentRatio("9:16")}
+                                      className={`px-1.5 py-0.5 rounded transition-all ${detailOpponentRatio === "9:16" ? "bg-white text-indigo-650 shadow-3xs" : "text-gray-500"}`}
+                                    >
+                                      9:16
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setDetailOpponentRatio("16:9")}
+                                      className={`px-1.5 py-0.5 rounded transition-all ${detailOpponentRatio === "16:9" ? "bg-white text-indigo-650 shadow-3xs" : "text-gray-500"}`}
+                                    >
+                                      16:9
+                                    </button>
+                                  </div>
+
+                                  {selectedDetailChallenge.opponentLiveUrl && (
+                                    <a 
+                                      href={selectedDetailChallenge.opponentLiveUrl} 
+                                      target="_blank" 
+                                      rel="noreferrer" 
+                                      className="text-[10px] text-blue-600 hover:text-blue-850 font-bold flex items-center"
+                                    >
+                                      <ExternalLink className="w-2.5 h-2.5" />
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                              <span className="block text-[11px] font-bold text-gray-750 mb-2 truncate">
+                                👤 {selectedDetailChallenge.opponentName || "Guest"}
+                              </span>
+
+                              {selectedDetailChallenge.opponentLiveUrl ? (
+                                <div className={`${detailOpponentRatio === "9:16" ? "aspect-[9/16] max-w-[200px] mx-auto" : "aspect-video"} w-full bg-black rounded-lg overflow-hidden border border-gray-200 transition-all duration-300`}>
+                                  <iframe 
+                                    src={`https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(cleanFacebookUrlForEmbed(selectedDetailChallenge.opponentLiveUrl))}&show_text=0&width=560`}
+                                    width="100%"
+                                    height="100%"
+                                    style={{ border: "none", overflow: "hidden" }}
+                                    scrolling="no"
+                                    frameBorder="0"
+                                    allowFullScreen={true}
+                                    allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+                                  />
+                                </div>
+                              ) : (
+                                <div className="aspect-[9/16] max-w-[200px] mx-auto w-full bg-gray-50 rounded-lg border border-dashed border-gray-200 flex flex-col items-center justify-center text-center p-4">
+                                  <Tv className="w-6 h-6 text-gray-300 mb-1" />
+                                  <span className="text-[9px] text-gray-400 font-bold leading-tight block">
+                                    {language === "en" ? "No video mapped" : "Chưa cấu hình video"}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+
+                      return (
+                        <div className="mt-6 border-t border-gray-100 pt-5">
+                          {isOlderThan15Days ? (
+                            <div className="border border-gray-200 rounded-xl overflow-hidden bg-gray-50/30">
+                              <button
+                                type="button"
+                                onClick={() => setShowDetailedVideos(!showDetailedVideos)}
+                                className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100/80 text-xs font-bold text-gray-750 transition-colors cursor-pointer"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <Tv className="w-4 h-4 text-indigo-650" />
+                                  <span>{language === "en" ? "Show Match Videos (Completed > 15 days ago)" : "Xem Video Trận Đấu (Đã xong > 15 ngày)"}</span>
+                                </div>
+                                <span className="text-gray-400">{showDetailedVideos ? "▲ Thu gọn" : "▼ Mở rộng"}</span>
+                              </button>
+                              {showDetailedVideos && (
+                                <div className="p-4 bg-white border-t border-gray-150 space-y-4">
+                                  {renderVideosContent()}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="border border-indigo-100 bg-indigo-50/10 rounded-xl p-4 space-y-4">
+                              <h5 className="font-bold text-xs text-indigo-950 uppercase tracking-wider flex items-center gap-2">
+                                <Tv className="w-4 h-4 text-indigo-600 animate-pulse" />
+                                <span>{language === "en" ? "Match Replay Videos" : "Video Livestream & Minh Chứng Trận Đấu"}</span>
+                              </h5>
+                              {renderVideosContent()}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </>
                 );
               })()}
@@ -5079,6 +5658,106 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         </div>,
         document.body
        )}
+
+      {/* ========================================================= */}
+      {/* 📹 UPDATE HISTORICAL MATCH VIDEO LINKS MODAL              */}
+      {/* ========================================================= */}
+      {updatingVideoChallenge !== null && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[99999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden border border-gray-150 relative flex flex-col"
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-700 px-6 py-4 flex items-center justify-between text-white">
+              <div className="flex items-center gap-2">
+                <Tv className="w-5 h-5 text-emerald-100 animate-pulse" />
+                <h3 className="text-xs font-bold uppercase tracking-wider">
+                  {language === "en" ? "Update Match Proof Videos" : "Cập nhật Video Minh Chứng Kèo PK"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUpdatingVideoChallenge(null)}
+                className="text-white hover:text-emerald-100 font-extrabold text-sm focus:outline-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div className="p-6 space-y-4">
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-gray-100">
+                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                  {language === "en" ? "Selected Match" : "Kèo đấu đang chọn"}
+                </span>
+                <span className="text-xs font-bold text-gray-800">
+                  {updatingVideoChallenge.title}
+                </span>
+                <span className="block text-[10px] text-gray-500 mt-1">
+                  📅 {updatingVideoChallenge.dateTime || updatingVideoChallenge.createdAt} | 📍 {updatingVideoChallenge.location}
+                </span>
+              </div>
+
+              {/* Challenger Feed Input */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-rose-800 uppercase tracking-wide">
+                  👤 {updatingVideoChallenge.challengerName} ({language === "en" ? "Challenger Video Link" : "Link Video Người Thách Đấu"})
+                </label>
+                <input
+                  type="text"
+                  placeholder="https://www.facebook.com/..."
+                  value={tempChallengerUrl}
+                  onChange={(e) => setTempChallengerUrl(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                />
+                <p className="text-[10px] text-gray-400">
+                  {language === "en" ? "Provide any public Facebook video/live stream URL." : "Hỗ trợ dán link video Facebook hoặc livestream chia sẻ."}
+                </p>
+              </div>
+
+              {/* Opponent Feed Input */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-indigo-800 uppercase tracking-wide">
+                  👤 {updatingVideoChallenge.opponentName || "Guest"} ({language === "en" ? "Opponent Video Link" : "Link Video Người Nhận Kèo"})
+                </label>
+                <input
+                  type="text"
+                  placeholder="https://www.facebook.com/..."
+                  value={tempOpponentUrl}
+                  onChange={(e) => setTempOpponentUrl(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                />
+                <p className="text-[10px] text-gray-400">
+                  {language === "en" ? "Provide any public Facebook video/live stream URL." : "Hỗ trợ dán link video Facebook hoặc livestream chia sẻ."}
+                </p>
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setUpdatingVideoChallenge(null)}
+                className="bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold px-4 py-2 rounded-xl transition-colors cursor-pointer"
+              >
+                {language === "en" ? "Cancel" : "Hủy"}
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveVideoUrls}
+                disabled={actionLoading}
+                className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold px-5 py-2 rounded-xl shadow-md transition-colors cursor-pointer"
+              >
+                {actionLoading ? (language === "en" ? "Saving..." : "Đang lưu...") : (language === "en" ? "Save Videos" : "Xác nhận Lưu Video")}
+              </button>
+            </div>
+          </motion.div>
+        </div>,
+        document.body
+      )}
 
       {/* ========================================================= */}
       {/* 🎯 VIEWPORT CENTER TARGET SHOTS REACHED ANNOUNCEMENT       */}
