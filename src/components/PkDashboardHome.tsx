@@ -69,7 +69,14 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
   };
 
   const handleProfileOrClubClick = (name: string, email?: string, uid?: string) => {
-    const matchingClub = systemClubs.find(c => c.name?.trim().toLowerCase() === name.trim().toLowerCase());
+    const cleanUid = uid?.trim().toLowerCase();
+    const cleanClubUid = cleanUid?.startsWith("club-") ? cleanUid.substring(5) : cleanUid;
+    const cleanName = name?.trim().toLowerCase();
+    const matchingClub = systemClubs.find(c => 
+      (c.id && c.id.trim().toLowerCase() === cleanUid) ||
+      (c.id && c.id.trim().toLowerCase() === cleanClubUid) ||
+      (c.name && c.name.trim().toLowerCase() === cleanName)
+    );
     if (matchingClub && onViewClubHub) {
       onViewClubHub(matchingClub);
     } else {
@@ -78,7 +85,8 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
   };
 
   const handleClubClick = (clubName: string) => {
-    const matchingClub = systemClubs.find(c => c.name?.trim().toLowerCase() === clubName.trim().toLowerCase());
+    const cleanName = clubName.trim().toLowerCase();
+    const matchingClub = systemClubs.find(c => c.name?.trim().toLowerCase() === cleanName || c.id?.trim().toLowerCase() === cleanName);
     if (matchingClub && onViewClubHub) {
       onViewClubHub(matchingClub);
     }
@@ -92,8 +100,13 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
     .sort((a, b) => (b.dateTime || b.createdAt || "").localeCompare(a.dateTime || a.createdAt || ""))
     .slice(0, 4);
 
+  // Filter out clubs for Home Top 10 to satisfy: "ở Bảng Anh Hùng PK Đỉnh Phong (TOP 10) ở trang chủ: Yêu cầu không xếp hạng CLB"
+  const personalLeaderboard = React.useMemo(() => {
+    return pkLeaderboard.filter(p => !p.isClub);
+  }, [pkLeaderboard]);
+
   // Get Top 3 players for podium
-  const topThree = pkLeaderboard.slice(0, 3);
+  const topThree = personalLeaderboard.slice(0, 3);
   // Reorder to [Silver, Gold, Bronze] for physical podium representation
   const podiumPlayers = (() => {
     if (topThree.length === 0) return [];
@@ -459,7 +472,7 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
       </div>
 
       {/* 🏆 Section 3: Leaderboard split (Podium on Left, TOP 4-10 list on Right completing TOP 10) */}
-      {pkLeaderboard.length > 0 && (
+      {personalLeaderboard.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
           <div className="flex items-center justify-between mb-6 border-b border-gray-100 pb-4">
             <div>
@@ -481,15 +494,15 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
             </button>
           </div>
 
-          <div className="flex flex-col gap-8">
-            {/* Top Section: Top 3 Podium (Bảng vàng Top 3) */}
-            <div className="w-full bg-slate-50/50 p-6 rounded-2xl border border-gray-100">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+            {/* Left Section: Top 3 Podium (Bảng vàng Top 3) */}
+            <div className="w-full bg-slate-50/50 p-6 rounded-2xl border border-gray-100 lg:col-span-5 flex flex-col justify-between">
               <div className="text-center mb-6">
                 <span className="text-[10px] font-black uppercase text-rose-800 bg-rose-50 border border-rose-100 px-3 py-1 rounded-full">
                   {language === "en" ? "TOP 3 GLORY PODIUM" : "BẢNG VÀNG TOP 3"}
                 </span>
               </div>
-              <div className="max-w-xl mx-auto grid grid-cols-3 gap-2 pt-2 items-end">
+              <div className="max-w-xl mx-auto w-full grid grid-cols-3 gap-2 pt-2 items-end">
                 {podiumPlayers.map((player, idx) => {
                   if (!player) {
                     return (
@@ -523,13 +536,13 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                   }
 
                   return (
-                    <div key={player.uid} className="flex flex-col items-center justify-end">
+                    <div key={player.id || player.uid} className="flex flex-col items-center justify-end">
                       {/* Avatar and Info */}
                       <div className="text-center space-y-1 mb-2">
                         <div className="relative mx-auto flex items-center justify-center">
                           <button
                             type="button"
-                            onClick={() => onViewAthleteProfile?.(player.name, player.email, player.athleteId || player.uid)}
+                            onClick={() => handleProfileOrClubClick(player.name, player.email, player.athleteId || player.uid)}
                             className="relative block rounded-full focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-transform active:scale-95"
                           >
                             <div className={`${avatarSize} rounded-full overflow-hidden border-2 border-white shadow-md bg-gray-100`}>
@@ -548,7 +561,7 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                         </div>
                         <button
                           type="button"
-                          onClick={() => onViewAthleteProfile?.(player.name, player.email, player.athleteId || player.uid)}
+                          onClick={() => handleProfileOrClubClick(player.name, player.email, player.athleteId || player.uid)}
                           className="text-[10px] sm:text-[11px] font-extrabold text-gray-800 hover:text-rose-600 transition-colors block line-clamp-1 max-w-[85px] mx-auto text-center"
                         >
                           {player.name}
@@ -579,26 +592,26 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
               </div>
             </div>
 
-            {/* Bottom Section: Remaining Rankings (Danh sách xếp hạng) */}
-            <div className="w-full flex flex-col">
+            {/* Right Section: Remaining Rankings (Danh sách xếp hạng) */}
+            <div className="w-full flex flex-col lg:col-span-7">
               <div className="flex items-center justify-between mb-3.5">
                 <span className="text-xs font-black uppercase text-gray-800 flex items-center gap-1.5">
                   <Sword className="w-3.5 h-3.5 text-rose-600" />
                   {language === "en" ? "GLADIATORS RANKED 4 - 10" : "DANH SÁCH HẠNG 4 - HẠNG 10"}
                 </span>
                 <span className="text-[10px] text-gray-400 font-bold">
-                  {pkLeaderboard.length} {language === "en" ? "athletes total" : "kỳ thủ hệ thống"}
+                  {personalLeaderboard.length} {language === "en" ? "athletes total" : "kỳ thủ hệ thống"}
                 </span>
               </div>
 
               <div className="max-h-[340px] overflow-y-auto pr-1 border border-gray-100 rounded-xl divide-y divide-gray-50 bg-white shadow-3xs">
-                {pkLeaderboard.slice(3, 10).map((player, index) => {
+                {personalLeaderboard.slice(3, 10).map((player, index) => {
                   const rank = index + 4;
                   const rankBg = "bg-gray-50 text-gray-500 border-gray-100";
 
                   return (
                     <div 
-                      key={player.uid} 
+                      key={player.id || player.uid} 
                       className="flex items-center justify-between p-2.5 sm:p-3 hover:bg-slate-50/50 transition-colors group"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -610,7 +623,7 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                         {/* Player Avatar & Name with profile link */}
                         <button
                           type="button"
-                          onClick={() => onViewAthleteProfile?.(player.name, player.email, player.athleteId || player.uid)}
+                          onClick={() => handleProfileOrClubClick(player.name, player.email, player.athleteId || player.uid)}
                           className="flex items-center gap-2.5 min-w-0 text-left focus:outline-none group-hover:text-rose-600 transition-colors"
                         >
                           <div className="w-8 h-8 rounded-full overflow-hidden border border-gray-100 bg-gray-100 shrink-0">
@@ -669,7 +682,7 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                   );
                 })}
 
-                {pkLeaderboard.length <= 3 && (
+                {personalLeaderboard.length <= 3 && (
                   <div className="p-4 text-center text-xs italic text-gray-400">
                     {language === "en" ? "No more rank 4-10 gladiators found." : "Hiện chưa có thêm đấu thủ xếp hạng từ 4 đến 10."}
                   </div>
@@ -738,7 +751,7 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                     {/* Challenger link */}
                     <button
                       type="button"
-                      onClick={() => onViewAthleteProfile?.(match.challengerName, match.challengerEmail, match.challengerUid)}
+                      onClick={() => handleProfileOrClubClick(match.challengerName, match.challengerEmail, match.challengerUid)}
                       className="flex items-center gap-1.5 w-[40%] text-left hover:text-rose-650 transition-colors"
                     >
                       <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 border border-gray-200">
@@ -763,7 +776,7 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                     {/* Opponent link */}
                     <button
                       type="button"
-                      onClick={() => onViewAthleteProfile?.(match.opponentName || "Đối thủ", match.opponentEmail, match.opponentUid)}
+                      onClick={() => handleProfileOrClubClick(match.opponentName || "Đối thủ", match.opponentEmail, match.opponentUid)}
                       className="flex items-center gap-1.5 w-[40%] justify-end text-right hover:text-rose-650 transition-colors"
                     >
                       <span className="text-[11px] font-bold text-gray-800 truncate hover:text-rose-600">{match.opponentName || "Awaiting"}</span>

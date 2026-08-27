@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useLanguage } from "../context/LanguageContext";
 import { SystemClub, MatchHistoryItem, Athlete } from "../types";
+import { db } from "../firebase";
+import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
 import { 
   subscribeToVscSystemClubs, 
   subscribeToVscSystemAthletes,
@@ -374,6 +376,163 @@ const getDetailedClubStats = (club: SystemClub, tournamentsList: any[]) => {
   };
 };
 
+const getPkPerformanceStats = (club: SystemClub, challengesList: any[]) => {
+  const stats: Record<string, { 
+    id: string;
+    uid: string; 
+    name: string; 
+    wins: number; 
+    losses: number; 
+    draws: number; 
+    elo: number; 
+    streak: number; 
+    isClub?: boolean;
+  }> = {};
+
+  challengesList.forEach((challenge) => {
+    if (challenge.status !== "completed" || !challenge.scores) return;
+
+    const challengerKey = challenge.type === "solo_1v1" ? challenge.challengerUid : `club-${challenge.challengerUid}`;
+    const opponentKey = challenge.type === "solo_1v1" ? challenge.opponentUid : `club-${challenge.opponentUid}`;
+
+    if (!challengerKey || !opponentKey) return;
+
+    if (!stats[challengerKey]) {
+      stats[challengerKey] = { 
+        id: challengerKey,
+        uid: challenge.challengerUid, 
+        name: challenge.challengerName, 
+        wins: 0, 
+        losses: 0, 
+        draws: 0, 
+        elo: 1000, 
+        streak: 0,
+        isClub: challenge.type === "team_vs_team"
+      };
+    }
+    if (!stats[opponentKey]) {
+      stats[opponentKey] = { 
+        id: opponentKey,
+        uid: challenge.opponentUid!, 
+        name: challenge.opponentName || "Đối thủ", 
+        wins: 0, 
+        losses: 0, 
+        draws: 0, 
+        elo: 1000, 
+        streak: 0,
+        isClub: challenge.type === "team_vs_team"
+      };
+    }
+
+    const scores = challenge.scores;
+    const chScores = scores.challengerScores || [];
+    const opScores = scores.opponentScores || [];
+    const winMechanism = challenge.winMechanism || "by_sets";
+
+    const chSum = chScores.reduce((a, b) => Number(a) + Number(b), 0);
+    const opSum = opScores.reduce((a, b) => Number(a) + Number(b), 0);
+
+    let chSetsWon = 0;
+    let opSetsWon = 0;
+    const len = Math.max(chScores.length, opScores.length);
+    for (let i = 0; i < len; i++) {
+      const chS = Number(chScores[i]) || 0;
+      const opS = Number(opScores[i]) || 0;
+      if (chS > opS) chSetsWon++;
+      else if (opS > chS) opSetsWon++;
+    }
+
+    const isBySets = winMechanism === "by_sets";
+    const challengerWin = isBySets ? (chSetsWon > opSetsWon) : (chSum > opSum);
+    const opponentWin = isBySets ? (opSetsWon > chSetsWon) : (opSum > chSum);
+
+    const rCh = stats[challengerKey].elo;
+    const rOp = stats[opponentKey].elo;
+    const expectedCh = 1 / (1 + Math.pow(10, (rOp - rCh) / 400));
+    const expectedOp = 1 / (1 + Math.pow(10, (rCh - rOp) / 400));
+    const K = 32;
+
+    if (challengerWin) {
+      stats[challengerKey].wins += 1;
+      stats[challengerKey].streak += 1;
+      stats[opponentKey].losses += 1;
+      stats[opponentKey].streak = 0;
+
+      stats[challengerKey].elo = Math.round(rCh + K * (1 - expectedCh));
+      stats[opponentKey].elo = Math.round(rOp + K * (0 - expectedOp));
+    } else if (opponentWin) {
+      stats[opponentKey].wins += 1;
+      stats[opponentKey].streak += 1;
+      stats[challengerKey].losses += 1;
+      stats[challengerKey].streak = 0;
+
+      stats[opponentKey].elo = Math.round(rOp + K * (1 - expectedOp));
+      stats[challengerKey].elo = Math.round(rCh + K * (0 - expectedCh));
+    } else {
+      stats[challengerKey].draws += 1;
+      stats[opponentKey].draws += 1;
+
+      stats[challengerKey].elo = Math.round(rCh + K * (0.5 - expectedCh));
+      stats[opponentKey].elo = Math.round(rOp + K * (0.5 - expectedOp));
+    }
+  });
+
+  const clubKey = `club-${club.id}`;
+  const clubData = stats[clubKey] || { wins: 0, losses: 0, draws: 0, elo: 1000, streak: 0 };
+  const clubTotalMatches = clubData.wins + clubData.losses + clubData.draws;
+  const clubWinRate = clubTotalMatches > 0 ? Math.round((clubData.wins / clubTotalMatches) * 100) : 0;
+
+  let totalMemberElo = 0;
+  let memberCountWithElo = 0;
+  let totalMemberWins = 0;
+  let totalMemberLosses = 0;
+  let totalMemberDraws = 0;
+
+  const clubMembers = club.members || [];
+  clubMembers.forEach(m => {
+    let foundStat = null;
+    if (m.userId && stats[m.userId]) {
+      foundStat = stats[m.userId];
+    } else if (m.athleteId && stats[m.athleteId]) {
+      foundStat = stats[m.athleteId];
+    } else {
+      const cleanMName = m.name?.trim().toLowerCase();
+      const matched = Object.values(stats).find(s => !s.isClub && s.name?.trim().toLowerCase() === cleanMName);
+      if (matched) {
+        foundStat = matched;
+      }
+    }
+
+    if (foundStat) {
+      totalMemberElo += foundStat.elo;
+      memberCountWithElo++;
+      totalMemberWins += foundStat.wins;
+      totalMemberLosses += foundStat.losses;
+      totalMemberDraws += foundStat.draws;
+    }
+  });
+
+  const avgMemberElo = memberCountWithElo > 0 ? Math.round(totalMemberElo / memberCountWithElo) : 1000;
+  const totalMemberMatches = totalMemberWins + totalMemberLosses + totalMemberDraws;
+  const memberWinRate = totalMemberMatches > 0 ? Math.round((totalMemberWins / totalMemberMatches) * 100) : 0;
+
+  return {
+    clubElo: clubData.elo,
+    clubWins: clubData.wins,
+    clubLosses: clubData.losses,
+    clubDraws: clubData.draws,
+    clubTotalMatches,
+    clubWinRate,
+    avgMemberElo,
+    totalMemberWins,
+    totalMemberLosses,
+    totalMemberDraws,
+    totalMemberMatches,
+    memberWinRate,
+    memberCountWithElo
+  };
+};
+
 export const VscSystemClubsDirectory: React.FC<VscSystemClubsDirectoryProps> = ({
   currentUser,
   userRole,
@@ -396,6 +555,20 @@ export const VscSystemClubsDirectory: React.FC<VscSystemClubsDirectoryProps> = (
 
   // Selected Club Details Modal state
   const [selectedClub, setSelectedClub] = useState<SystemClub | null>(externalSelectedClub || null);
+  const [challenges, setChallenges] = useState<any[]>([]);
+
+  // Real-time PK Challenges Subscription
+  useEffect(() => {
+    const q = query(collection(db, "vsc_pk_challenges"));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      const list: any[] = [];
+      snap.forEach((docSnap) => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setChallenges(list);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Sync externalSelectedClub to selectedClub if provided
   useEffect(() => {
@@ -1207,6 +1380,25 @@ export const VscSystemClubsDirectory: React.FC<VscSystemClubsDirectoryProps> = (
                     </div>
                   </div>
 
+                  {/* PK PERFORMANCE INDICATORS */}
+                  {(() => {
+                    const pkStats = getPkPerformanceStats(club, challenges);
+                    return (
+                      <div className="grid grid-cols-2 gap-2 bg-rose-50/20 dark:bg-slate-900/40 p-2.5 rounded-xl border border-rose-100/30 dark:border-slate-800/60 text-center text-[10px]">
+                        <div className="border-r border-slate-100 dark:border-slate-850 pr-1">
+                          <span className="text-[8px] uppercase font-black text-rose-500 block mb-0.5 tracking-wider">HIỆU SUẤT CLB</span>
+                          <span className="font-extrabold text-slate-800 dark:text-slate-200 text-xs block">{pkStats.clubElo} ELO</span>
+                          <span className="text-[8px] text-gray-400 block mt-0.5">Thắng-Hòa-Thua: {pkStats.clubWins}-{pkStats.clubDraws}-{pkStats.clubLosses}</span>
+                        </div>
+                        <div className="pl-1">
+                          <span className="text-[8px] uppercase font-black text-amber-600 block mb-0.5 tracking-wider font-extrabold">CÁ NHÂN TB</span>
+                          <span className="font-extrabold text-slate-800 dark:text-slate-200 text-xs block">{pkStats.avgMemberElo} ELO</span>
+                          <span className="text-[8px] text-gray-400 block mt-0.5">Tổng win cá nhân: {pkStats.totalMemberWins}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   <div className="border-t border-slate-100 dark:border-slate-850 pt-3.5 flex items-center justify-between text-[11px] text-slate-400">
                     <span className="truncate">
                       Leader: <strong className="text-slate-600 dark:text-slate-300 font-extrabold">{club.leaderId ? club.leaderName : (language === "en" ? "None" : "Chưa có")}</strong>
@@ -1685,6 +1877,50 @@ export const VscSystemClubsDirectory: React.FC<VscSystemClubsDirectoryProps> = (
                           </div>
                         </div>
                       </div>
+
+                      {/* PK Matchmaking Performance Indicators */}
+                      {(() => {
+                        const pkStats = getPkPerformanceStats(club, challenges);
+                        return (
+                          <div>
+                            <h4 className="text-[10px] uppercase font-black text-rose-500 tracking-wider mb-3 flex items-center gap-1.5">
+                              <Sparkles className="w-4 h-4 text-rose-500 animate-pulse" />
+                              <span>{language === "en" ? "PK Slingshot Arena Performance" : "Chỉ Số Hiệu Suất Đấu Trường PK"}</span>
+                            </h4>
+                            <div className="grid grid-cols-2 gap-4">
+                              {/* Club Team-vs-Team PK Stats */}
+                              <div className="bg-gradient-to-br from-rose-50/50 to-rose-100/10 dark:from-slate-900 dark:to-slate-950 border border-rose-250/30 dark:border-slate-800 p-4 rounded-xl shadow-xs flex flex-col gap-1.5">
+                                <span className="text-[9px] font-black text-rose-600 uppercase tracking-wider block">
+                                  {language === "en" ? "Club Rating & Record" : "HIỆU SUẤT ĐỐI KHÁNG CLB"}
+                                </span>
+                                <div className="text-xl font-black text-slate-800 dark:text-white flex items-baseline gap-1">
+                                  <span>{pkStats.clubElo}</span>
+                                  <span className="text-[10px] text-rose-500 font-extrabold uppercase">ELO</span>
+                                </div>
+                                <div className="text-[10px] text-slate-500 space-y-0.5 font-medium mt-1">
+                                  <p>Thắng: <b className="text-emerald-600 dark:text-emerald-400">{pkStats.clubWins}</b> | Hòa: <b>{pkStats.clubDraws}</b> | Thua: <b className="text-rose-500">{pkStats.clubLosses}</b></p>
+                                  <p>Số trận đấu: <b>{pkStats.clubTotalMatches}</b> (Tỉ lệ thắng: <b>{pkStats.clubWinRate}%</b>)</p>
+                                </div>
+                              </div>
+
+                              {/* Member Individual PK Stats */}
+                              <div className="bg-gradient-to-br from-amber-50/50 to-amber-100/10 dark:from-slate-900 dark:to-slate-950 border border-amber-250/30 dark:border-slate-800 p-4 rounded-xl shadow-xs flex flex-col gap-1.5">
+                                <span className="text-[9px] font-black text-amber-600 uppercase tracking-wider block">
+                                  {language === "en" ? "Average Member Rating" : "HIỆU SUẤT TỔNG CÁC CÁ NHÂN"}
+                                </span>
+                                <div className="text-xl font-black text-slate-800 dark:text-white flex items-baseline gap-1">
+                                  <span>{pkStats.avgMemberElo}</span>
+                                  <span className="text-[10px] text-amber-600 font-extrabold uppercase">ELO TB</span>
+                                </div>
+                                <div className="text-[10px] text-slate-500 space-y-0.5 font-medium mt-1">
+                                  <p>Tổng trận thắng: <b className="text-emerald-600 dark:text-emerald-400">{pkStats.totalMemberWins}</b> | Thua: <b className="text-rose-500">{pkStats.totalMemberLosses}</b></p>
+                                  <p>Số VĐV có ELO: <b>{pkStats.memberCountWithElo}</b> / <b>{club.members?.length || 0}</b></p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* Active Roster Preview */}
                       <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/80 rounded-xl p-4 shadow-xs">

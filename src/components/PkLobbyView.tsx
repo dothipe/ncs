@@ -76,6 +76,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
 }) => {
   const { language } = useLanguage();
   const [internalSubTab, setInternalSubTab] = useState<"dashboard" | "lobby" | "leaderboard" | "history">("dashboard");
+  const [leaderboardSubTab, setLeaderboardSubTab] = useState<"personal" | "club">("personal");
   const activeSubTab = controlledActiveSubTab || internalSubTab;
 
   const setActiveSubTab = useCallback((tab: "dashboard" | "lobby" | "leaderboard" | "history") => {
@@ -147,7 +148,14 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
   };
 
   const handleProfileOrClubClick = (name: string, email?: string, athleteIdOrUid?: string) => {
-    const matchingClub = systemClubs.find(c => c.name?.trim().toLowerCase() === name.trim().toLowerCase());
+    const cleanUid = athleteIdOrUid?.trim().toLowerCase();
+    const cleanClubUid = cleanUid?.startsWith("club-") ? cleanUid.substring(5) : cleanUid;
+    const cleanName = name?.trim().toLowerCase();
+    const matchingClub = systemClubs.find(c => 
+      (c.id && c.id.trim().toLowerCase() === cleanUid) ||
+      (c.id && c.id.trim().toLowerCase() === cleanClubUid) ||
+      (c.name && c.name.trim().toLowerCase() === cleanName)
+    );
     if (matchingClub) {
       if (onViewClubHub) {
         onViewClubHub(matchingClub);
@@ -170,7 +178,8 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
   };
 
   const handleClubClick = (clubName: string) => {
-    const matchingClub = systemClubs.find(c => c.name?.trim().toLowerCase() === clubName.trim().toLowerCase());
+    const cleanName = clubName.trim().toLowerCase();
+    const matchingClub = systemClubs.find(c => c.name?.trim().toLowerCase() === cleanName || c.id?.trim().toLowerCase() === cleanName);
     if (matchingClub) {
       if (onViewClubHub) {
         onViewClubHub(matchingClub);
@@ -728,6 +737,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
   // Calculate stats dynamically for PK Leaderboard
   const pkLeaderboard = useMemo(() => {
     const stats: Record<string, { 
+      id: string;
       uid: string; 
       name: string; 
       avatarUrl: string; 
@@ -750,6 +760,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
       // Initialize if not exists
       if (!stats[challengerKey]) {
         stats[challengerKey] = { 
+          id: challengerKey,
           uid: challenge.challengerUid, 
           name: challenge.challengerName, 
           avatarUrl: challenge.challengerAvatar || "", 
@@ -763,6 +774,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
       }
       if (!stats[opponentKey]) {
         stats[opponentKey] = { 
+          id: opponentKey,
           uid: challenge.opponentUid!, 
           name: challenge.opponentName || "Đối thủ", 
           avatarUrl: challenge.opponentAvatar || "", 
@@ -835,6 +847,14 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
 
     return Object.values(stats).sort((a, b) => b.elo - a.elo);
   }, [challenges]);
+
+  const filteredLeaderboard = useMemo(() => {
+    if (leaderboardSubTab === "club") {
+      return pkLeaderboard.filter(p => p.isClub);
+    } else {
+      return pkLeaderboard.filter(p => !p.isClub);
+    }
+  }, [pkLeaderboard, leaderboardSubTab]);
 
   // Handle Challenge Creation
   const handleCreateChallenge = async (e: React.FormEvent) => {
@@ -2946,13 +2966,142 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
           /* ========================================================= */
           /* 🏆 PK LEADERSHIP ELO RATING BOARD                        */
           /* ========================================================= */
-          <div className="max-w-2xl mx-auto">
+          <div className="max-w-2xl mx-auto space-y-6">
+            
+            {/* Small inner sub-tabs for Leaderboard (Personal vs Club) */}
+            <div className="flex bg-gray-100/85 dark:bg-slate-850 p-1 rounded-2xl w-fit mx-auto border border-gray-200/50 shadow-3xs">
+              <button
+                type="button"
+                onClick={() => setLeaderboardSubTab("personal")}
+                className={`px-5 py-2.5 text-xs font-black rounded-xl transition-all flex items-center gap-1.5 cursor-pointer focus:outline-none ${
+                  leaderboardSubTab === "personal"
+                    ? "bg-white dark:bg-slate-900 text-rose-600 shadow-sm border border-gray-100/30"
+                    : "text-gray-500 hover:text-gray-850 dark:text-gray-400"
+                }`}
+              >
+                <User className="w-4 h-4" />
+                <span>{language === "en" ? "Personal Ratings" : "BXH PK CÁ NHÂN"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setLeaderboardSubTab("club")}
+                className={`px-5 py-2.5 text-xs font-black rounded-xl transition-all flex items-center gap-1.5 cursor-pointer focus:outline-none ${
+                  leaderboardSubTab === "club"
+                    ? "bg-white dark:bg-slate-900 text-rose-600 shadow-sm border border-gray-100/30"
+                    : "text-gray-500 hover:text-gray-850 dark:text-gray-400"
+                }`}
+              >
+                <Users className="w-4 h-4" />
+                <span>{language === "en" ? "Club Ratings" : "BXH PK CÂU LẠC BỘ"}</span>
+              </button>
+            </div>
+
+            {/* 🥇 BẢNG TRÊN: BẢNG VÀNG TOP 3 */}
+            {filteredLeaderboard.length > 0 && (
+              <div className="bg-gradient-to-r from-amber-500/10 via-amber-600/5 to-amber-500/10 rounded-3xl border-2 border-amber-400/30 p-5 shadow-sm">
+                <div className="text-center mb-4">
+                  <span className="text-[10px] font-black uppercase text-amber-850 bg-amber-100 border border-amber-200 px-4 py-1.5 rounded-full tracking-wider flex items-center justify-center gap-1.5 w-fit mx-auto">
+                    <Trophy className="w-4 h-4 text-amber-600 animate-bounce" />
+                    <span>{leaderboardSubTab === "club" ? (language === "en" ? "TOP 3 GLORY CLUBS" : "BẢNG VÀNG TOP 3 CLB PK") : (language === "en" ? "TOP 3 GLORY BOARD" : "BẢNG VÀNG TOP 3 CÁ NHÂN")}</span>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 items-end pt-4">
+                  {/* Silver (Rank 2) */}
+                  {filteredLeaderboard[1] ? (
+                    <button
+                      type="button"
+                      onClick={() => handleProfileOrClubClick(filteredLeaderboard[1].name, filteredLeaderboard[1].email, filteredLeaderboard[1].athleteId || filteredLeaderboard[1].uid)}
+                      className="flex flex-col items-center bg-white/85 dark:bg-slate-900/85 p-3 rounded-2xl border border-gray-100 shadow-3xs cursor-pointer text-center relative hover:scale-102 transition-all w-full"
+                    >
+                      <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                        <span className="bg-gray-100 text-gray-800 text-[10px] font-black px-2 py-0.5 rounded-full border border-gray-200">🥈 #2</span>
+                      </div>
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden border border-gray-200 bg-gray-50 flex items-center justify-center mt-2 shadow-xs">
+                        {filteredLeaderboard[1].avatarUrl ? (
+                          <img src={filteredLeaderboard[1].avatarUrl} alt={filteredLeaderboard[1].name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <User className="w-5 h-5 text-gray-300" />
+                        )}
+                      </div>
+                      <span className="font-bold text-xs text-gray-900 dark:text-white truncate w-full mt-2 block">{filteredLeaderboard[1].name}</span>
+                      <span className="font-extrabold text-xs text-rose-600 mt-1 block">{filteredLeaderboard[1].elo} ELO</span>
+                    </button>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center p-3 text-center border border-dashed border-gray-200 rounded-2xl bg-slate-50/50">
+                      <span className="text-[10px] text-gray-400">#2 Chờ...</span>
+                    </div>
+                  )}
+
+                  {/* Gold (Rank 1) */}
+                  {filteredLeaderboard[0] ? (
+                    <button
+                      type="button"
+                      onClick={() => handleProfileOrClubClick(filteredLeaderboard[0].name, filteredLeaderboard[0].email, filteredLeaderboard[0].athleteId || filteredLeaderboard[0].uid)}
+                      className="flex flex-col items-center bg-white dark:bg-slate-900 p-4 rounded-2xl border-2 border-amber-350 shadow-sm cursor-pointer text-center relative hover:scale-102 transition-all -translate-y-2 w-full"
+                    >
+                      <div className="absolute -top-4 left-1/2 -translate-x-1/2">
+                        <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2.5 py-0.5 rounded-full border border-amber-300 flex items-center gap-0.5 shadow-xs">
+                          👑 🥇 #1
+                        </span>
+                      </div>
+                      <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-amber-300 bg-gray-50 flex items-center justify-center mt-2 shadow-sm ring-2 ring-amber-100">
+                        {filteredLeaderboard[0].avatarUrl ? (
+                          <img src={filteredLeaderboard[0].avatarUrl} alt={filteredLeaderboard[0].name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <User className="w-6 h-6 text-gray-300" />
+                        )}
+                      </div>
+                      <span className="font-black text-sm text-gray-950 dark:text-white truncate w-full mt-2 block">{filteredLeaderboard[0].name}</span>
+                      <span className="font-black text-sm text-rose-600 mt-1 block">{filteredLeaderboard[0].elo} ELO</span>
+                    </button>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center p-3 text-center border border-dashed border-gray-200 rounded-2xl bg-slate-50/50 -translate-y-2">
+                      <span className="text-[10px] text-gray-400">#1 Chờ...</span>
+                    </div>
+                  )}
+
+                  {/* Bronze (Rank 3) */}
+                  {filteredLeaderboard[2] ? (
+                    <button
+                      type="button"
+                      onClick={() => handleProfileOrClubClick(filteredLeaderboard[2].name, filteredLeaderboard[2].email, filteredLeaderboard[2].athleteId || filteredLeaderboard[2].uid)}
+                      className="flex flex-col items-center bg-white/85 dark:bg-slate-900/85 p-3 rounded-2xl border border-gray-100 shadow-3xs cursor-pointer text-center relative hover:scale-102 transition-all w-full"
+                    >
+                      <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                        <span className="bg-orange-50 text-orange-700 text-[10px] font-black px-2 py-0.5 rounded-full border border-orange-200">🥉 #3</span>
+                      </div>
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden border border-gray-200 bg-gray-50 flex items-center justify-center mt-2 shadow-xs">
+                        {filteredLeaderboard[2].avatarUrl ? (
+                          <img src={filteredLeaderboard[2].avatarUrl} alt={filteredLeaderboard[2].name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <User className="w-5 h-5 text-gray-300" />
+                        )}
+                      </div>
+                      <span className="font-bold text-xs text-gray-900 dark:text-white truncate w-full mt-2 block">{filteredLeaderboard[2].name}</span>
+                      <span className="font-extrabold text-xs text-rose-600 mt-1 block">{filteredLeaderboard[2].elo} ELO</span>
+                    </button>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center p-3 text-center border border-dashed border-gray-200 rounded-2xl bg-slate-50/50">
+                      <span className="text-[10px] text-gray-400">#3 Chờ...</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 🏆 BẢNG DƯỚI: DANH SÁCH XẾP HẠNG NHƯ HIỆN TẠI */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="p-5 border-b border-gray-100 bg-rose-50/20 flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
                     <Trophy className="w-4 h-4 text-amber-500" />
-                    <span>{language === "en" ? "Top PK Slingshot Gladiators" : "Bảng Xếp Hạng Anh Hùng PK"}</span>
+                    <span>
+                      {leaderboardSubTab === "club"
+                        ? (language === "en" ? "Top PK Slingshot Clubs" : "Bảng Xếp Hạng Câu Lạc Bộ PK")
+                        : (language === "en" ? "Top PK Slingshot Gladiators" : "Bảng Xếp Hạng Anh Hùng PK")
+                      }
+                    </span>
                   </h3>
                   <p className="text-[11px] text-gray-500 mt-0.5">
                     {language === "en" 
@@ -2963,13 +3112,13 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                 <Flame className="w-5 h-5 text-rose-500 animate-pulse" />
               </div>
 
-              {pkLeaderboard.length === 0 ? (
+              {filteredLeaderboard.length === 0 ? (
                 <div className="p-12 text-center text-gray-500 text-xs">
-                  {language === "en" ? "No completed PK match data yet." : "Chưa có dữ liệu trận đấu PK nào được hoàn thành để xếp hạng."}
+                  {language === "en" ? "No completed PK match data yet for this category." : "Chưa có dữ liệu trận đấu PK nào được hoàn thành ở bảng này."}
                 </div>
               ) : (
                 <div className="divide-y divide-gray-50">
-                  {pkLeaderboard.map((player, idx) => {
+                  {filteredLeaderboard.map((player, idx) => {
                     // Medal or Rank badge
                     let rankBadge = <span className="font-bold text-gray-500 text-sm">{idx + 1}</span>;
                     if (idx === 0) {
@@ -2983,8 +3132,8 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                     return (
                       <button
                         type="button"
-                        key={player.uid}
-                        onClick={() => handleViewAthleteProfile(player.name, player.email, player.athleteId || player.uid)}
+                        key={player.id || player.uid}
+                        onClick={() => handleProfileOrClubClick(player.name, player.email, player.athleteId || player.uid)}
                         className="w-full text-left p-4 flex items-center justify-between gap-4 hover:bg-slate-50 transition-colors focus:outline-none cursor-pointer"
                       >
                         <div className="flex items-center gap-3">
@@ -5196,7 +5345,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
       )}
 
       {/* Live Challenger "Modal nổ" Popup Notification */}
-      {newApplicantNotification && (
+      {newApplicantNotification && createPortal(
         <div className="fixed inset-0 z-[10030] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs">
           <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-md w-full border border-rose-100 dark:border-rose-950/50 shadow-2xl text-slate-800 dark:text-slate-101 text-center animate-bounceIn relative overflow-hidden">
             {/* Top flashing decoration */}
@@ -5250,7 +5399,8 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Reusable Club Hub Modal */}
