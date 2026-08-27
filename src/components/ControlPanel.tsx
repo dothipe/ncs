@@ -1644,15 +1644,15 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               </button>
               {/* Removed My Club tab button per request */}
               <button
-                onClick={() => setSubTab("created")}
+                onClick={() => setSubTab("training")}
                 className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap ${
-                  subTab === "created"
+                  subTab === "training"
                     ? "bg-white dark:bg-slate-800 shadow-xs text-indigo-700 dark:text-indigo-400 border border-slate-200/40 dark:border-slate-700/40"
                     : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
                 }`}
               >
-                <ShieldCheck className="w-4 h-4" />
-                {language === "en" ? `Created Tournaments (${myCreatedTournaments.length})` : `Giải tôi tạo (${myCreatedTournaments.length})`}
+                <Target className="w-4 h-4 text-emerald-500" />
+                {language === "en" ? "Practice Progress" : "Tiến Trình Tập Luyện"}
               </button>
               <button
                 onClick={() => setSubTab("pk_challenges")}
@@ -1666,6 +1666,17 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 {language === "en" ? `PK Challenges (${userPkChallenges.length})` : `Thách đấu PK (${userPkChallenges.length})`}
               </button>
               <button
+                onClick={() => setSubTab("created")}
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap ${
+                  subTab === "created"
+                    ? "bg-white dark:bg-slate-800 shadow-xs text-indigo-700 dark:text-indigo-400 border border-slate-200/40 dark:border-slate-700/40"
+                    : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
+                }`}
+              >
+                <ShieldCheck className="w-4 h-4" />
+                {language === "en" ? `Created Tournaments (${myCreatedTournaments.length})` : `Giải tôi tạo (${myCreatedTournaments.length})`}
+              </button>
+              <button
                 onClick={() => setSubTab("referee")}
                 className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap ${
                   subTab === "referee"
@@ -1675,17 +1686,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               >
                 <Award className="w-4 h-4" />
                 {language === "en" ? `Referee Tournaments (${myRefereeTournaments.length})` : `Giải tôi làm Trọng tài (${myRefereeTournaments.length})`}
-              </button>
-              <button
-                onClick={() => setSubTab("training")}
-                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap ${
-                  subTab === "training"
-                    ? "bg-white dark:bg-slate-800 shadow-xs text-indigo-700 dark:text-indigo-400 border border-slate-200/40 dark:border-slate-700/40"
-                    : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
-                }`}
-              >
-                <Target className="w-4 h-4 text-emerald-500" />
-                {language === "en" ? "Practice Progress" : "Tiến Trình Tập Luyện"}
               </button>
             </div>
 

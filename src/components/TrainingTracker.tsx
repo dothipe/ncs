@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { 
   Target, 
   TrendingUp, 
@@ -13,12 +14,17 @@ import {
   Activity, 
   FileText, 
   ChevronRight, 
+  ChevronLeft,
   Undo, 
   BarChart2, 
   MapPin, 
   Clock, 
   BookOpen, 
-  AlertCircle 
+  AlertCircle,
+  Sparkles,
+  ThumbsUp,
+  Flame,
+  X
 } from "lucide-react";
 import { db, collection, addDoc, deleteDoc, doc, query, where, orderBy, onSnapshot } from "../firebase";
 import { TrainingSession } from "../types";
@@ -93,6 +99,17 @@ export default function TrainingTracker({ currentUser }: TrainingTrackerProps) {
 
   // Active hover tooltip state for trend graph
   const [hoveredPointIdx, setHoveredPointIdx] = useState<number | null>(null);
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isAllHistoryModalOpen, setIsAllHistoryModalOpen] = useState(false);
+  const [modalCurrentPage, setModalCurrentPage] = useState(1);
+
+  // Reset pagination when filters or data length change
+  useEffect(() => {
+    setCurrentPage(1);
+    setModalCurrentPage(1);
+  }, [distanceFilter, targetTypeFilter]);
 
   // Pre-selected option arrays
   const quickDistances = [7, 10, 12, 15, 20, 25, 30];
@@ -272,6 +289,20 @@ export default function TrainingTracker({ currentUser }: TrainingTrackerProps) {
     });
   }, [sessions, distanceFilter, targetTypeFilter]);
 
+  // Paginate filtered sessions
+  const ITEMS_PER_PAGE = 100;
+  const totalPages = Math.ceil(filteredSessions.length / ITEMS_PER_PAGE);
+  const paginatedSessions = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredSessions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredSessions, currentPage]);
+
+  const modalTotalPages = Math.ceil(filteredSessions.length / ITEMS_PER_PAGE);
+  const modalPaginatedSessions = useMemo(() => {
+    const startIndex = (modalCurrentPage - 1) * ITEMS_PER_PAGE;
+    return filteredSessions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredSessions, modalCurrentPage]);
+
   // Aggregate stats
   const stats = useMemo(() => {
     if (sessions.length === 0) {
@@ -317,6 +348,126 @@ export default function TrainingTracker({ currentUser }: TrainingTrackerProps) {
       bestDistance: bestDist
     };
   }, [sessions]);
+
+  // AI Coach Insights memo block
+  const coachInsights = useMemo(() => {
+    if (sessions.length === 0) return null;
+
+    // 1. Calculate accuracy consistency streak (consecutive sessions >= 70% from latest descending)
+    let consistencyStreak = 0;
+    for (let i = 0; i < sessions.length; i++) {
+      if (sessions[i].accuracy >= 70) {
+        consistencyStreak++;
+      } else {
+        break;
+      }
+    }
+
+    // 2. Trend direction (Comparing last 3 sessions against overall average)
+    let trend = "stable"; // "improving" | "stable" | "declining"
+    if (sessions.length >= 3) {
+      const last3Sum = sessions[0].accuracy + sessions[1].accuracy + sessions[2].accuracy;
+      const last3Avg = last3Sum / 3;
+      const overallAvg = stats.avgAccuracy;
+      if (last3Avg > overallAvg + 4) {
+        trend = "improving";
+      } else if (last3Avg < overallAvg - 4) {
+        trend = "declining";
+      }
+    }
+
+    // 3. Motivational dynamic message from Coach
+    let messageVi = "";
+    let messageEn = "";
+
+    if (stats.avgAccuracy >= 80) {
+      messageVi = `Tuyệt đỉnh thiện xạ! Bạn đang sở hữu độ chính xác ấn tượng (${stats.avgAccuracy}%). Kỹ thuật kéo thun và ngắm bắn của bạn vô cùng chuẩn xác. Hãy thử sức ở các cự ly xa hơn (15m-20m) hoặc tham gia ngay Thách Đấu PK để khẳng định đẳng cấp nhé!`;
+      messageEn = `Superb marksman! You maintain an outstanding average accuracy of ${stats.avgAccuracy}%. Your slinging form and release are highly locked in. Push your limits at 15m-20m ranges or start a PK challenge to showcase your skills!`;
+    } else if (stats.avgAccuracy >= 65) {
+      if (trend === "improving") {
+        messageVi = `Phong độ đang lên như diều gặp gió! Các loạt bắn gần đây có sự tiến bộ vượt bậc so với trung bình của bạn. Hãy giữ nguyên tư thế vững chãi này và tập trung nín thở nhẹ khi nhả da nhé!`;
+        messageEn = `Your form is rising fast! Your recent sets show impressive improvement over your average. Keep this solid stance and apply a gentle exhale pause as you release the pocket!`;
+      } else {
+        messageVi = `Phong độ luyện tập rất tốt và ổn định. Bạn đã có cảm giác thun và góc ngắm vững vàng. Hãy chú ý giữ điểm đặt má (anchor point) thật đồng nhất giữa các lượt bắn để gom đường đạn hẹp hơn nữa.`;
+        messageEn = `Very solid and consistent performance. Your band feel and aiming alignment are firm. Ensure your anchor point is perfectly uniform between shots to group your hits even tighter.`;
+      }
+    } else {
+      if (sessions.length < 3) {
+        messageVi = `Khởi đầu rất tốt! Hãy tiếp tục duy trì thói quen tập luyện đều đặn hằng ngày và ghi thêm ít nhất 2-3 loạt bắn nữa. AI Coach sẽ có đủ dữ liệu để phân tích chi tiết phong độ cho bạn nhé!`;
+        messageEn = `Excellent start! Continue your daily practice and log at least 2-3 more sets. AI Coach will unlock deeper performance feedback once enough data is compiled!`;
+      } else if (trend === "declining") {
+        messageVi = `Có vẻ bạn đang gặp chút dao động phong độ trong vài lượt bắn gần đây. Đừng nản lòng, đây là một phần tự nhiên trong quá trình luyện tập! Hãy thử giảm cự ly xuống chút ít, tập trung vào tư thế đứng thả lỏng và lực kéo thun thật đều.`;
+        messageEn = `It seems your recent sets have fluctuated slightly. Don't be discouraged, it's a natural part of training! Try shortening the distance temporarily, focus on a relaxed stance, and pull the bands uniformly.`;
+      } else {
+        messageVi = `Hãy kiên trì luyện tập mỗi ngày! Để nâng cao tỉ lệ trúng, bạn nên kiểm tra lại độ vuông góc của thun, giữ tay cầm ná thật tĩnh sau khi buông da bắn (follow-through) ít nhất 1 giây. Sự kiên nhẫn sẽ đưa bạn đến đích!`;
+        messageEn = `Stay persistent with your daily training! To boost accuracy, verify your band alignment and practice a clean 'follow-through' by holding your aiming arm steady for at least 1 second after release.`;
+      }
+    }
+
+    // 4. Badges unlocked dynamically
+    const badges = [];
+    
+    const hasPaperKing = sessions.some(s => s.targetType === "bia_giay" && s.accuracy >= 85);
+    const hasMetalKing = sessions.some(s => s.targetType === "bia_muc_tieu" && s.accuracy >= 85);
+    const hasLongRange = sessions.some(s => s.distance >= 15 && s.accuracy >= 75);
+    const hasPersistence = sessions.length >= 8;
+
+    if (hasPaperKing) {
+      badges.push({
+        id: "paper_king",
+        titleVi: "Bách Phát Bách Trúng (Bia Giấy)",
+        titleEn: "Paper Target Specialist",
+        descVi: "Ghi điểm số xuất sắc >= 85% trên bia giấy chuyên nghiệp.",
+        descEn: "Scored a high accurate set >= 85% on standard paper targets.",
+        icon: "🎯",
+        color: "from-blue-500 to-indigo-500"
+      });
+    }
+
+    if (hasMetalKing) {
+      badges.push({
+        id: "metal_king",
+        titleVi: "Thiện Xạ Bia Sắt",
+        titleEn: "Metal Target Sniper",
+        descVi: "Độ chính xác vượt bậc >= 85% trên bia mục tiêu.",
+        descEn: "Hit an outstanding accuracy rate >= 85% on metal targets.",
+        icon: "⚡",
+        color: "from-amber-500 to-rose-500"
+      });
+    }
+
+    if (hasLongRange) {
+      badges.push({
+        id: "long_range",
+        titleVi: "Cao Thủ Cự Ly Xa",
+        titleEn: "Long-Range Marksman",
+        descVi: "Hoàn thành loạt bắn ở cự ly >= 15m với tỉ lệ trúng >= 75%.",
+        descEn: "Completed a set at 15m or deeper with >= 75% accuracy.",
+        icon: "🏹",
+        color: "from-emerald-500 to-teal-500"
+      });
+    }
+
+    if (hasPersistence) {
+      badges.push({
+        id: "persistence",
+        titleVi: "Kỷ Luật Thép",
+        titleEn: "Steel Discipline",
+        descVi: "Kiên trì rèn luyện và ghi nhận từ 8 lượt tập luyện trở lên.",
+        descEn: "Consistently practiced and logged 8 or more training sessions.",
+        icon: "🔥",
+        color: "from-purple-500 to-pink-500"
+      });
+    }
+
+    return {
+      consistencyStreak,
+      trend,
+      messageVi,
+      messageEn,
+      badges
+    };
+  }, [sessions, stats]);
 
   // Custom Chart Data: chronological sort
   const chartData = useMemo(() => {
@@ -826,11 +977,11 @@ export default function TrainingTracker({ currentUser }: TrainingTrackerProps) {
                     </div>
 
                     <div className="relative h-56 bg-slate-50 dark:bg-slate-950/30 p-2 rounded-xl border border-slate-100 dark:border-slate-800/40">
-                      <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
                         {/* Gridlines */}
-                        <line x1="0" y1="25" x2="100" y2="25" stroke="#94a3b8" strokeOpacity="0.15" strokeWidth="0.5" />
-                        <line x1="0" y1="50" x2="100" y2="50" stroke="#94a3b8" strokeOpacity="0.15" strokeWidth="0.5" />
-                        <line x1="0" y1="75" x2="100" y2="75" stroke="#94a3b8" strokeOpacity="0.15" strokeWidth="0.5" />
+                        <line x1="0" y1="25" x2="100" y2="25" stroke="#94a3b8" strokeOpacity="0.15" strokeWidth="0.5" vectorEffect="non-scaling-stroke" />
+                        <line x1="0" y1="50" x2="100" y2="50" stroke="#94a3b8" strokeOpacity="0.15" strokeWidth="0.5" vectorEffect="non-scaling-stroke" />
+                        <line x1="0" y1="75" x2="100" y2="75" stroke="#94a3b8" strokeOpacity="0.15" strokeWidth="0.5" vectorEffect="non-scaling-stroke" />
 
                         {/* Line Path */}
                         {(() => {
@@ -865,25 +1016,8 @@ export default function TrainingTracker({ currentUser }: TrainingTrackerProps) {
                                 strokeWidth="2"
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
+                                vectorEffect="non-scaling-stroke"
                               />
-
-                              {/* Node Points */}
-                              {points.map((p, idx) => (
-                                <g key={idx} className="cursor-pointer group">
-                                  <circle
-                                    cx={p.x}
-                                    cy={p.y}
-                                    r={hoveredPointIdx === idx ? "3.5" : "2"}
-                                    fill="#10b981"
-                                    stroke="#ffffff"
-                                    strokeWidth="1"
-                                    className="transition-all duration-150"
-                                    onMouseEnter={() => setHoveredPointIdx(idx)}
-                                    onMouseLeave={() => setHoveredPointIdx(null)}
-                                    onTouchStart={() => setHoveredPointIdx(idx)}
-                                  />
-                                </g>
-                              ))}
 
                               {/* Gradient definitions */}
                               <defs>
@@ -900,6 +1034,37 @@ export default function TrainingTracker({ currentUser }: TrainingTrackerProps) {
                           );
                         })()}
                       </svg>
+
+                      {/* Perfectly round HTML points laid over the SVG to prevent stretch/distortion */}
+                      {(() => {
+                        const pointsCount = chartData.length;
+                        if (pointsCount === 0) return null;
+
+                        return chartData.map((item, idx) => {
+                          const x = pointsCount > 1 ? (idx / (pointsCount - 1)) * 90 + 5 : 50;
+                          const y = 90 - (item.accuracy / 100) * 80;
+                          const isHovered = hoveredPointIdx === idx;
+
+                          return (
+                            <div
+                              key={idx}
+                              style={{ left: `${x}%`, top: `${y}%` }}
+                              onMouseEnter={() => setHoveredPointIdx(idx)}
+                              onMouseLeave={() => setHoveredPointIdx(null)}
+                              onTouchStart={() => setHoveredPointIdx(idx)}
+                              className={`absolute -translate-x-1/2 -translate-y-1/2 w-4.5 h-4.5 flex items-center justify-center cursor-pointer transition-all duration-150 ${
+                                isHovered ? "scale-125 z-20" : "z-10"
+                              }`}
+                            >
+                              <span className={`w-2.5 h-2.5 rounded-full border border-white dark:border-slate-900 shadow-md transition-all ${
+                                isHovered 
+                                  ? "bg-indigo-500 w-3.5 h-3.5 scale-110" 
+                                  : "bg-emerald-500 hover:bg-indigo-500"
+                              }`} />
+                            </div>
+                          );
+                        });
+                      })()}
 
                       {/* Left vertical legend helper */}
                       <div className="absolute left-1 top-1 bottom-1 flex flex-col justify-between text-[7px] text-slate-400 font-bold pointer-events-none">
@@ -988,6 +1153,135 @@ export default function TrainingTracker({ currentUser }: TrainingTrackerProps) {
 
           </div>
 
+          {/* AI COACH & DEEP ANALYTICS CONTAINER */}
+          {sessions.length > 0 && coachInsights && (
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 rounded-3xl p-6 shadow-sm flex flex-col gap-5">
+              <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                <Sparkles className="w-5 h-5 text-indigo-500 animate-pulse" />
+                <div>
+                  <h3 className="font-black text-sm uppercase tracking-wider text-slate-800 dark:text-slate-100">
+                    {isEng ? "AI Coach & Performance Insights" : "TRỢ LÝ HUẤN LUYỆN VIÊN AI & PHÂN TÍCH CHUYÊN SÂU"}
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                    {isEng ? "Advanced slinging analytics & professional advice" : "Phân tích kỹ thuật & phản hồi chuyên môn tự động"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Bento-style Metrics Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                
+                {/* 1. Consistency Streak */}
+                <div className="bg-slate-50/50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800/60 p-4 rounded-2xl flex flex-col gap-1">
+                  <div className="flex items-center gap-1.5 text-slate-400 dark:text-slate-500">
+                    <Flame className="w-4 h-4 text-orange-500" />
+                    <span className="text-[10px] font-black uppercase tracking-wider">{isEng ? "Aim Consistency" : "Chuỗi Phong Độ Ổn Định"}</span>
+                  </div>
+                  <div className="flex items-baseline gap-1 mt-1">
+                    <span className="text-2xl font-black text-slate-800 dark:text-slate-100">
+                      {coachInsights.consistencyStreak}
+                    </span>
+                    <span className="text-xs font-bold text-slate-400">{isEng ? "sets" : "loạt bắn"}</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 italic mt-1 font-semibold">
+                    {isEng ? "Consecutive sets with accuracy ≥ 70%" : "Số loạt bắn liên tiếp đạt tỉ lệ trúng ≥ 70%"}
+                  </p>
+                </div>
+
+                {/* 2. Aim Trend */}
+                <div className="bg-slate-50/50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800/60 p-4 rounded-2xl flex flex-col gap-1">
+                  <div className="flex items-center gap-1.5 text-slate-400 dark:text-slate-500">
+                    <Activity className="w-4 h-4 text-indigo-500" />
+                    <span className="text-[10px] font-black uppercase tracking-wider">{isEng ? "Recent Trend" : "Xu Hướng Gần Đây"}</span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <span className={`px-2.5 py-0.5 rounded-lg text-xs font-black uppercase tracking-wider ${
+                      coachInsights.trend === "improving"
+                        ? "bg-emerald-500 text-white"
+                        : coachInsights.trend === "declining"
+                          ? "bg-rose-500 text-white"
+                          : "bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                    }`}>
+                      {coachInsights.trend === "improving" 
+                        ? (isEng ? "Improving" : "Thăng tiến") 
+                        : coachInsights.trend === "declining" 
+                          ? (isEng ? "Fluctuating" : "Dao động") 
+                          : (isEng ? "Consistent" : "Ổn định")}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 italic mt-2.5 font-semibold">
+                    {isEng ? "Comparing latest 3 sets with overall avg" : "So sánh phong độ 3 loạt gần nhất với trung bình"}
+                  </p>
+                </div>
+
+                {/* 3. Mastery Range */}
+                <div className="bg-slate-50/50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800/60 p-4 rounded-2xl flex flex-col gap-1">
+                  <div className="flex items-center gap-1.5 text-slate-400 dark:text-slate-500">
+                    <Target className="w-4 h-4 text-emerald-500" />
+                    <span className="text-[10px] font-black uppercase tracking-wider">{isEng ? "Range Mastery" : "Cự Ly Đắc Lực Nhất"}</span>
+                  </div>
+                  <div className="flex items-baseline gap-1 mt-1">
+                    <span className="text-md sm:text-lg font-black text-slate-800 dark:text-slate-100 truncate max-w-full">
+                      {stats.bestDistance}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 italic mt-2.5 font-semibold">
+                    {isEng ? "Distance with highest avg accuracy" : "Cự ly có tỉ lệ trúng trung bình cao nhất"}
+                  </p>
+                </div>
+
+              </div>
+
+              {/* Coach Conversational Message */}
+              <div className="p-4 rounded-2xl bg-indigo-50/40 dark:bg-indigo-950/10 border border-indigo-100/40 dark:border-indigo-900/30 flex gap-3">
+                <div className="w-8 h-8 rounded-full bg-indigo-500/10 dark:bg-indigo-400/10 flex items-center justify-center shrink-0 text-indigo-500 dark:text-indigo-400">
+                  <ThumbsUp className="w-4 h-4" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
+                    {isEng ? "Coach's Slingshot Tip" : "Lời khuyên từ Huấn luyện viên AI"}
+                  </span>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 font-bold leading-relaxed">
+                    {isEng ? coachInsights.messageEn : coachInsights.messageVi}
+                  </p>
+                </div>
+              </div>
+
+              {/* Achieved Badges */}
+              {coachInsights.badges.length > 0 && (
+                <div className="flex flex-col gap-2 pt-2 border-t border-slate-100 dark:border-slate-800/60">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                    <Award className="w-3.5 h-3.5 text-amber-500" />
+                    {isEng ? "Unlocked Slingshot Achievements" : "DANH HIỆU THIỆN XẠ ĐÃ ĐẠT ĐƯỢC"}
+                  </span>
+                  
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {coachInsights.badges.map(b => (
+                      <div 
+                        key={b.id} 
+                        className="group relative flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/80 cursor-help"
+                      >
+                        <span className="text-base">{b.icon}</span>
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-black text-slate-800 dark:text-slate-200">
+                            {isEng ? b.titleEn : b.titleVi}
+                          </span>
+                        </div>
+                        
+                        {/* Hover Tooltip explaining badge */}
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-900 text-white text-[9px] font-bold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 shadow-md z-30">
+                          {isEng ? b.descEn : b.descVi}
+                          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            </div>
+          )}
+
           {/* HISTORICAL LOG LIST */}
           <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 rounded-3xl p-6 shadow-sm flex flex-col gap-4">
             
@@ -1039,8 +1333,8 @@ export default function TrainingTracker({ currentUser }: TrainingTrackerProps) {
                 {isEng ? "No practice logs found matching filters." : "Không tìm thấy nhật ký tập luyện nào khớp bộ lọc."}
               </div>
             ) : (
-              <div className="max-h-[360px] overflow-y-auto pr-1 space-y-3.5">
-                {filteredSessions.map((session) => {
+              <div className={totalPages > 1 ? "space-y-3.5" : "max-h-[360px] overflow-y-auto pr-1 space-y-3.5"}>
+                {paginatedSessions.map((session) => {
                   const isPaper = session.targetType === "bia_giay";
                   
                   return (
@@ -1152,11 +1446,287 @@ export default function TrainingTracker({ currentUser }: TrainingTrackerProps) {
               </div>
             )}
 
+            {/* Pagination Controls */}
+            {!loading && totalPages > 1 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between border-t border-slate-100 dark:border-slate-800/80 pt-4 mt-2 gap-3">
+                <div className="text-[11px] font-bold text-slate-400">
+                  {isEng 
+                    ? `Showing ${(currentPage - 1) * ITEMS_PER_PAGE + 1}-${Math.min(currentPage * ITEMS_PER_PAGE, filteredSessions.length)} of ${filteredSessions.length}` 
+                    : `Hiển thị ${(currentPage - 1) * ITEMS_PER_PAGE + 1}-${Math.min(currentPage * ITEMS_PER_PAGE, filteredSessions.length)} trên ${filteredSessions.length}`}
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    type="button"
+                    disabled={currentPage === 1}
+                    onClick={() => {
+                      setCurrentPage(prev => Math.max(1, prev - 1));
+                    }}
+                    className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-indigo-500 hover:border-indigo-500 disabled:opacity-40 disabled:hover:text-slate-500 disabled:hover:border-slate-200 dark:disabled:hover:border-slate-800 transition-all cursor-pointer bg-slate-50 dark:bg-slate-950"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+                  
+                  {Array.from({ length: totalPages }).map((_, idx) => {
+                    const pageNum = idx + 1;
+                    return (
+                      <button
+                        key={pageNum}
+                        type="button"
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`w-7 h-7 flex items-center justify-center text-xs font-black rounded-lg transition-all cursor-pointer ${
+                          currentPage === pageNum
+                            ? "bg-indigo-500 text-white shadow-xs"
+                            : "bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200/40 dark:border-slate-800/60"
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    disabled={currentPage === totalPages}
+                    onClick={() => {
+                      setCurrentPage(prev => Math.min(totalPages, prev + 1));
+                    }}
+                    className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-indigo-500 hover:border-indigo-500 disabled:opacity-40 disabled:hover:text-slate-500 disabled:hover:border-slate-200 dark:disabled:hover:border-slate-800 transition-all cursor-pointer bg-slate-50 dark:bg-slate-950"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* View All History Button */}
+            {sessions.length > 0 && (
+              <div className="border-t border-slate-100 dark:border-slate-800/80 pt-4 mt-2 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalCurrentPage(1);
+                    setIsAllHistoryModalOpen(true);
+                  }}
+                  className="w-full py-2.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 dark:hover:bg-slate-900 border border-slate-200/60 dark:border-slate-800 text-indigo-600 dark:text-indigo-400 text-xs font-black rounded-xl transition-all active:scale-98 shadow-2xs hover:shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>📂</span>
+                  <span>{isEng ? "View All History Logs in Viewport" : "XEM TẤT CẢ LỊCH SỬ TẬP LUYỆN"}</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
           </div>
 
         </div>
 
       </div>
+
+      {/* PORTAL MODAL - COMPLETE PRACTICE HISTORY */}
+      {isAllHistoryModalOpen && createPortal(
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-[9999] animate-fadeIn">
+          {/* Click outside to close */}
+          <div className="absolute inset-0" onClick={() => setIsAllHistoryModalOpen(false)} />
+          
+          <div className="relative bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col p-6 overflow-hidden z-10 animate-scaleIn">
+            
+            {/* Modal Header */}
+            <div className="flex justify-between items-center pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-indigo-500" />
+                <div>
+                  <h3 className="font-black text-sm sm:text-base uppercase tracking-wider text-slate-800 dark:text-slate-100">
+                    {isEng ? "Complete Training History Logs" : "TOÀN BỘ LỊCH SỬ NHẬT KÝ TẬP LUYỆN"}
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                    {isEng 
+                      ? `Showing up to 100 entries per page • ${filteredSessions.length} total logs` 
+                      : `Hiển thị tối đa 100 mục mỗi trang • Tổng cộng ${filteredSessions.length} loạt bắn`}
+                  </p>
+                </div>
+              </div>
+              
+              <button
+                type="button"
+                onClick={() => setIsAllHistoryModalOpen(false)}
+                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Synchronized Filter Indicators */}
+            {(distanceFilter !== "all" || targetTypeFilter !== "all") && (
+              <div className="flex flex-wrap gap-2 py-2.5 px-1 bg-slate-50 dark:bg-slate-950/40 border-b border-slate-100 dark:border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <span>{isEng ? "Filters applied" : "Đang lọc theo"}:</span>
+                {distanceFilter !== "all" && (
+                  <span className="bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-md border border-indigo-100/30">
+                    {isEng ? `Distance` : `Cự ly`}: {distanceFilter}m
+                  </span>
+                )}
+                {targetTypeFilter !== "all" && (
+                  <span className="bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-md border border-amber-100/30">
+                    {isEng ? `Target` : `Bia`}: {targetTypeFilter === "bia_giay" ? (isEng ? "Paper" : "Bia Giấy") : (isEng ? "Metal" : "Bia Mục Tiêu")}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Modal Scrollable Body */}
+            <div className="flex-1 overflow-y-auto pr-1 py-4 space-y-3.5">
+              {modalPaginatedSessions.map((session) => {
+                const isPaper = session.targetType === "bia_giay";
+                return (
+                  <div
+                    key={session.id}
+                    className="group relative bg-slate-50/40 dark:bg-slate-950/20 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/60 flex flex-col gap-2.5 hover:border-slate-200 dark:hover:border-slate-800 transition-all"
+                  >
+                    <div className="flex justify-between items-center gap-4">
+                      <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-200 font-extrabold text-xs sm:text-sm">
+                        <Clock className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>{formatDateTime(session.createdAt, session.date)}</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        {deleteConfirmId === session.id ? (
+                          <div className="flex items-center gap-1 bg-rose-50 dark:bg-rose-950/40 p-1 rounded-lg border border-rose-100 dark:border-rose-900/30">
+                            <span className="text-[9px] font-black text-rose-600 dark:text-rose-400 px-1">{isEng ? "Sure?" : "Xóa?"}</span>
+                            <button
+                              onClick={() => handleDeleteSession(session.id)}
+                              className="px-1.5 py-0.5 bg-rose-500 text-white text-[9px] font-black rounded-md hover:bg-rose-600 cursor-pointer"
+                            >
+                              {isEng ? "Yes" : "Có"}
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirmId(null)}
+                              className="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[9px] font-black rounded-md hover:bg-slate-300 cursor-pointer"
+                            >
+                              {isEng ? "No" : "Hủy"}
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setDeleteConfirmId(session.id)}
+                            className="p-1.5 text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all cursor-pointer"
+                            title={isEng ? "Delete Session" : "Xóa lịch sử"}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+
+                        <div className={`px-2.5 py-0.5 rounded-lg text-xs font-black shadow-3xs ${
+                          session.accuracy >= 80
+                            ? "bg-emerald-500 text-white"
+                            : session.accuracy >= 50
+                            ? "bg-indigo-500 text-white"
+                            : "bg-slate-500 text-white"
+                        }`}>
+                          {session.accuracy}%
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                      <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${
+                        isPaper
+                          ? "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-100/30 dark:border-blue-900/40"
+                          : "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-100/30 dark:border-amber-900/40"
+                      }`}>
+                        {isPaper ? (isEng ? "Paper" : "Bia Giấy") : (isEng ? "Metal" : "Bia Mục Tiêu")}
+                      </span>
+                      <span className="text-slate-300">•</span>
+                      <span className="flex items-center gap-0.5 text-slate-600 dark:text-slate-300">
+                        <MapPin className="w-3 h-3 text-rose-500" />
+                        <span>{session.distance}m</span>
+                      </span>
+                      <span className="text-slate-300">•</span>
+                      <span className="text-slate-600 dark:text-slate-300">
+                        {isEng ? "Shots" : "Đạn"}: <span className="font-extrabold text-slate-800 dark:text-slate-100">{session.targetShots} viên</span>
+                      </span>
+                      <span className="text-slate-300">•</span>
+                      <span className="text-slate-600 dark:text-slate-300">
+                        {isPaper ? (
+                          <>{isEng ? "Score" : "Điểm"}: <span className="font-extrabold text-indigo-600 dark:text-indigo-400">{session.score}/{session.maxScore}</span></>
+                        ) : (
+                          <>{isEng ? "Hits" : "Trúng"}: <span className="font-extrabold text-emerald-500">{session.hitsCount}/{session.targetShots} viên</span></>
+                        )}
+                      </span>
+                    </div>
+
+                    {session.notes && (
+                      <div className="text-[11px] text-slate-400 dark:text-slate-500 italic bg-slate-50/50 dark:bg-slate-950/40 px-3 py-1.5 rounded-xl border border-slate-100/40 dark:border-slate-800/40 mt-0.5">
+                        "{session.notes}"
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Modal Footer Controls */}
+            <div className="flex flex-col sm:flex-row items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-4 mt-2 gap-3 shrink-0">
+              <div className="text-[11px] font-bold text-slate-400">
+                {isEng 
+                  ? `Showing ${(modalCurrentPage - 1) * ITEMS_PER_PAGE + 1}-${Math.min(modalCurrentPage * ITEMS_PER_PAGE, filteredSessions.length)} of ${filteredSessions.length}` 
+                  : `Hiển thị ${(modalCurrentPage - 1) * ITEMS_PER_PAGE + 1}-${Math.min(modalCurrentPage * ITEMS_PER_PAGE, filteredSessions.length)} trên ${filteredSessions.length}`}
+              </div>
+              
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {modalTotalPages > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      disabled={modalCurrentPage === 1}
+                      onClick={() => setModalCurrentPage(prev => Math.max(1, prev - 1))}
+                      className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-indigo-500 hover:border-indigo-500 disabled:opacity-40 disabled:hover:text-slate-500 disabled:hover:border-slate-200 dark:disabled:hover:border-slate-800 transition-all cursor-pointer bg-slate-50 dark:bg-slate-950"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                    
+                    {Array.from({ length: modalTotalPages }).map((_, idx) => {
+                      const pageNum = idx + 1;
+                      return (
+                        <button
+                          key={pageNum}
+                          type="button"
+                          onClick={() => setModalCurrentPage(pageNum)}
+                          className={`w-7 h-7 flex items-center justify-center text-xs font-black rounded-lg transition-all cursor-pointer ${
+                            modalCurrentPage === pageNum
+                              ? "bg-indigo-500 text-white shadow-xs"
+                              : "bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200/40 dark:border-slate-800/60"
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      disabled={modalCurrentPage === modalTotalPages}
+                      onClick={() => setModalCurrentPage(prev => Math.min(modalTotalPages, prev + 1))}
+                      className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-indigo-500 hover:border-indigo-500 disabled:opacity-40 disabled:hover:text-slate-500 disabled:hover:border-slate-200 dark:disabled:hover:border-slate-800 transition-all cursor-pointer bg-slate-50 dark:bg-slate-950"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setIsAllHistoryModalOpen(false)}
+                  className="ml-2 px-4 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-lg transition-all cursor-pointer"
+                >
+                  {isEng ? "Close" : "Đóng"}
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>,
+        document.body
+      )}
 
     </div>
   );
