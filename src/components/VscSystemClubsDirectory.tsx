@@ -102,6 +102,9 @@ interface VscSystemClubsDirectoryProps {
   history: MatchHistoryItem[];
   onlineTournaments?: any[];
   onOpenAuthModal: () => void;
+  externalSelectedClub?: SystemClub | null;
+  onCloseExternalSelectedClub?: () => void;
+  hideDirectoryList?: boolean;
 }
 
 // Stats helper to compute club performance
@@ -376,7 +379,10 @@ export const VscSystemClubsDirectory: React.FC<VscSystemClubsDirectoryProps> = (
   userRole,
   history,
   onlineTournaments = [],
-  onOpenAuthModal
+  onOpenAuthModal,
+  externalSelectedClub,
+  onCloseExternalSelectedClub,
+  hideDirectoryList = false
 }) => {
   const { language } = useLanguage();
   const [clubs, setClubs] = useState<SystemClub[]>([]);
@@ -389,7 +395,23 @@ export const VscSystemClubsDirectory: React.FC<VscSystemClubsDirectoryProps> = (
   const [sortBy, setSortBy] = useState<"name" | "members" | "shots" | "hits" | "hitRate">("name");
 
   // Selected Club Details Modal state
-  const [selectedClub, setSelectedClub] = useState<SystemClub | null>(null);
+  const [selectedClub, setSelectedClub] = useState<SystemClub | null>(externalSelectedClub || null);
+
+  // Sync externalSelectedClub to selectedClub if provided
+  useEffect(() => {
+    if (externalSelectedClub) {
+      setSelectedClub(externalSelectedClub);
+    }
+  }, [externalSelectedClub]);
+
+  // Sync back close event to parent
+  useEffect(() => {
+    if (selectedClub === null && externalSelectedClub) {
+      if (onCloseExternalSelectedClub) {
+        onCloseExternalSelectedClub();
+      }
+    }
+  }, [selectedClub, onCloseExternalSelectedClub]);
 
   // Selected Athlete Profile Modal state for looking up club members
   const [selectedAthleteProfile, setSelectedAthleteProfile] = useState<Athlete | null>(null);
@@ -985,9 +1007,11 @@ export const VscSystemClubsDirectory: React.FC<VscSystemClubsDirectoryProps> = (
   }, [selectedClub, rosterSortBy, clubStatsMap]);
 
   return (
-    <div className="w-full min-h-screen bg-slate-50 dark:bg-slate-950 pb-20 text-slate-800 dark:text-slate-100 transition-colors">
+    <div className={hideDirectoryList ? "" : "w-full min-h-screen bg-slate-50 dark:bg-slate-950 pb-20 text-slate-800 dark:text-slate-100 transition-colors"}>
       
-      {/* HEADER PORTAL */}
+      {!hideDirectoryList && (
+        <>
+          {/* HEADER PORTAL */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
         <div className="bg-gradient-to-br from-[#9c0c13] to-[#80090e] text-white rounded-2xl p-6 shadow-lg border border-red-800 flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
           <div className="absolute right-0 top-0 opacity-10 shrink-0 select-none pointer-events-none transform translate-x-12 -translate-y-8">
@@ -1444,6 +1468,8 @@ export const VscSystemClubsDirectory: React.FC<VscSystemClubsDirectoryProps> = (
           </div>
         </div>,
         document.body
+      )}
+        </>
       )}
 
       {/* SELECTED CLUB DETAILS DRAWER / SIDEBAR (PROFESSIONAL CONTROL DASHBOARD) */}

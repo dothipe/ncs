@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { 
@@ -34,6 +34,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { PKChallenge, Athlete, SystemClub } from "../types";
 import { PkDashboardHome } from "./PkDashboardHome";
 import { AthleteProfileModal } from "./AthleteProfileModal";
+import { VscSystemClubsDirectory } from "./VscSystemClubsDirectory";
 import { db } from "../firebase";
 import { 
   collection, 
@@ -59,6 +60,7 @@ interface PkLobbyViewProps {
   onClearInitialSubTab?: () => void;
   editChallengeId?: string | null;
   onClearEditChallengeId?: () => void;
+  onViewClubHub?: (club: any) => void;
 }
 
 export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ 
@@ -69,7 +71,8 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
   initialSubTab,
   onClearInitialSubTab,
   editChallengeId,
-  onClearEditChallengeId
+  onClearEditChallengeId,
+  onViewClubHub
 }) => {
   const { language } = useLanguage();
   const [activeSubTab, setActiveSubTab] = useState<"dashboard" | "lobby" | "leaderboard" | "history">("dashboard");
@@ -80,6 +83,19 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
 
   const [selectedProfileAthlete, setSelectedProfileAthlete] = useState<Athlete | null>(null);
   const [onlineTournaments, setOnlineTournaments] = useState<any[]>([]);
+
+  // Accept PK Challenge Flow state (PIN / Password input modal or Confirmation modal)
+  const [activeAcceptChallenge, setActiveAcceptChallenge] = useState<PKChallenge | null>(null);
+  const [acceptPinInput, setAcceptPinInput] = useState("");
+  const [acceptError, setAcceptError] = useState("");
+
+  // Live "Modal nổ" popup notifications when someone joins the current user's challenge
+  const isFirstLoadRef = useRef(true);
+  const notifiedRequestsRef = useRef<Set<string>>(new Set());
+  const [newApplicantNotification, setNewApplicantNotification] = useState<{ challenge: PKChallenge; applicant: any } | null>(null);
+
+  // Club Hub modal state
+  const [selectedClubHub, setSelectedClubHub] = useState<SystemClub | null>(null);
 
   // Subscribe to system tournaments list to calculate athlete achievements
   useEffect(() => {
@@ -121,6 +137,40 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         email: email || "",
         scores: {}
       });
+    }
+  };
+
+  const handleProfileOrClubClick = (name: string, email?: string, athleteIdOrUid?: string) => {
+    const matchingClub = systemClubs.find(c => c.name?.trim().toLowerCase() === name.trim().toLowerCase());
+    if (matchingClub) {
+      if (onViewClubHub) {
+        onViewClubHub(matchingClub);
+      } else {
+        setSelectedClubHub(matchingClub);
+      }
+    } else {
+      handleViewAthleteProfile(name, email, athleteIdOrUid);
+    }
+  };
+
+  const getPlayerClubName = (name: string) => {
+    const directClub = systemClubs.find(c => c.name?.trim().toLowerCase() === name.trim().toLowerCase());
+    if (directClub) return directClub.name;
+
+    const ath = systemAthletes.find(a => a.name?.trim().toLowerCase() === name.trim().toLowerCase());
+    if (ath && ath.clubName) return ath.clubName;
+
+    return null;
+  };
+
+  const handleClubClick = (clubName: string) => {
+    const matchingClub = systemClubs.find(c => c.name?.trim().toLowerCase() === clubName.trim().toLowerCase());
+    if (matchingClub) {
+      if (onViewClubHub) {
+        onViewClubHub(matchingClub);
+      } else {
+        setSelectedClubHub(matchingClub);
+      }
     }
   };
 
@@ -342,6 +392,32 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
       setChallenges(list);
       setLoading(false);
 
+      // Check for new join requests to trigger "Modal nổ" for Challenger
+      if (currentUser) {
+        list.forEach((challenge) => {
+          if (
+            challenge.challengerUid === currentUser.uid &&
+            challenge.status === "open" &&
+            challenge.joinRequests &&
+            challenge.joinRequests.length > 0
+          ) {
+            challenge.joinRequests.forEach((req) => {
+              const uniqueKey = `${challenge.id}-${req.uid}`;
+              if (isFirstLoadRef.current) {
+                notifiedRequestsRef.current.add(uniqueKey);
+              } else {
+                if (!notifiedRequestsRef.current.has(uniqueKey)) {
+                  notifiedRequestsRef.current.add(uniqueKey);
+                  // Trigger the Modal nổ!
+                  setNewApplicantNotification({ challenge, applicant: req });
+                }
+              }
+            });
+          }
+        });
+      }
+      isFirstLoadRef.current = false;
+
       // If user is currently in the arena, keep their arena challenge updated in real-time
       const activeChallenge = activeArenaChallengeRef.current;
       if (activeChallenge) {
@@ -359,7 +435,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [currentUser]);
 
   // Subscribe to System Athletes to link profiles
   useEffect(() => {
@@ -791,29 +867,21 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
       return;
     }
 
-    // PIN Verification
-    if (challenge.pin && challenge.pin.trim() !== "") {
-      const enteredPin = prompt(
-        language === "en" 
-          ? "This challenge is protected by a security PIN. Please enter the match PIN to continue:" 
-          : "Kèo đấu này yêu cầu mã PIN bảo mật. Vui lòng nhập mã PIN để tiếp tục:"
-      );
-      if (enteredPin === null) return; // user cancelled
-      if (enteredPin.trim() !== challenge.pin.trim()) {
-        alert(language === "en" ? "Incorrect PIN!" : "Mã PIN không chính xác! Không thể tham gia.");
-        return;
-      }
+    // Open custom accept modal
+    setAcceptPinInput("");
+    setAcceptError("");
+    setActiveAcceptChallenge(challenge);
+  };
+
+  const handleImmediateJoinWithPin = async (challenge: PKChallenge) => {
+    if (!currentUser) return;
+    if (acceptPinInput.trim() !== challenge.pin?.trim()) {
+      setAcceptError(language === "en" ? "Incorrect PIN!" : "Mã PIN không chính xác!");
+      return;
     }
 
-    const confirmAccept = window.confirm(
-      language === "en" 
-        ? `Are you sure you want to request to join this challenge from "${challenge.challengerName}"?` 
-        : `Bạn có chắc chắn muốn đăng ký nhận kèo thách đấu này của "${challenge.challengerName}" không?`
-    );
-    if (!confirmAccept) return;
-
     setActionLoading(true);
-
+    setAcceptError("");
     try {
       let opponentName = currentUser.displayName || "Đối thủ";
       let opponentAvatar = currentUser.photoURL || "";
@@ -826,6 +894,60 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         }
       } else {
         // Overwrite with first available club owned by user
+        if (loggedInClubs.length > 0) {
+          opponentName = loggedInClubs[0].name;
+          if (loggedInClubs[0].logoUrl) opponentAvatar = loggedInClubs[0].logoUrl;
+        }
+      }
+
+      const finalSetsCount = challenge.setsCount || 3;
+      const finalShotsPerSet = challenge.shotsPerSet || 5;
+
+      const challengeRef = doc(db, "vsc_pk_challenges", challenge.id);
+      await updateDoc(challengeRef, {
+        opponentUid: currentUser.uid,
+        opponentName: opponentName,
+        opponentAvatar: opponentAvatar,
+        opponentAthleteId: (challenge.type === "solo_1v1" && loggedInAthlete) ? loggedInAthlete.id : "",
+        status: "accepted",
+        scores: {
+          challengerScores: Array(finalSetsCount).fill(0),
+          opponentScores: Array(finalSetsCount).fill(0),
+          challengerShots: JSON.stringify(Array(finalSetsCount).fill(null).map(() => Array(finalShotsPerSet).fill(null))),
+          opponentShots: JSON.stringify(Array(finalSetsCount).fill(null).map(() => Array(finalShotsPerSet).fill(null))),
+          challengerConfirm: false,
+          opponentConfirm: false
+        },
+        joinRequests: [] // Clear other requests
+      });
+
+      alert(language === "en"
+        ? "Successfully joined the challenge! Match has started."
+        : "Vào kèo thành công! Kèo đấu chính thức bắt đầu."
+      );
+      setActiveAcceptChallenge(null);
+      setAcceptPinInput("");
+    } catch (err: any) {
+      console.error("Error joining with PIN:", err);
+      setAcceptError("Lỗi: " + err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRequestJoinWithoutPin = async (challenge: PKChallenge) => {
+    if (!currentUser) return;
+    setActionLoading(true);
+    try {
+      let opponentName = currentUser.displayName || "Đối thủ";
+      let opponentAvatar = currentUser.photoURL || "";
+
+      if (challenge.type === "solo_1v1") {
+        if (loggedInAthlete) {
+          opponentName = loggedInAthlete.name;
+          if (loggedInAthlete.avatarUrl) opponentAvatar = loggedInAthlete.avatarUrl;
+        }
+      } else {
         if (loggedInClubs.length > 0) {
           opponentName = loggedInClubs[0].name;
           if (loggedInClubs[0].logoUrl) opponentAvatar = loggedInClubs[0].logoUrl;
@@ -845,13 +967,14 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         joinRequests: arrayUnion(requestObj)
       });
 
-      alert(language === "en" 
-        ? "Successfully submitted join request! Please wait for the Challenger to approve you." 
-        : "Đăng ký ứng tuyển kèo thành công! Hãy đợi Chủ kèo phê duyệt ghép trận."
+      alert(language === "en"
+        ? "Successfully submitted join request! Please wait for the Challenger to approve you."
+        : "Gửi yêu cầu ứng tuyển kèo thành công! Hãy đợi Chủ kèo duyệt."
       );
-    } catch (err) {
-      console.error("Error accepting challenge:", err);
-      alert("Lỗi khi đăng ký nhận kèo: " + (err as Error).message);
+      setActiveAcceptChallenge(null);
+    } catch (err: any) {
+      console.error("Error request join:", err);
+      alert("Lỗi khi ứng tuyển: " + err.message);
     } finally {
       setActionLoading(false);
     }
@@ -923,6 +1046,31 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
     } catch (err) {
       console.error("Error declining request:", err);
       alert("Lỗi khi từ chối yêu cầu: " + (err as Error).message);
+    }
+  };
+
+  // Cancel/Withdraw own Join Request
+  const handleCancelJoinRequest = async (challenge: PKChallenge) => {
+    if (!currentUser) return;
+    
+    const request = challenge.joinRequests?.find(r => r.uid === currentUser.uid);
+    if (!request) return;
+
+    const confirmCancel = window.confirm(
+      language === "en"
+        ? "Are you sure you want to withdraw your join request?"
+        : "Bạn có chắc chắn muốn hủy yêu cầu nhận kèo PK này không?"
+    );
+    if (!confirmCancel) return;
+
+    try {
+      const challengeRef = doc(db, "vsc_pk_challenges", challenge.id);
+      await updateDoc(challengeRef, {
+        joinRequests: arrayRemove(request)
+      });
+    } catch (err) {
+      console.error("Error cancelling join request:", err);
+      alert("Lỗi khi hủy yêu cầu nhận kèo: " + (err as Error).message);
     }
   };
 
@@ -2249,6 +2397,12 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
             currentUser={currentUser}
             onAcceptChallenge={handleAcceptChallenge}
             onOpenAuthModal={onOpenAuthModal}
+            onApproveJoinRequest={handleApproveJoinRequest}
+            onDeclineJoinRequest={handleDeclineJoinRequest}
+            onCancelJoinRequest={handleCancelJoinRequest}
+            systemClubs={systemClubs}
+            systemAthletes={systemAthletes}
+            onViewClubHub={onViewClubHub}
           />
         ) : activeSubTab === "lobby" ? (
           /* ========================================================= */
@@ -2410,59 +2564,87 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
 
                           {/* Contestants Visualization bar */}
                           <div className="flex items-center justify-between border-t border-gray-50 pt-3.5">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleViewAthleteProfile(challenge.challengerName, challenge.challengerEmail, challenge.challengerUid);
-                              }}
-                              className="flex items-center gap-2 max-w-[45%] text-left hover:text-rose-600 transition-colors cursor-pointer focus:outline-none"
-                            >
-                              <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-rose-100 bg-gray-50 flex items-center justify-center">
-                                {challenge.challengerAvatar ? (
-                                  <img 
-                                    src={challenge.challengerAvatar} 
-                                    alt={challenge.challengerName} 
-                                    className="w-full h-full object-cover"
-                                    referrerPolicy="no-referrer"
-                                  />
-                                ) : (
-                                  <User className="w-4 h-4 text-gray-400" />
-                                )}
-                              </div>
-                              <span className="text-xs font-bold truncate">
-                                {challenge.challengerName}
-                              </span>
-                            </button>
-
-                            <span className="text-[10px] italic font-black text-rose-500 shrink-0">VS</span>
-
-                            <div className="flex items-center gap-2 max-w-[45%] justify-end text-right">
-                              {isMatched ? (
+                            <div className="flex flex-col items-start max-w-[45%] text-left">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleProfileOrClubClick(challenge.challengerName, challenge.challengerEmail, challenge.challengerUid);
+                                }}
+                                className="flex items-center gap-2 text-left hover:text-rose-600 transition-colors cursor-pointer focus:outline-none"
+                              >
+                                <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-rose-100 bg-gray-50 flex items-center justify-center">
+                                  {challenge.challengerAvatar ? (
+                                    <img 
+                                      src={challenge.challengerAvatar} 
+                                      alt={challenge.challengerName} 
+                                      className="w-full h-full object-cover"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  ) : (
+                                    <User className="w-4 h-4 text-gray-400" />
+                                  )}
+                                </div>
+                                <span className="text-xs font-bold truncate">
+                                  {challenge.challengerName}
+                                </span>
+                              </button>
+                              {getPlayerClubName(challenge.challengerName) && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleViewAthleteProfile(challenge.opponentName || "Đối thủ", challenge.opponentEmail, challenge.opponentUid);
+                                    handleClubClick(getPlayerClubName(challenge.challengerName)!);
                                   }}
-                                  className="flex items-center gap-2 text-right justify-end hover:text-rose-600 transition-colors cursor-pointer focus:outline-none"
+                                  className="text-[9px] text-indigo-600 hover:underline font-bold mt-0.5 ml-10 cursor-pointer"
                                 >
-                                  <span className="text-xs font-bold truncate">
-                                    {challenge.opponentName}
-                                  </span>
-                                  <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-gray-200 bg-gray-50 flex items-center justify-center order-first sm:order-last">
-                                    {challenge.opponentAvatar ? (
-                                      <img 
-                                        src={challenge.opponentAvatar} 
-                                        alt={challenge.opponentName} 
-                                        className="w-full h-full object-cover"
-                                        referrerPolicy="no-referrer"
-                                      />
-                                    ) : (
-                                      <User className="w-4 h-4 text-gray-400" />
-                                    )}
-                                  </div>
+                                  {getPlayerClubName(challenge.challengerName)}
                                 </button>
+                              )}
+                            </div>
+
+                            <span className="text-[10px] italic font-black text-rose-500 shrink-0">VS</span>
+
+                            <div className="flex flex-col items-end max-w-[45%] text-right">
+                              {isMatched ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleProfileOrClubClick(challenge.opponentName || "Đối thủ", challenge.opponentEmail, challenge.opponentUid);
+                                    }}
+                                    className="flex items-center gap-2 text-right justify-end hover:text-rose-600 transition-colors cursor-pointer focus:outline-none"
+                                  >
+                                    <span className="text-xs font-bold truncate">
+                                      {challenge.opponentName}
+                                    </span>
+                                    <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-gray-200 bg-gray-50 flex items-center justify-center order-first sm:order-last">
+                                      {challenge.opponentAvatar ? (
+                                        <img 
+                                          src={challenge.opponentAvatar} 
+                                          alt={challenge.opponentName} 
+                                          className="w-full h-full object-cover"
+                                          referrerPolicy="no-referrer"
+                                        />
+                                      ) : (
+                                        <User className="w-4 h-4 text-gray-400" />
+                                      )}
+                                    </div>
+                                  </button>
+                                  {challenge.opponentName && getPlayerClubName(challenge.opponentName) && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleClubClick(getPlayerClubName(challenge.opponentName)!);
+                                      }}
+                                      className="text-[9px] text-indigo-600 hover:underline font-bold mt-0.5 mr-10 cursor-pointer"
+                                    >
+                                      {getPlayerClubName(challenge.opponentName)}
+                                    </button>
+                                  )}
+                                </>
                               ) : (
                                 <span className="text-xs italic text-gray-400">
                                   {language === "en" ? "Awaiting..." : "Đang chờ đối..."}
@@ -2545,14 +2727,40 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
 
                           <div className="flex items-center gap-2 ml-auto">
                             {!isOwner && !isMatched && (
-                              <button
-                                type="button"
-                                onClick={() => handleAcceptChallenge(challenge)}
-                                className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2 rounded-xl cursor-pointer shadow-sm transition-colors"
-                              >
-                                <Sword className="w-3.5 h-3.5" />
-                                <span>{language === "en" ? "Accept Challenge" : "Nhận Kèo PK"}</span>
-                              </button>
+                              (() => {
+                                const alreadyRequested = challenge.joinRequests?.some(r => r.uid === currentUser?.uid);
+                                if (alreadyRequested) {
+                                  return (
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        disabled
+                                        className="flex items-center gap-1.5 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 text-xs font-bold px-3 py-2 rounded-xl border border-yellow-500/20"
+                                      >
+                                        <Clock className="w-3.5 h-3.5 animate-pulse text-yellow-500" />
+                                        <span>{language === "en" ? "Awaiting Approval" : "Đang Chờ Duyệt"}</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleCancelJoinRequest(challenge)}
+                                        className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 text-xs font-bold px-3 py-2 rounded-xl cursor-pointer transition-colors border border-slate-200 dark:border-slate-700"
+                                      >
+                                        <span>{language === "en" ? "Cancel Request" : "Hủy nhận kèo"}</span>
+                                      </button>
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAcceptChallenge(challenge)}
+                                    className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2 rounded-xl cursor-pointer shadow-sm transition-colors"
+                                  >
+                                    <Sword className="w-3.5 h-3.5" />
+                                    <span>{language === "en" ? "Accept Challenge" : "Nhận Kèo PK"}</span>
+                                  </button>
+                                );
+                              })()
                             )}
 
                             {isMatched && (
@@ -2773,7 +2981,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                           {/* Challenger */}
                           <button
                             type="button"
-                            onClick={() => handleViewAthleteProfile(challenge.challengerName, challenge.challengerEmail, challenge.challengerUid)}
+                            onClick={() => handleProfileOrClubClick(challenge.challengerName, challenge.challengerEmail, challenge.challengerUid)}
                             className="flex flex-col items-center text-center w-5/12 focus:outline-none hover:text-rose-600 transition-colors cursor-pointer"
                           >
                             <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center shadow-sm">
@@ -2806,7 +3014,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                           {/* Opponent */}
                           <button
                             type="button"
-                            onClick={() => handleViewAthleteProfile(challenge.opponentName || "Đối thủ", challenge.opponentEmail, challenge.opponentUid)}
+                            onClick={() => handleProfileOrClubClick(challenge.opponentName || "Đối thủ", challenge.opponentEmail, challenge.opponentUid)}
                             className="flex flex-col items-center text-center w-5/12 focus:outline-none hover:text-rose-600 transition-colors cursor-pointer"
                           >
                             <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center shadow-sm">
@@ -4579,6 +4787,165 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         isGlobalAdmin={false}
         language={language}
       />
+
+      {/* Custom Accept Modal */}
+      {activeAcceptChallenge && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[99999] flex flex-col items-center justify-center overflow-y-auto bg-slate-950/65 backdrop-blur-xs p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-md w-full border border-slate-100 dark:border-slate-800 shadow-2xl text-slate-800 dark:text-slate-101 my-auto">
+            <div className="flex items-center gap-2 border-b border-gray-150 dark:border-slate-800 pb-3 mb-4">
+              <Sword className="w-5 h-5 text-rose-500 animate-pulse" />
+              <h3 className="font-black text-sm uppercase tracking-wide">
+                {activeAcceptChallenge.pin ? "Nhận Kèo Phòng Mật Khẩu" : "Xác Nhận Nhận Kèo PK"}
+              </h3>
+            </div>
+
+            {activeAcceptChallenge.pin ? (
+              <div className="space-y-4">
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-semibold">
+                  Kèo đấu này được bảo vệ bằng mã PIN bảo mật. Vui lòng nhập mật khẩu phòng đấu để tham gia trực tiếp:
+                </p>
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-gray-400 mb-1">Mã PIN Phòng</label>
+                  <input
+                    type="password"
+                    placeholder="••••••"
+                    value={acceptPinInput}
+                    onChange={(e) => {
+                      setAcceptPinInput(e.target.value);
+                      setAcceptError("");
+                    }}
+                    className="w-full bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-rose-400 font-extrabold text-center tracking-widest text-slate-900 dark:text-white"
+                  />
+                </div>
+                {acceptError && (
+                  <p className="text-[10px] text-rose-500 font-bold text-center">{acceptError}</p>
+                )}
+                <div className="flex gap-3 justify-end mt-4">
+                  <button
+                    type="button"
+                    onClick={() => { setActiveAcceptChallenge(null); setAcceptPinInput(""); setAcceptError(""); }}
+                    className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleImmediateJoinWithPin(activeAcceptChallenge)}
+                    disabled={actionLoading}
+                    className="px-4 py-2 text-xs font-bold bg-green-600 hover:bg-green-700 text-white rounded-xl transition-all shadow-md cursor-pointer disabled:opacity-50"
+                  >
+                    {actionLoading ? "Đang xử lý..." : "Xác nhận & Vào kèo"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs text-slate-650 leading-relaxed font-semibold">
+                  Bạn có chắc chắn muốn nhận kèo đấu này của <strong className="text-slate-900 dark:text-white">"{activeAcceptChallenge.challengerName}"</strong> không?
+                </p>
+                <div className="bg-slate-50 dark:bg-slate-950/20 p-3 rounded-xl border border-slate-200/50 dark:border-slate-800/50 text-[11px] text-slate-500 space-y-1">
+                  <div>Địa điểm: <strong className="text-slate-700 dark:text-slate-300">{activeAcceptChallenge.location}</strong></div>
+                  <div>Cự ly: <strong className="text-slate-700 dark:text-slate-300">{activeAcceptChallenge.distance}m</strong></div>
+                  <div>Quy cách: <strong className="text-slate-700 dark:text-slate-300">{activeAcceptChallenge.setsCount} hiệp - {activeAcceptChallenge.shotsPerSet} viên</strong></div>
+                </div>
+                <p className="text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/20 p-2.5 rounded-lg border border-amber-100 dark:border-amber-900">
+                  ℹ️ Vì phòng không có mật khẩu bảo mật, yêu cầu của bạn sẽ được gửi tới Chủ kèo. Bạn vui lòng chờ duyệt kèo nếu được chấp nhận mới chính thức thi đấu.
+                </p>
+                <div className="flex gap-3 justify-end mt-4">
+                  <button
+                    type="button"
+                    onClick={() => { setActiveAcceptChallenge(null); }}
+                    className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRequestJoinWithoutPin(activeAcceptChallenge)}
+                    disabled={actionLoading}
+                    className="px-4 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl transition-all shadow-md cursor-pointer disabled:opacity-50"
+                  >
+                    {actionLoading ? "Đang xử lý..." : "Xác nhận gửi yêu cầu"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Live Challenger "Modal nổ" Popup Notification */}
+      {newApplicantNotification && (
+        <div className="fixed inset-0 z-[10030] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-md w-full border border-rose-100 dark:border-rose-950/50 shadow-2xl text-slate-800 dark:text-slate-101 text-center animate-bounceIn relative overflow-hidden">
+            {/* Top flashing decoration */}
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-rose-500 via-amber-500 to-rose-500 animate-pulse" />
+
+            <div className="w-16 h-16 rounded-2xl bg-rose-50 dark:bg-rose-950/40 text-rose-500 flex items-center justify-center mx-auto mb-4 border border-rose-100 dark:border-rose-900 shadow-sm animate-pulse">
+              <Sword className="w-8 h-8 rotate-45" />
+            </div>
+
+            <h3 className="font-black text-base uppercase text-rose-600 tracking-wide mb-1">
+              ⚡ ĐÃ CÓ YÊU CẦU ỨNG TUYỂN MỚI!
+            </h3>
+            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-4">
+              {newApplicantNotification.challenge.title}
+            </p>
+
+            <div className="flex flex-col items-center bg-slate-50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/60 mb-5">
+              <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-rose-100 shrink-0 mb-2 shadow-sm bg-slate-100">
+                {newApplicantNotification.applicant.avatar ? (
+                  <img src={newApplicantNotification.applicant.avatar} alt={newApplicantNotification.applicant.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  <User className="w-6 h-6 text-gray-400 m-auto" />
+                )}
+              </div>
+              <span className="font-black text-sm text-slate-900 dark:text-white">
+                {newApplicantNotification.applicant.name}
+              </span>
+              <span className="text-[9px] font-bold text-slate-400 italic mt-0.5">
+                Vừa gửi yêu cầu nhận kèo thách đấu của bạn
+              </span>
+            </div>
+
+            <div className="flex gap-2 justify-center">
+              <button
+                type="button"
+                onClick={() => setNewApplicantNotification(null)}
+                className="px-4 py-2.5 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
+              >
+                Bỏ qua
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setNewApplicantNotification(null);
+                  setActiveSubTab("dashboard"); // Bring them to dashboard control panel
+                }}
+                className="px-5 py-2.5 text-xs font-black bg-rose-600 hover:bg-rose-700 text-white rounded-xl transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+              >
+                <span>Xem và Duyệt ngay</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reusable Club Hub Modal */}
+      {selectedClubHub && (
+        <VscSystemClubsDirectory
+          currentUser={currentUser}
+          userRole={currentUser?.uid === selectedClubHub.creatorUid ? "admin" : "user"}
+          history={[]}
+          onlineTournaments={onlineTournaments}
+          onOpenAuthModal={onOpenAuthModal}
+          externalSelectedClub={selectedClubHub}
+          onCloseExternalSelectedClub={() => setSelectedClubHub(null)}
+          hideDirectoryList={true}
+        />
+      )}
 
     </div>
   );

@@ -28,6 +28,12 @@ interface PkDashboardHomeProps {
   currentUser?: any;
   onAcceptChallenge?: (challenge: PKChallenge) => void;
   onOpenAuthModal?: () => void;
+  onApproveJoinRequest?: (challenge: PKChallenge, request: any) => void;
+  onDeclineJoinRequest?: (challenge: PKChallenge, request: any) => void;
+  onCancelJoinRequest?: (challenge: PKChallenge) => void;
+  systemClubs?: any[];
+  systemAthletes?: any[];
+  onViewClubHub?: (club: any) => void;
 }
 
 export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
@@ -40,8 +46,43 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
   onViewAthleteProfile,
   currentUser,
   onAcceptChallenge,
-  onOpenAuthModal
+  onOpenAuthModal,
+  onApproveJoinRequest,
+  onDeclineJoinRequest,
+  onCancelJoinRequest,
+  systemClubs = [],
+  systemAthletes = [],
+  onViewClubHub
 }) => {
+  const getPlayerClubName = (name: string) => {
+    const directClub = systemClubs.find(c => c.name?.trim().toLowerCase() === name.trim().toLowerCase());
+    if (directClub) return directClub.name;
+
+    const ath = systemAthletes.find(a => a.name?.trim().toLowerCase() === name.trim().toLowerCase());
+    if (ath && ath.clubName) return ath.clubName;
+
+    // Fallback to leaderboard data
+    const lbPlayer = pkLeaderboard.find(p => p.name?.trim().toLowerCase() === name.trim().toLowerCase());
+    if (lbPlayer && lbPlayer.clubName) return lbPlayer.clubName;
+
+    return null;
+  };
+
+  const handleProfileOrClubClick = (name: string, email?: string, uid?: string) => {
+    const matchingClub = systemClubs.find(c => c.name?.trim().toLowerCase() === name.trim().toLowerCase());
+    if (matchingClub && onViewClubHub) {
+      onViewClubHub(matchingClub);
+    } else {
+      onViewAthleteProfile?.(name, email, uid);
+    }
+  };
+
+  const handleClubClick = (clubName: string) => {
+    const matchingClub = systemClubs.find(c => c.name?.trim().toLowerCase() === clubName.trim().toLowerCase());
+    if (matchingClub && onViewClubHub) {
+      onViewClubHub(matchingClub);
+    }
+  };
   // Statistics
   const openChallenges = challenges.filter(c => c.status === "open");
   const liveMatches = challenges.filter(c => c.status === "accepted" || c.status === "ongoing");
@@ -267,27 +308,39 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
 
                     {/* Challenger Section */}
                     <div className="flex items-center justify-between border-t border-gray-50 pt-3">
-                      <button
-                        type="button"
-                        onClick={() => onViewAthleteProfile?.(challenge.challengerName, challenge.challengerEmail, challenge.challengerUid)}
-                        className="flex items-center gap-2 text-left focus:outline-none hover:text-rose-600 transition-colors"
-                      >
-                        <div className="w-8 h-8 rounded-full overflow-hidden border border-rose-150 bg-gray-50 shrink-0">
-                          {challenge.challengerAvatar ? (
-                            <img src={challenge.challengerAvatar} alt={challenge.challengerName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                          ) : (
-                            <User className="w-4 h-4 text-gray-400 m-auto" />
-                          )}
-                        </div>
-                        <div>
-                          <span className="text-xs font-black text-gray-800 block truncate max-w-[125px]">
-                            {challenge.challengerName}
-                          </span>
-                          <span className="text-[9px] text-gray-450 font-bold block">
-                            {challenge.type === "solo_1v1" ? "Chủ kèo" : "Đại diện CLB"}
-                          </span>
-                        </div>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleProfileOrClubClick(challenge.challengerName, challenge.challengerEmail, challenge.challengerUid)}
+                          className="flex items-center gap-2 text-left focus:outline-none hover:text-rose-600 transition-colors"
+                        >
+                          <div className="w-8 h-8 rounded-full overflow-hidden border border-rose-150 bg-gray-50 shrink-0">
+                            {challenge.challengerAvatar ? (
+                              <img src={challenge.challengerAvatar} alt={challenge.challengerName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            ) : (
+                              <User className="w-4 h-4 text-gray-400 m-auto" />
+                            )}
+                          </div>
+                          <div>
+                            <span className="text-xs font-black text-gray-800 block truncate max-w-[125px]">
+                              {challenge.challengerName}
+                            </span>
+                            <span className="text-[9px] text-gray-450 font-bold block">
+                              {challenge.type === "solo_1v1" ? "Chủ kèo" : "Đại diện CLB"}
+                            </span>
+                          </div>
+                        </button>
+
+                        {getPlayerClubName(challenge.challengerName) && (
+                          <button
+                            type="button"
+                            onClick={() => handleClubClick(getPlayerClubName(challenge.challengerName)!)}
+                            className="text-[9px] font-extrabold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded hover:underline cursor-pointer transition-colors"
+                          >
+                            {getPlayerClubName(challenge.challengerName)}
+                          </button>
+                        )}
+                      </div>
 
                       <div className="flex flex-col items-end text-right">
                         <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">
@@ -298,6 +351,56 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                         </span>
                       </div>
                     </div>
+
+                    {/* Applicant requests list */}
+                    {challenge.joinRequests && challenge.joinRequests.length > 0 && (
+                      <div className="mt-3 bg-rose-50/50 dark:bg-rose-950/10 p-3 rounded-xl border border-rose-100/50 dark:border-rose-950/20 text-xs">
+                        <div className="flex items-center gap-1 text-rose-700 dark:text-rose-400 font-black text-[10px] uppercase tracking-wider mb-2">
+                          <Users className="w-3.5 h-3.5" />
+                          <span>Yêu Cầu Ứng Tuyển ({challenge.joinRequests.length})</span>
+                        </div>
+                        <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                          {challenge.joinRequests.map((req: any) => (
+                            <div key={req.uid} className="flex items-center justify-between gap-2 bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-100 dark:border-slate-750/50 shadow-3xs">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 bg-slate-50">
+                                  {req.avatar ? (
+                                    <img src={req.avatar} alt={req.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                  ) : (
+                                    <User className="w-3.5 h-3.5 text-gray-400 m-auto" />
+                                  )}
+                                </div>
+                                <span className="font-bold text-gray-800 dark:text-gray-200 truncate max-w-[110px]">
+                                  {req.name}
+                                </span>
+                              </div>
+                              {isOwner && onApproveJoinRequest && onDeclineJoinRequest ? (
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => onApproveJoinRequest(challenge, req)}
+                                    className="bg-green-600 hover:bg-green-750 text-white text-[9px] font-bold px-2 py-1 rounded cursor-pointer transition-colors"
+                                  >
+                                    {language === "en" ? "Approve" : "Duyệt"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => onDeclineJoinRequest(challenge, req)}
+                                    className="bg-rose-100 hover:bg-rose-200 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400 text-[9px] font-bold px-2 py-1 rounded cursor-pointer transition-colors"
+                                  >
+                                    {language === "en" ? "Decline" : "Từ chối"}
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-[9px] text-amber-600 font-bold italic">
+                                  {language === "en" ? "Pending..." : "Chờ duyệt..."}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Card Action Footer */}
@@ -307,14 +410,36 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                     </span>
                     <div>
                       {!isOwner ? (
-                        <button
-                          type="button"
-                          onClick={() => onAcceptChallenge ? onAcceptChallenge(challenge) : setActiveSubTab("lobby")}
-                          className="flex items-center gap-1 bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg cursor-pointer shadow-3xs transition-colors"
-                        >
-                          <Sword className="w-3.5 h-3.5" />
-                          <span>{language === "en" ? "Join Challenge" : "Nhận Kèo Ngay"}</span>
-                        </button>
+                        (() => {
+                          const alreadyRequested = challenge.joinRequests?.some((r: any) => r.uid === currentUser?.uid);
+                          if (alreadyRequested) {
+                            return (
+                              <div className="flex items-center gap-1.5">
+                                <span className="flex items-center gap-1 bg-yellow-500/10 text-yellow-600 dark:text-yellow-500 text-[10px] font-extrabold px-2 py-1 rounded-md border border-yellow-500/20">
+                                  <Clock className="w-3 h-3 animate-pulse text-yellow-500" />
+                                  {language === "en" ? "Awaiting Approval" : "Đang Chờ Duyệt"}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => onCancelJoinRequest && onCancelJoinRequest(challenge)}
+                                  className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-2 py-1 rounded-md cursor-pointer border border-slate-200 transition-colors"
+                                >
+                                  {language === "en" ? "Cancel" : "Hủy nhận kèo"}
+                                </button>
+                              </div>
+                            );
+                          }
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => onAcceptChallenge ? onAcceptChallenge(challenge) : setActiveSubTab("lobby")}
+                              className="flex items-center gap-1 bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg cursor-pointer shadow-3xs transition-colors"
+                            >
+                              <Sword className="w-3.5 h-3.5" />
+                              <span>{language === "en" ? "Join Challenge" : "Nhận Kèo Ngay"}</span>
+                            </button>
+                          );
+                        })()
                       ) : (
                         <button
                           type="button"
@@ -356,15 +481,15 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
             </button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
-            {/* Left Column: Top 3 Podium */}
-            <div className="lg:col-span-5 flex flex-col justify-center bg-slate-50/50 p-6 rounded-2xl border border-gray-100">
+          <div className="flex flex-col gap-8">
+            {/* Top Section: Top 3 Podium (Bảng vàng Top 3) */}
+            <div className="w-full bg-slate-50/50 p-6 rounded-2xl border border-gray-100">
               <div className="text-center mb-6">
                 <span className="text-[10px] font-black uppercase text-rose-800 bg-rose-50 border border-rose-100 px-3 py-1 rounded-full">
                   {language === "en" ? "TOP 3 GLORY PODIUM" : "BẢNG VÀNG TOP 3"}
                 </span>
               </div>
-              <div className="grid grid-cols-3 gap-2 pt-2 items-end">
+              <div className="max-w-xl mx-auto grid grid-cols-3 gap-2 pt-2 items-end">
                 {podiumPlayers.map((player, idx) => {
                   if (!player) {
                     return (
@@ -430,6 +555,15 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                         </button>
                         <span className="text-[10px] font-extrabold text-rose-600 block">ELO {player.elo}</span>
                         <span className="text-[8px] text-gray-400 font-bold block">{player.wins}W - {player.losses}L</span>
+                        {getPlayerClubName(player.name) && (
+                          <button
+                            type="button"
+                            onClick={() => handleClubClick(getPlayerClubName(player.name)!)}
+                            className="text-[8px] text-indigo-600 hover:underline font-extrabold block line-clamp-1 max-w-[85px] mx-auto cursor-pointer"
+                          >
+                            {getPlayerClubName(player.name)}
+                          </button>
+                        )}
                       </div>
 
                       {/* Physical Podium Block */}
@@ -445,8 +579,8 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
               </div>
             </div>
 
-            {/* Right Column: TOP 4-10 list (shows exactly 7 players) */}
-            <div className="lg:col-span-7 flex flex-col">
+            {/* Bottom Section: Remaining Rankings (Danh sách xếp hạng) */}
+            <div className="w-full flex flex-col">
               <div className="flex items-center justify-between mb-3.5">
                 <span className="text-xs font-black uppercase text-gray-800 flex items-center gap-1.5">
                   <Sword className="w-3.5 h-3.5 text-rose-600" />
@@ -490,9 +624,31 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                             <span className="text-xs font-black text-gray-800 block truncate group-hover:text-rose-600 transition-colors">
                               {player.name}
                             </span>
-                            <span className="text-[9px] text-gray-400 font-bold block">
-                              {player.clubName || (language === "en" ? "Independent" : "Tự do")}
-                            </span>
+                            {player.clubName ? (
+                              <span 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleClubClick(player.clubName);
+                                }}
+                                className="text-[9px] text-indigo-600 hover:underline font-bold block cursor-pointer"
+                              >
+                                {player.clubName}
+                              </span>
+                            ) : getPlayerClubName(player.name) ? (
+                              <span 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleClubClick(getPlayerClubName(player.name)!);
+                                }}
+                                className="text-[9px] text-indigo-600 hover:underline font-bold block cursor-pointer"
+                              >
+                                {getPlayerClubName(player.name)}
+                              </span>
+                            ) : (
+                              <span className="text-[9px] text-gray-400 font-bold block">
+                                {language === "en" ? "Independent" : "Tự do"}
+                              </span>
+                            )}
                           </div>
                         </button>
                       </div>
@@ -736,23 +892,34 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                     <div className="flex items-center justify-around gap-4 bg-gray-50 p-3.5 rounded-xl border border-gray-50">
                       
                       {/* Challenger */}
-                      <button
-                        type="button"
-                        onClick={() => onViewAthleteProfile?.(match.challengerName, match.challengerEmail, match.challengerUid)}
-                        className="flex flex-col items-center text-center w-5/12 focus:outline-none hover:text-rose-650 transition-colors cursor-pointer"
-                      >
-                        <div className="w-8 h-8 rounded-full overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center shadow-xs">
-                          {match.challengerAvatar ? (
-                            <img src={match.challengerAvatar} alt={match.challengerName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                          ) : (
-                            <User className="w-4 h-4 text-gray-300" />
-                          )}
-                        </div>
-                        <span className="text-[11px] font-bold mt-1.5 truncate max-w-full text-gray-850">{match.challengerName}</span>
+                      <div className="flex flex-col items-center text-center w-5/12">
+                        <button
+                          type="button"
+                          onClick={() => handleProfileOrClubClick(match.challengerName, match.challengerEmail, match.challengerUid)}
+                          className="flex flex-col items-center text-center focus:outline-none hover:text-rose-600 transition-colors cursor-pointer"
+                        >
+                          <div className="w-8 h-8 rounded-full overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center shadow-xs">
+                            {match.challengerAvatar ? (
+                              <img src={match.challengerAvatar} alt={match.challengerName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            ) : (
+                              <User className="w-4 h-4 text-gray-300" />
+                            )}
+                          </div>
+                          <span className="text-[11px] font-bold mt-1.5 truncate max-w-full text-gray-850">{match.challengerName}</span>
+                        </button>
+                        {getPlayerClubName(match.challengerName) && (
+                          <button
+                            type="button"
+                            onClick={() => handleClubClick(getPlayerClubName(match.challengerName)!)}
+                            className="text-[9px] text-indigo-600 hover:underline font-bold mt-0.5 cursor-pointer"
+                          >
+                            {getPlayerClubName(match.challengerName)}
+                          </button>
+                        )}
                         {challengerWin && (
                           <span className="text-[8px] font-black uppercase text-green-600 bg-green-50 border border-green-100 px-1.5 py-0.2 rounded mt-0.5">Winner</span>
                         )}
-                      </button>
+                      </div>
 
                       {/* Scores Sum */}
                       <div className="text-center shrink-0 flex flex-col items-center">
@@ -769,23 +936,34 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                       </div>
 
                       {/* Opponent */}
-                      <button
-                        type="button"
-                        onClick={() => onViewAthleteProfile?.(match.opponentName || "Đối thủ", match.opponentEmail, match.opponentUid)}
-                        className="flex flex-col items-center text-center w-5/12 focus:outline-none hover:text-rose-650 transition-colors cursor-pointer"
-                      >
-                        <div className="w-8 h-8 rounded-full overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center shadow-xs">
-                          {match.opponentAvatar ? (
-                            <img src={match.opponentAvatar} alt={match.opponentName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                          ) : (
-                            <User className="w-4 h-4 text-gray-300" />
-                          )}
-                        </div>
-                        <span className="text-[11px] font-bold mt-1.5 truncate max-w-full text-gray-850">{match.opponentName || "Guest"}</span>
+                      <div className="flex flex-col items-center text-center w-5/12">
+                        <button
+                          type="button"
+                          onClick={() => handleProfileOrClubClick(match.opponentName || "Đối thủ", match.opponentEmail, match.opponentUid)}
+                          className="flex flex-col items-center text-center focus:outline-none hover:text-rose-650 transition-colors cursor-pointer"
+                        >
+                          <div className="w-8 h-8 rounded-full overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center shadow-xs">
+                            {match.opponentAvatar ? (
+                              <img src={match.opponentAvatar} alt={match.opponentName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            ) : (
+                              <User className="w-4 h-4 text-gray-300" />
+                            )}
+                          </div>
+                          <span className="text-[11px] font-bold mt-1.5 truncate max-w-full text-gray-850">{match.opponentName || "Guest"}</span>
+                        </button>
+                        {match.opponentName && getPlayerClubName(match.opponentName) && (
+                          <button
+                            type="button"
+                            onClick={() => handleClubClick(getPlayerClubName(match.opponentName)!)}
+                            className="text-[9px] text-indigo-600 hover:underline font-bold mt-0.5 cursor-pointer"
+                          >
+                            {getPlayerClubName(match.opponentName)}
+                          </button>
+                        )}
                         {opponentWin && (
                           <span className="text-[8px] font-black uppercase text-green-600 bg-green-50 border border-green-100 px-1.5 py-0.2 rounded mt-0.5">Winner</span>
                         )}
-                      </button>
+                      </div>
 
                     </div>
                   </div>

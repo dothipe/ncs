@@ -278,6 +278,7 @@ export default function App() {
   // VSC System Athletes & Profile Modal States
   const [vscSystemAthletes, setVscSystemAthletes] = useState<Athlete[]>([]);
   const [globalAthleteProfile, setGlobalAthleteProfile] = useState<Athlete | null>(null);
+  const [globalSelectedClub, setGlobalSelectedClub] = useState<any | null>(null);
 
   const [isShareCopied, setIsShareCopied] = useState(false);
 
@@ -3735,14 +3736,15 @@ export default function App() {
               vscSystemAthletes={vscSystemAthletes}
               onlineTournaments={onlineTournaments}
               onSelectPkChallenge={(id, subTab) => {
-                setActivePkChallengeId(id);
-                if (subTab) setActivePkSubTab(subTab);
-                setActiveTab("pk_lobby");
+                 setActivePkChallengeId(id);
+                 if (subTab) setActivePkSubTab(subTab);
+                 setActiveTab("pk_lobby");
               }}
               onEditPkChallenge={(id) => {
-                setPkChallengeToEditId(id);
-                setActiveTab("pk_lobby");
+                 setPkChallengeToEditId(id);
+                 setActiveTab("pk_lobby");
               }}
+              onViewClubHub={(club) => setGlobalSelectedClub(club)}
             />
           )}
 
@@ -3787,6 +3789,7 @@ export default function App() {
               onClearInitialSubTab={() => setActivePkSubTab(null)}
               editChallengeId={pkChallengeToEditId}
               onClearEditChallengeId={() => setPkChallengeToEditId(null)}
+              onViewClubHub={(club) => setGlobalSelectedClub(club)}
             />
           )}
 
@@ -4035,6 +4038,19 @@ export default function App() {
         isGlobalAdmin={isGlobalAdmin}
         language={language}
       />
+
+      {globalSelectedClub && (
+        <VscSystemClubsDirectory
+          currentUser={currentUser}
+          userRole={isGlobalAdmin ? "admin" : "user"}
+          history={history}
+          onlineTournaments={onlineTournaments}
+          onOpenAuthModal={() => setIsAuthModalOpen(true)}
+          externalSelectedClub={globalSelectedClub}
+          onCloseExternalSelectedClub={() => setGlobalSelectedClub(null)}
+          hideDirectoryList={true}
+        />
+      )}
 
       {draftPreviewItem && (
         <PublishDraftModal

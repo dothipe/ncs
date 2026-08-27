@@ -8,7 +8,8 @@ import {
   Plus, 
   Shield, 
   Heart, 
-  User 
+  User,
+  Sword
 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 
@@ -187,7 +188,7 @@ export function MobileBottomNav({
     );
   }
 
-  const isSettingsActive = activeTab === "settings";
+  const isPkActive = activeTab === "pk_lobby";
   const isActiveActive = activeTab === "dashboard" || (activeTab === "home" && homeFilter === "active");
   const isHomeActive = activeTab === "home" && (homeFilter === "all" || homeFilter === "all_list");
   const isFollowedActive = activeTab === "home" && homeFilter === "followed";
@@ -197,41 +198,27 @@ export function MobileBottomNav({
     <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-gradient-to-b from-[#b80e16] to-[#8c0a10] border-t border-red-500/25 shadow-2xl h-16 pb-safe flex items-stretch">
       <div className="grid grid-cols-5 w-full h-full items-center text-center relative px-2">
         
-        {/* Button 1: TẠO GIẢI ĐẤU MỚI */}
+        {/* Button 1: THÁCH ĐẤU PK */}
         <button
           onClick={() => {
-            if (!currentUser) {
-              setIsAuthModalOpen(true);
-              return;
-            }
-            if (activeHistoryId) {
-              if (hasUnsavedChanges) {
-                setPendingTabTarget({ type: "exit", value: "all" });
-                setIsUnsavedModalOpen(true);
-                return;
-              }
-              handleExitTournament();
-            }
-            setActiveTab("settings");
-            setSettingsSubTab("config");
-            setIsNewTournamentModalOpen(true);
+            changeTab("pk_lobby");
           }}
           className="flex flex-col items-center justify-center h-full relative cursor-pointer select-none border-none bg-transparent"
         >
-          <div className={`transition-all duration-300 flex flex-col items-center ${isSettingsActive ? "-translate-y-3.5" : "translate-y-0"}`}>
+          <div className={`transition-all duration-300 flex flex-col items-center ${isPkActive ? "-translate-y-3.5" : "translate-y-0"}`}>
             <div className={`transition-all duration-300 flex items-center justify-center ${
-              isSettingsActive 
+              isPkActive 
                 ? "w-12 h-12 bg-gradient-to-b from-[#d8141c] to-[#9c0c13] rounded-full border-4 border-white dark:border-slate-950 shadow-lg" 
                 : "w-9 h-9 bg-transparent"
             }`}>
-              <Plus className={`w-5 h-5 transition-all duration-300 ${isSettingsActive ? "text-white scale-110" : "text-white/70"}`} />
+              <Sword className={`w-5 h-5 transition-all duration-300 ${isPkActive ? "text-white scale-110" : "text-white/70"}`} />
             </div>
             <span className={`text-[8px] transition-all duration-300 tracking-tight ${
-              isSettingsActive 
+              isPkActive 
                 ? "font-black text-yellow-400 mt-0.5 uppercase tracking-wider" 
                 : "font-bold text-white/70 mt-1"
             }`}>
-              {language === "en" ? "Create" : "Tạo giải"}
+              {language === "en" ? "Battle" : "Thách Đấu"}
             </span>
           </div>
         </button>

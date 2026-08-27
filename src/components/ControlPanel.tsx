@@ -62,6 +62,7 @@ import { Athlete, DistanceConfig, SystemClub, PKChallenge } from "../types";
 import { getHitCount } from "../utils/qualification";
 import { useLanguage } from "../context/LanguageContext";
 import { Club } from "../types";
+import { VscSystemClubsDirectory } from "./VscSystemClubsDirectory";
 
 interface ControlPanelProps {
   isGlobalAdmin?: boolean;
@@ -75,6 +76,7 @@ interface ControlPanelProps {
   onChangeActiveTab?: (tab: "home" | "desktop" | "dashboard" | "scoring" | "input_scores" | "leaderboard" | "teams" | "athletes" | "settings" | "history" | "control_panel" | "qltv" | "vsc_system_directory" | "vsc_clubs_directory" | "pk_lobby") => void;
   onSelectPkChallenge?: (id: string, subTab?: "dashboard" | "lobby" | "leaderboard" | "history") => void;
   onEditPkChallenge?: (id: string) => void;
+  onViewClubHub?: (club: SystemClub) => void;
 }
 
 export const resolveTournamentType = (tour: TournamentData): "individual" | "team" | "combined" => {
@@ -230,7 +232,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   onlineTournaments = [],
   onChangeActiveTab,
   onSelectPkChallenge,
-  onEditPkChallenge
+  onEditPkChallenge,
+  onViewClubHub
 }) => {
   const { language } = useLanguage();
   const [tournaments, setTournaments] = useState<TournamentData[]>([]);
@@ -267,6 +270,13 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   const [editPin, setEditPin] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
 
+  // States for 2-step confirmation to cancel a challenge
+  const [cancelChallengeId, setCancelChallengeId] = useState<string | null>(null);
+  const [cancelStep, setCancelStep] = useState<number>(0); // 0 = closed, 1 = first confirm, 2 = second confirm
+
+  // State for Club Hub Modal
+  const [selectedClubHub, setSelectedClubHub] = useState<SystemClub | null>(null);
+
   const loggedInAthlete = useMemo(() => {
     if (!currentUser || !vscSystemAthletes) return null;
     const myEmail = currentUser.email?.toLowerCase().trim();
@@ -281,6 +291,24 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
       return members.some(m => m.uid === currentUser.uid);
     });
   }, [currentUser, systemClubs]);
+
+  const getPlayerClubName = (name: string) => {
+    const directClub = systemClubs.find(c => c.name?.trim().toLowerCase() === name.trim().toLowerCase());
+    if (directClub) return directClub.name;
+
+    const ath = vscSystemAthletes.find(a => a.name?.trim().toLowerCase() === name.trim().toLowerCase());
+    if (ath && ath.clubName) return ath.clubName;
+
+    return null;
+  };
+
+  const handleClubClick = (clubName: string) => {
+    const matchingClub = systemClubs.find(c => c.name?.trim().toLowerCase() === clubName.trim().toLowerCase());
+    if (matchingClub) {
+      if (onViewClubHub) onViewClubHub(matchingClub);
+      else setSelectedClubHub(matchingClub);
+    }
+  };
 
   const formatDate = (isoString: string) => {
     if (!isoString) return "";
@@ -621,19 +649,75 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   };
   
   const handleCancelPkChallenge = async (challengeId: string) => {
-    const isConfirmed = window.confirm(
-      language === "en" 
-        ? "Are you sure you want to cancel and delete this pending challenge?" 
-        : "Bạn có chắc chắn muốn hủy và xóa kèo đấu đang chờ này không?"
-    );
-    if (!isConfirmed) return;
-
     try {
       await deleteDoc(doc(db, "vsc_pk_challenges", challengeId));
       alert(language === "en" ? "Challenge cancelled successfully!" : "Hủy và xóa kèo đấu thành công!");
     } catch (err: any) {
       console.error("Error deleting challenge:", err);
       alert(language === "en" ? `Error cancelling challenge: ${err.message}` : `Lỗi khi hủy kèo đấu: ${err.message}`);
+    } finally {
+      setCancelChallengeId(null);
+      setCancelStep(0);
+    }
+  };
+
+  const handleApproveJoinRequest = async (challenge: PKChallenge, request: any) => {
+    const confirmApprove = window.confirm(
+      language === "en"
+        ? `Are you sure you want to select "${request.name}" as your match opponent?`
+        : `Bạn có chắc chắn muốn đồng ý chọn "${request.name}" làm đối thủ thi đấu không?`
+    );
+    if (!confirmApprove) return;
+
+    try {
+      const finalSetsCount = challenge.setsCount || 3;
+      const finalShotsPerSet = challenge.shotsPerSet || 5;
+
+      const challengeRef = doc(db, "vsc_pk_challenges", challenge.id);
+      await updateDoc(challengeRef, {
+        opponentUid: request.uid,
+        opponentName: request.name,
+        opponentAvatar: request.avatar || "",
+        opponentAthleteId: request.athleteId || "",
+        status: "accepted",
+        scores: {
+          challengerScores: Array(finalSetsCount).fill(0),
+          opponentScores: Array(finalSetsCount).fill(0),
+          challengerShots: JSON.stringify(Array(finalSetsCount).fill(null).map(() => Array(finalShotsPerSet).fill(null))),
+          opponentShots: JSON.stringify(Array(finalSetsCount).fill(null).map(() => Array(finalShotsPerSet).fill(null))),
+          challengerConfirm: false,
+          opponentConfirm: false
+        },
+        joinRequests: [] // Clear all pending requests upon match confirmation
+      });
+
+      alert(language === "en" 
+        ? "Successfully matched with opponent! Match has started." 
+        : "Ghép cặp thi đấu thành công! Kèo đấu chính thức bắt đầu."
+      );
+    } catch (err: any) {
+      console.error("Error approving request:", err);
+      alert("Lỗi khi phê duyệt đối thủ: " + err.message);
+    }
+  };
+
+  const handleDeclineJoinRequest = async (challenge: PKChallenge, request: any) => {
+    const confirmDecline = window.confirm(
+      language === "en"
+        ? `Are you sure you want to decline "${request.name}"'s request?`
+        : `Bạn có chắc chắn muốn từ chối yêu cầu của "${request.name}" không?`
+    );
+    if (!confirmDecline) return;
+
+    try {
+      const challengeRef = doc(db, "vsc_pk_challenges", challenge.id);
+      await updateDoc(challengeRef, {
+        joinRequests: challenge.joinRequests?.filter(r => r.uid !== request.uid) || []
+      });
+      alert(language === "en" ? "Declined request." : "Đã từ chối yêu cầu ứng tuyển.");
+    } catch (err: any) {
+      console.error("Error declining request:", err);
+      alert("Lỗi khi từ chối yêu cầu: " + err.message);
     }
   };
 
@@ -3028,15 +3112,112 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                                       ? (language === "en" ? `Touch target first to ${challenge.targetTouchShots || 15}` : `Chạm ${challenge.targetTouchShots || 15} viên trước`)
                                       : (language === "en" ? "Cumulative points" : "Cộng tổng điểm")}
                                   </strong></div>
-                                  <div>{language === "en" ? "Matchup: " : "Cặp Trận: "} <strong className="text-slate-700 dark:text-slate-300">{challenge.challengerName} vs {challenge.opponentName || "?"}</strong></div>
+                                  <div>{language === "en" ? "Matchup: " : "Cặp Trận: "} <strong className="text-slate-700 dark:text-slate-300">
+                                    <span 
+                                      className="hover:underline hover:text-indigo-600 cursor-pointer transition-colors"
+                                      onClick={() => {
+                                        const matchingClub = systemClubs?.find(c => c.name?.trim().toLowerCase() === challenge.challengerName?.trim().toLowerCase());
+                                        if (matchingClub) {
+                                          if (onViewClubHub) onViewClubHub(matchingClub);
+                                          else setSelectedClubHub(matchingClub);
+                                        }
+                                      }}
+                                    >
+                                      {challenge.challengerName}
+                                    </span>
+                                    {getPlayerClubName(challenge.challengerName) && (
+                                      <span 
+                                        className="text-[10px] text-indigo-600 hover:underline cursor-pointer ml-1 font-bold font-mono" 
+                                        onClick={() => handleClubClick(getPlayerClubName(challenge.challengerName)!)}
+                                      >
+                                        ({getPlayerClubName(challenge.challengerName)})
+                                      </span>
+                                    )}
+                                    {" vs "}
+                                    <span 
+                                      className="hover:underline hover:text-indigo-600 cursor-pointer transition-colors"
+                                      onClick={() => {
+                                        if (challenge.opponentName) {
+                                          const matchingClub = systemClubs?.find(c => c.name?.trim().toLowerCase() === challenge.opponentName?.trim().toLowerCase());
+                                          if (matchingClub) {
+                                            if (onViewClubHub) onViewClubHub(matchingClub);
+                                            else setSelectedClubHub(matchingClub);
+                                          }
+                                        }
+                                      }}
+                                    >
+                                      {challenge.opponentName || "?"}
+                                    </span>
+                                    {challenge.opponentName && getPlayerClubName(challenge.opponentName) && (
+                                      <span 
+                                        className="text-[10px] text-indigo-600 hover:underline cursor-pointer ml-1 font-bold font-mono" 
+                                        onClick={() => handleClubClick(getPlayerClubName(challenge.opponentName)!)}
+                                      >
+                                        ({getPlayerClubName(challenge.opponentName)})
+                                      </span>
+                                    )}
+                                  </strong></div>
                                 </div>
+
+                                {/* Applicant requests list */}
+                                {challenge.joinRequests && challenge.joinRequests.length > 0 && (
+                                  <div className="mt-3 bg-rose-50/50 dark:bg-rose-950/10 p-3 rounded-xl border border-rose-100/50 dark:border-rose-950/20 text-xs">
+                                    <div className="flex items-center gap-1 text-rose-700 dark:text-rose-400 font-black text-[10px] uppercase tracking-wider mb-2">
+                                      <Users className="w-3.5 h-3.5" />
+                                      <span>Yêu Cầu Ứng Tuyển ({challenge.joinRequests.length})</span>
+                                    </div>
+                                    <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                                      {challenge.joinRequests.map((req: any) => (
+                                        <div key={req.uid} className="flex items-center justify-between gap-2 bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-100 dark:border-slate-750/50 shadow-3xs">
+                                          <div className="flex items-center gap-2 min-w-0">
+                                            <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 bg-slate-50">
+                                              {req.avatar ? (
+                                                <img src={req.avatar} alt={req.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                              ) : (
+                                                <User className="w-3.5 h-3.5 text-gray-400 m-auto" />
+                                              )}
+                                            </div>
+                                            <span className="font-bold text-gray-800 dark:text-gray-200 truncate max-w-[110px]">
+                                              {req.name}
+                                            </span>
+                                          </div>
+                                          {isCreator ? (
+                                            <div className="flex items-center gap-1 shrink-0">
+                                              <button
+                                                type="button"
+                                                onClick={() => handleApproveJoinRequest(challenge, req)}
+                                                className="bg-green-600 hover:bg-green-750 text-white text-[9px] font-bold px-2 py-1 rounded cursor-pointer transition-colors"
+                                              >
+                                                {language === "en" ? "Approve" : "Duyệt"}
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => handleDeclineJoinRequest(challenge, req)}
+                                                className="bg-rose-100 hover:bg-rose-200 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400 text-[9px] font-bold px-2 py-1 rounded cursor-pointer transition-colors"
+                                              >
+                                                {language === "en" ? "Decline" : "Từ chối"}
+                                              </button>
+                                            </div>
+                                          ) : (
+                                            <span className="text-[9px] text-amber-600 font-bold italic">
+                                              {language === "en" ? "Pending..." : "Chờ duyệt..."}
+                                            </span>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
 
                               <div className="flex justify-end gap-2.5 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/40">
                                 {challenge.status === "open" && isCreator && (
                                   <button
                                     type="button"
-                                    onClick={() => handleCancelPkChallenge(challenge.id)}
+                                    onClick={() => {
+                                      setCancelChallengeId(challenge.id);
+                                      setCancelStep(1);
+                                    }}
                                     className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:text-rose-400 dark:bg-rose-950/20 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer border border-rose-100"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -4244,6 +4425,81 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           </motion.div>
         </div>,
         document.body
+      )}
+
+      {/* 2-Step Confirmation Modals for Challenge Cancellation */}
+      {cancelStep === 1 && (
+        <div className="fixed inset-0 z-[10020] flex items-center justify-center p-4 bg-slate-950/65 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-md w-full border border-slate-100 dark:border-slate-800 shadow-2xl text-slate-800 dark:text-slate-100">
+            <h4 className="text-sm font-black uppercase text-amber-600 tracking-wider flex items-center gap-2 mb-3">
+              <span>⚠️ XÁC NHẬN HỦY KÈO (BƯỚC 1/2)</span>
+            </h4>
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-semibold">
+              Bạn có chắc chắn muốn hủy và xóa hoàn toàn kèo đấu đang chờ này không?
+              Một khi đã hủy, thông tin kèo đấu sẽ bị xóa khỏi sảnh PK và không thể phục hồi.
+            </p>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                type="button"
+                onClick={() => { setCancelStep(0); setCancelChallengeId(null); }}
+                className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
+              >
+                Quay lại
+              </button>
+              <button
+                type="button"
+                onClick={() => setCancelStep(2)}
+                className="px-4 py-2 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-xl transition-all shadow-md cursor-pointer"
+              >
+                Tiếp tục hủy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cancelStep === 2 && (
+        <div className="fixed inset-0 z-[10020] flex items-center justify-center p-4 bg-slate-950/65 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-md w-full border border-rose-100 dark:border-slate-850 shadow-2xl text-slate-800 dark:text-slate-101">
+            <h4 className="text-sm font-black uppercase text-rose-600 tracking-wider flex items-center gap-2 mb-3">
+              <span>🚨 XÁC NHẬN LẦN CUỐI (BƯỚC 2/2)</span>
+            </h4>
+            <p className="text-xs text-rose-700 dark:text-rose-300 leading-relaxed font-black bg-rose-50 dark:bg-rose-950/20 p-3 rounded-xl border border-rose-100 dark:border-rose-950/40">
+              CẢNH BÁO: Tất cả yêu cầu ứng tuyển liên quan đến kèo đấu này cũng sẽ bị từ chối và xóa bỏ!
+              Hành động này hoàn toàn không thể khôi phục lại. Bạn có chắc chắn muốn xác nhận xóa kèo vĩnh viễn?
+            </p>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                type="button"
+                onClick={() => setCancelStep(1)}
+                className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
+              >
+                Trở lại bước 1
+              </button>
+              <button
+                type="button"
+                onClick={() => cancelChallengeId && handleCancelPkChallenge(cancelChallengeId)}
+                className="px-4 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl transition-all shadow-md cursor-pointer"
+              >
+                Đồng ý hủy vĩnh viễn
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reusable Club Hub Modal */}
+      {selectedClubHub && (
+        <VscSystemClubsDirectory
+          currentUser={currentUser}
+          userRole={isGlobalAdmin ? "admin" : "user"}
+          history={[]}
+          onlineTournaments={onlineTournaments}
+          onOpenAuthModal={onOpenAuthModal}
+          externalSelectedClub={selectedClubHub}
+          onCloseExternalSelectedClub={() => setSelectedClubHub(null)}
+          hideDirectoryList={true}
+        />
       )}
 
     </div>
