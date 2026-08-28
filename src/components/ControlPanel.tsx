@@ -937,13 +937,13 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
     loadProfile();
   }, [currentUser]);
 
-  // Subscribe to tournaments live database
+  // Subscribe to tournaments live database (no need to fetch heavy decoupled payloads)
   useEffect(() => {
     setLoading(true);
     const unsubscribe = subscribeToTournamentsList((list) => {
       setTournaments(list);
       setLoading(false);
-    });
+    }, false);
     return () => unsubscribe();
   }, []);
 

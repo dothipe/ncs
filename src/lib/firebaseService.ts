@@ -571,7 +571,7 @@ export async function deleteOnlineTournament(id: string) {
  * Subscribes to real-time list of tournaments sorted by latest createdAt.
  * Automatically and reactively merges decoupled athlete, master athlete, and team collections!
  */
-export function subscribeToTournamentsList(callback: (tournaments: TournamentData[]) => void) {
+export function subscribeToTournamentsList(callback: (tournaments: TournamentData[]) => void, includeDecoupled = false) {
   const collectionRef = collection(db, "tournaments");
   const q = query(collectionRef, orderBy("createdAt", "desc"));
   
@@ -643,35 +643,37 @@ export function subscribeToTournamentsList(callback: (tournaments: TournamentDat
     })
   );
 
-  // 2. Listen to decoupled payloads collections
-  const payloadCollections: { key: keyof typeof decoupledData; coll: string }[] = [
-    { key: "masterAthletes", coll: "vsc_tournament_master_athletes" },
-    { key: "athletes", coll: "vsc_tournament_athletes" },
-    { key: "teamAthletes", coll: "vsc_tournament_team_athletes" },
-    { key: "teamMasterAthletes", coll: "vsc_tournament_team_master_athletes" },
-    { key: "inputAthletes", coll: "vsc_tournament_input_athletes" },
-    { key: "teamInputAthletes", coll: "vsc_tournament_team_input_athletes" },
-    { key: "clubs", coll: "vsc_tournament_clubs" },
-  ];
+  // 2. Listen to decoupled payloads collections only if requested (heavy collections)
+  if (includeDecoupled) {
+    const payloadCollections: { key: keyof typeof decoupledData; coll: string }[] = [
+      { key: "masterAthletes", coll: "vsc_tournament_master_athletes" },
+      { key: "athletes", coll: "vsc_tournament_athletes" },
+      { key: "teamAthletes", coll: "vsc_tournament_team_athletes" },
+      { key: "teamMasterAthletes", coll: "vsc_tournament_team_master_athletes" },
+      { key: "inputAthletes", coll: "vsc_tournament_input_athletes" },
+      { key: "teamInputAthletes", coll: "vsc_tournament_team_input_athletes" },
+      { key: "clubs", coll: "vsc_tournament_clubs" },
+    ];
 
-  payloadCollections.forEach(({ key, coll }) => {
-    try {
-      unsubs.push(
-        onSnapshot(collection(db, coll), (snap) => {
-          const map: Record<string, any[]> = {};
-          snap.forEach(docSnap => {
-            map[docSnap.id] = docSnap.data()?.list || [];
-          });
-          decoupledData[key] = map;
-          emit();
-        }, (err) => {
-          console.warn(`Could not subscribe to collection ${coll}:`, err);
-        })
-      );
-    } catch (e) {
-      console.warn(`Failed to attach snapshot listener for ${coll}:`, e);
-    }
-  });
+    payloadCollections.forEach(({ key, coll }) => {
+      try {
+        unsubs.push(
+          onSnapshot(collection(db, coll), (snap) => {
+            const map: Record<string, any[]> = {};
+            snap.forEach(docSnap => {
+              map[docSnap.id] = docSnap.data()?.list || [];
+            });
+            decoupledData[key] = map;
+            emit();
+          }, (err) => {
+            console.warn(`Could not subscribe to collection ${coll}:`, err);
+          })
+        );
+      } catch (e) {
+        console.warn(`Failed to attach snapshot listener for ${coll}:`, e);
+      }
+    });
+  }
 
   return () => {
     unsubs.forEach(unsub => {

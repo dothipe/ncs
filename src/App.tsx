@@ -362,13 +362,6 @@ export default function App() {
     };
   }, []);
 
-  useEffect(() => {
-    const unsubscribe = subscribeToTournamentsList((list) => {
-      setOnlineTournaments(list);
-    });
-    return () => unsubscribe();
-  }, []);
-
   const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
 
   useEffect(() => {
@@ -485,6 +478,15 @@ export default function App() {
     }
     return "home";
   });
+
+  useEffect(() => {
+    const needsDecoupled = ["vsc_system_directory", "vsc_clubs_directory", "control_panel"].includes(activeTab);
+    const unsubscribe = subscribeToTournamentsList((list) => {
+      setOnlineTournaments(list);
+    }, needsDecoupled);
+    return () => unsubscribe();
+  }, [activeTab]);
+
   const [homeFilter, setHomeFilter] = useState<"all" | "all_list" | "active" | "followed">("all");
   const [athleteForceTab, setAthleteForceTab] = useState<"athletes" | "clubs" | "vsc_system">(() => {
     if (typeof window !== "undefined") {

@@ -380,13 +380,13 @@ export const OnlineTournamentsPanel: React.FC<OnlineTournamentsPanelProps> = ({
     return () => unsubscribe();
   }, []);
 
-  // Listen to Firestore events list in real-time
+  // Listen to Firestore events list in real-time (no need to fetch heavy decoupled payloads)
   useEffect(() => {
     setLoading(true);
     const unsubscribe = subscribeToTournamentsList((list) => {
       setTournaments(list);
       setLoading(false);
-    });
+    }, false);
     return () => unsubscribe();
   }, []);
 
@@ -1301,8 +1301,6 @@ export const OnlineTournamentsPanel: React.FC<OnlineTournamentsPanelProps> = ({
     const activeAthletesList = isTeam ? (tour.teamAthletes || []) : (tour.athletes || []);
     const activeDistancesList = isTeam ? (tour.teamDistances || []) : (tour.distances || []);
 
-    const topAthletes = getTopAthletes(tour);
-    const topTeams = getTopTeams(tour);
     const dateStr = tour.createdAt && typeof tour.createdAt.toDate === "function" 
       ? tour.createdAt.toDate().toLocaleDateString(language === "en" ? "en-US" : "vi-VN", { hour: "2-digit", minute: "2-digit" }) 
       : (language === "en" ? "Recent activity" : "Hoạt động gần đây");

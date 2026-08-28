@@ -169,11 +169,11 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
   // Club Hub modal state
   const [selectedClubHub, setSelectedClubHub] = useState<SystemClub | null>(null);
 
-  // Subscribe to system tournaments list to calculate athlete achievements
+  // Subscribe to system tournaments list to calculate athlete achievements (no need to fetch heavy decoupled payloads)
   useEffect(() => {
     const unsub = subscribeToTournamentsList((list) => {
       setOnlineTournaments(list);
-    });
+    }, false);
     return () => unsub();
   }, []);
 
