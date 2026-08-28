@@ -14,7 +14,8 @@ import {
   X, 
   TrendingUp, 
   Menu, 
-  User 
+  User,
+  MessageSquare
 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import { VSCLogo } from "./VSCLogo";
@@ -318,7 +319,7 @@ export function HeaderNavigation({
                     }`}
                   >
                     <Play className="w-4 h-4 text-emerald-400 fill-emerald-400/25" />
-                    {language === "en" ? "Live Tournaments" : "Giải Đang Diễn Ra"}
+                    {language === "en" ? "Live Tournaments" : "Đang Diễn Ra"}
                   </button>
 
                   <button
@@ -328,7 +329,7 @@ export function HeaderNavigation({
                     }`}
                   >
                     <Heart className="w-4 h-4 text-rose-500 fill-rose-500/25" />
-                    {language === "en" ? "Followed" : "Giải Đang Theo Dõi"}
+                    {language === "en" ? "Followed" : "Đang Theo Dõi"}
                   </button>
                 </>
               )}
@@ -344,7 +345,7 @@ export function HeaderNavigation({
                     }`}
                   >
                     <Users className="w-4 h-4 text-amber-300" />
-                    {language === "en" ? "System Athletes" : "VĐV Hệ Thống"}
+                    {language === "en" ? "System Athletes" : "VĐV NCS"}
                   </button>
 
                   <button
@@ -356,7 +357,7 @@ export function HeaderNavigation({
                     }`}
                   >
                     <Users className="w-4 h-4 text-emerald-450" />
-                    {language === "en" ? "System Clubs" : "CLB Hệ Thống"}
+                    {language === "en" ? "System Clubs" : "CLB NCS"}
                   </button>
 
                   <button
@@ -369,6 +370,16 @@ export function HeaderNavigation({
                   >
                     <Target className="w-4 h-4 text-rose-500 animate-pulse" />
                     {language === "en" ? "PK Arena" : "Thách Đấu PK"}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent("open_vsc_messenger"));
+                    }}
+                    className="px-4.5 py-4 text-xs sm:text-sm font-extrabold uppercase tracking-wider transition-all hover:bg-black/15 flex items-center gap-1.5 border-none bg-transparent text-white"
+                  >
+                    <MessageSquare className="w-4 h-4 text-yellow-300 animate-pulse" />
+                    {language === "en" ? "VSC Messenger" : "Hộp Thư"}
                   </button>
                 </>
               )}
@@ -881,6 +892,18 @@ export function HeaderNavigation({
                     >
                       <Target className="w-4 h-4 shrink-0 text-rose-500 animate-pulse" />
                       <span>{language === "en" ? "PK Arena" : "Thách Đấu PK"}</span>
+                    </button>
+
+                    {/* VSC Messenger */}
+                    <button
+                      onClick={() => {
+                        setIsMobileDrawerOpen(false);
+                        window.dispatchEvent(new CustomEvent("open_vsc_messenger"));
+                      }}
+                      className="w-full px-3 py-2.5 rounded-lg text-xs font-extrabold flex items-center gap-3 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all border-none bg-transparent"
+                    >
+                      <MessageSquare className="w-4 h-4 shrink-0 text-yellow-500 animate-pulse" />
+                      <span>{language === "en" ? "VSC Messenger" : "Hộp Thư VSC"}</span>
                     </button>
                   </>
                 )}

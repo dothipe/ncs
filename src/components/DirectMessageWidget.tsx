@@ -24,6 +24,8 @@ import {
   getOrCreateChat, 
   getAllUsers 
 } from "../lib/chatService";
+import { subscribeToVscSystemAthletes } from "../lib/firebaseService";
+import { Athlete } from "../types";
 
 interface DirectMessageWidgetProps {
   currentUser: any;
@@ -55,6 +57,25 @@ export const DirectMessageWidget: React.FC<DirectMessageWidgetProps> = ({
 
   // Auto scroll ref
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const [systemAthletes, setSystemAthletes] = useState<Athlete[]>([]);
+
+  // Load system athletes for ID lookup
+  useEffect(() => {
+    const unsubscribe = subscribeToVscSystemAthletes((athletes) => {
+      setSystemAthletes(athletes || []);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Listen to global open messenger event
+  useEffect(() => {
+    const handleOpenVscMessenger = () => {
+      setIsOpen(true);
+    };
+    window.addEventListener("open_vsc_messenger", handleOpenVscMessenger);
+    return () => window.removeEventListener("open_vsc_messenger", handleOpenVscMessenger);
+  }, []);
 
   // Listen to active conversations when user is logged in
   useEffect(() => {
@@ -246,8 +267,19 @@ export const DirectMessageWidget: React.FC<DirectMessageWidgetProps> = ({
   const filteredUsers = userDirectory.filter(u => {
     const nameStr = (u.displayName || "").toLowerCase();
     const emailStr = (u.email || "").toLowerCase();
+    
+    // Find matching system athlete to search by VSC ID
+    const matchedAthlete = systemAthletes.find(
+      (a) => a.email && a.email.trim().toLowerCase() === u.email?.trim().toLowerCase()
+    );
+    const athleteIdStr = matchedAthlete ? String(matchedAthlete.id).toLowerCase() : "";
+
     const query = searchQuery.toLowerCase();
-    return nameStr.includes(query) || emailStr.includes(query);
+    return (
+      nameStr.includes(query) || 
+      emailStr.includes(query) || 
+      (athleteIdStr && athleteIdStr.includes(query))
+    );
   });
 
   return (
@@ -492,10 +524,25 @@ export const DirectMessageWidget: React.FC<DirectMessageWidgetProps> = ({
                               </div>
                             )}
                             <div className="min-w-0 flex-1">
-                              <span className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate block">
-                                {user.displayName || (language === "en" ? "System Athlete" : "VĐV Liên kết")}
-                              </span>
-                              <span className="text-[10px] text-slate-500 dark:text-slate-450 truncate block">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
+                                  {user.displayName || (language === "en" ? "System Athlete" : "VĐV Liên kết")}
+                                </span>
+                                {(() => {
+                                  const matchedAthlete = systemAthletes.find(
+                                    (a) => a.email && a.email.trim().toLowerCase() === user.email?.trim().toLowerCase()
+                                  );
+                                  if (matchedAthlete) {
+                                    return (
+                                      <span className="bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-blue-100 dark:border-blue-900/50 uppercase tracking-tight shrink-0">
+                                        ID: {matchedAthlete.id}
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                              </div>
+                              <span className="text-[10px] text-slate-500 dark:text-slate-450 truncate block mt-0.5">
                                 {user.email}
                               </span>
                             </div>
