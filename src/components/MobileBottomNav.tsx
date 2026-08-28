@@ -344,7 +344,7 @@ export function MobileBottomNav({
                 ? "font-black text-yellow-400 mt-0.5 uppercase tracking-wider" 
                 : "font-bold text-white/70 mt-1"
             }`}>
-              {language === "en" ? "Battle" : "Thách Đấu"}
+              {language === "en" ? "Battle" : "Thách Đấu PK"}
             </span>
           </div>
         </button>

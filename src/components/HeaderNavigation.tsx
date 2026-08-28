@@ -336,6 +336,19 @@ export function HeaderNavigation({
 
               {!activeHistoryId && (
                 <>
+                
+                  <button
+                    onClick={() => {
+                      changeTab("pk_lobby");
+                    }}
+                    className={`px-4.5 py-4 text-xs sm:text-sm font-extrabold uppercase tracking-wider transition-all hover:bg-black/15 flex items-center gap-1.5 border-none bg-transparent ${
+                      activeTab === "pk_lobby" ? "bg-black/25 text-yellow-400 border-b-4 border-yellow-400 font-black" : "text-white"
+                    }`}
+                  >
+                    <Target className="w-4 h-4 text-rose-500 animate-pulse" />
+                    {language === "en" ? "PK Arena" : "Thách Đấu PK"}
+                  </button>
+
                   <button
                     onClick={() => {
                       changeTab("vsc_system_directory");
@@ -362,24 +375,12 @@ export function HeaderNavigation({
 
                   <button
                     onClick={() => {
-                      changeTab("pk_lobby");
-                    }}
-                    className={`px-4.5 py-4 text-xs sm:text-sm font-extrabold uppercase tracking-wider transition-all hover:bg-black/15 flex items-center gap-1.5 border-none bg-transparent ${
-                      activeTab === "pk_lobby" ? "bg-black/25 text-yellow-400 border-b-4 border-yellow-400 font-black" : "text-white"
-                    }`}
-                  >
-                    <Target className="w-4 h-4 text-rose-500 animate-pulse" />
-                    {language === "en" ? "PK Arena" : "Thách Đấu PK"}
-                  </button>
-
-                  <button
-                    onClick={() => {
                       window.dispatchEvent(new CustomEvent("open_vsc_messenger"));
                     }}
                     className="px-4.5 py-4 text-xs sm:text-sm font-extrabold uppercase tracking-wider transition-all hover:bg-black/15 flex items-center gap-1.5 border-none bg-transparent text-white"
                   >
                     <MessageSquare className="w-4 h-4 text-yellow-300 animate-pulse" />
-                    {language === "en" ? "VSC Messenger" : "Hộp Thư"}
+                    {language === "en" ? "Messenger" : "Tin Nhắn"}
                   </button>
                 </>
               )}
@@ -903,7 +904,7 @@ export function HeaderNavigation({
                       className="w-full px-3 py-2.5 rounded-lg text-xs font-extrabold flex items-center gap-3 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all border-none bg-transparent"
                     >
                       <MessageSquare className="w-4 h-4 shrink-0 text-yellow-500 animate-pulse" />
-                      <span>{language === "en" ? "VSC Messenger" : "Hộp Thư VSC"}</span>
+                      <span>{language === "en" ? "Messenger" : "Tin Nhắn"}</span>
                     </button>
                   </>
                 )}
