@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { PKChallenge } from "../types";
 import { ChatWidget } from "./ChatWidget";
+import { getChallengeTargetLabel } from "../lib/vscPointsHelper";
 
 interface PkDashboardHomeProps {
   challenges: PKChallenge[];
@@ -329,7 +330,7 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                         <div className="flex items-center gap-2">
                           <Award className="w-3.5 h-3.5 text-rose-500 shrink-0" />
                           <span className="truncate font-medium">
-                            {language === "en" ? "Target: " : "Mục tiêu: "} {challenge.targetType === "bia_giay_tinh_diem" ? (language === "en" ? "Paper Target" : "Bia giấy tính điểm") : (language === "en" ? "Target Plate" : "Bia mục tiêu")}
+                            {language === "en" ? "Target: " : "Mục tiêu: "} {getChallengeTargetLabel(challenge.targetType, challenge.targetDetail, challenge.targetName, language)}
                           </span>
                         </div>
                         <div className="flex items-center gap-2 sm:col-span-2">
@@ -841,7 +842,7 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                         <div className="flex items-center gap-2">
                           <Award className="w-3.5 h-3.5 text-rose-500 shrink-0" />
                           <span className="truncate font-medium">
-                            {language === "en" ? "Target: " : "Mục tiêu: "} {challenge.targetType === "bia_giay_tinh_diem" ? (language === "en" ? "Paper Target" : "Bia giấy tính điểm") : (language === "en" ? "Target Plate" : "Bia mục tiêu")}
+                            {language === "en" ? "Target: " : "Mục tiêu: "} {getChallengeTargetLabel(challenge.targetType, challenge.targetDetail, challenge.targetName, language)}
                           </span>
                         </div>
                         <div className="flex items-center gap-2 sm:col-span-2">
@@ -1075,9 +1076,7 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                           <span className="text-rose-650">🎯</span>
                           <span>{language === "en" ? "Target:" : "Mục tiêu:"}</span>
                           <span className="text-gray-800">
-                            {match.targetType === "bia_giay_tinh_diem" 
-                              ? (language === "en" ? "Paper Target" : "Bia giấy tính điểm") 
-                              : (language === "en" ? "Target Plate" : "Bia mục tiêu")}
+                            {getChallengeTargetLabel(match.targetType, match.targetDetail, match.targetName, language)}
                           </span>
                         </span>
                         <span className="text-gray-300">•</span>

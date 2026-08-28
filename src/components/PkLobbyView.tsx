@@ -57,7 +57,7 @@ import {
 } from "firebase/firestore";
 import { subscribeToVscSystemAthletes, subscribeToVscSystemClubs, subscribeToTournamentsList } from "../lib/firebaseService";
 import { getLatestAvatar } from "../utils/avatarHelpers";
-import { getVscTitleAndBadge } from "../lib/vscPointsHelper";
+import { getVscTitleAndBadge, getChallengeTargetLabel } from "../lib/vscPointsHelper";
 
 // Helper function to convert Facebook short share/video links to standard formats
 const cleanFacebookUrlForEmbed = (url: string): string => {
@@ -287,6 +287,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
   const [formSetsCountCustom, setFormSetsCountCustom] = useState<string>("3");
   const [formWinMechanism, setFormWinMechanism] = useState<"by_sets" | "by_total_points" | "by_target_shots">("by_sets");
   const [formTargetType, setFormTargetType] = useState<"bia_muc_tieu" | "bia_giay_tinh_diem">("bia_muc_tieu");
+  const [formTargetDetail, setFormTargetDetail] = useState<string>("Bia đường kính 4cm");
   const [formTargetTouchShots, setFormTargetTouchShots] = useState<number>(5);
   const [formVscWager, setFormVscWager] = useState<number>(0);
 
@@ -305,6 +306,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
   const [editSetsCountCustom, setEditSetsCountCustom] = useState("3");
   const [editWinMechanism, setEditWinMechanism] = useState<"by_sets" | "by_total_points" | "by_target_shots">("by_sets");
   const [editTargetType, setEditTargetType] = useState<"bia_muc_tieu" | "bia_giay_tinh_diem">("bia_muc_tieu");
+  const [editTargetDetail, setEditTargetDetail] = useState<string>("Bia đường kính 4cm");
   const [editTargetTouchShots, setEditTargetTouchShots] = useState<number>(5);
   const [editType, setEditType] = useState<"solo_1v1" | "team_vs_team" | "">("solo_1v1");
   const [editTeamSize, setEditTeamSize] = useState<number>(3);
@@ -1189,6 +1191,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         setsCount: finalSetsCount,
         winMechanism: formWinMechanism,
         targetType: formTargetType,
+        targetDetail: formTargetDetail.trim() || "Bia đường kính 4cm",
         targetTouchShots: Number(formTargetTouchShots) || 30,
         challengerLiveUrl: formChallengerLiveUrl.trim() || "",
         opponentLiveUrl: ""
@@ -1250,6 +1253,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
       setFormTitle("");
       setFormDescription("");
       setFormLocation("VSC ONLINE");
+      setFormTargetDetail("Bia đường kính 4cm");
       setFormRefereeEmail("");
       setFormPin("");
       setFormDesignateOpponent(false);
@@ -1553,6 +1557,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
     setEditShotsPerSet(challenge.shotsPerSet || 10);
     setEditWinMechanism(challenge.winMechanism || "by_sets");
     setEditTargetType(challenge.targetType || "bia_muc_tieu");
+    setEditTargetDetail(challenge.targetDetail || challenge.targetName || "Bia đường kính 4cm");
     setEditTargetTouchShots(challenge.targetTouchShots || 30);
     setEditChallengerLiveUrl(challenge.challengerLiveUrl || "");
     setEditOpponentLiveUrl(challenge.opponentLiveUrl || "");
@@ -1678,6 +1683,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         setsCount: finalSetsCount,
         winMechanism: editWinMechanism,
         targetType: editTargetType,
+        targetDetail: editTargetDetail.trim() || "Bia đường kính 4cm",
         targetTouchShots: Number(editTargetTouchShots) || 30,
         type: editType,
         challengerName: creatorName,
@@ -3485,7 +3491,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                               <div className="flex items-center gap-2">
                                 <Award className="w-3.5 h-3.5 text-rose-500 shrink-0" />
                                 <span className="truncate font-medium">
-                                  {language === "en" ? "Target: " : "Mục tiêu: "} {challenge.targetType === "bia_giay_tinh_diem" ? (language === "en" ? "Paper Target" : "Bia giấy tính điểm") : (language === "en" ? "Target Plate" : "Bia mục tiêu")}
+                                  {language === "en" ? "Target: " : "Mục tiêu: "} {getChallengeTargetLabel(challenge.targetType, challenge.targetDetail, challenge.targetName, language)}
                                 </span>
                               </div>
                               <div className="flex items-center gap-2 sm:col-span-2">
@@ -4148,9 +4154,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                             <span className="text-rose-600">🎯</span>
                             <span>{language === "en" ? "Target:" : "Mục tiêu:"}</span>
                             <span className="text-gray-800">
-                              {challenge.targetType === "bia_giay_tinh_diem" 
-                                ? (language === "en" ? "Paper Target" : "Bia giấy tính điểm") 
-                                : (language === "en" ? "Target Plate" : "Bia mục tiêu")}
+                              {getChallengeTargetLabel(challenge.targetType, challenge.targetDetail, challenge.targetName, language)}
                             </span>
                           </span>
                           <span className="text-gray-300">•</span>
@@ -4344,6 +4348,22 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                     <option value="bia_muc_tieu">{language === "en" ? "Target Plate (Default)" : "Bia mục tiêu (mặc định)"}</option>
                     <option value="bia_giay_tinh_diem">{language === "en" ? "Paper Scoreboard" : "Bia giấy tính điểm"}</option>
                   </select>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                    {language === "en" ? "Target Name / Specification *" : "Tên / Quy cách Mục tiêu thi đấu *"}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ví dụ: Bia đường kính 4cm, Bia nắp chai 3cm, Bia mini 2.5cm..."
+                    value={formTargetDetail}
+                    onChange={(e) => setFormTargetDetail(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all font-semibold text-gray-800"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    {language === "en" ? "Default: 'Bia đường kính 4cm'. You can change the target name/size as agreed." : "Mặc định: 'Bia đường kính 4cm'. Bạn có thể thay đổi tên hoặc kích thước mục tiêu thỏa thuận."}
+                  </p>
                 </div>
 
                 {formType === "team_vs_team" && (
@@ -4962,6 +4982,22 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                     <option value="bia_muc_tieu">{language === "en" ? "Target Plate (Default)" : "Bia mục tiêu (mặc định)"}</option>
                     <option value="bia_giay_tinh_diem">{language === "en" ? "Paper Scoreboard" : "Bia giấy tính điểm"}</option>
                   </select>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                    {language === "en" ? "Target Name / Specification *" : "Tên / Quy cách Mục tiêu thi đấu *"}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ví dụ: Bia đường kính 4cm, Bia nắp chai 3cm, Bia mini 2.5cm..."
+                    value={editTargetDetail}
+                    onChange={(e) => setEditTargetDetail(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-semibold text-gray-800"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    {language === "en" ? "Default: 'Bia đường kính 4cm'. You can change the target name/size as agreed." : "Mặc định: 'Bia đường kính 4cm'. Bạn có thể thay đổi tên hoặc kích thước mục tiêu thỏa thuận."}
+                  </p>
                 </div>
 
                 {editType === "team_vs_team" && (
@@ -5763,9 +5799,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                     {language === "en" ? "Target Type" : "Mục tiêu"}
                   </span>
                   <span className="font-semibold text-gray-800">
-                    {selectedDetailChallenge.targetType === "bia_giay_tinh_diem" 
-                      ? (language === "en" ? "Paper Scoreboard" : "Bia giấy tính điểm") 
-                      : (language === "en" ? "Standard Target" : "Bia mục tiêu")}
+                    {getChallengeTargetLabel(selectedDetailChallenge.targetType, selectedDetailChallenge.targetDetail, selectedDetailChallenge.targetName, language)}
                   </span>
                 </div>
                 <div>
@@ -6738,6 +6772,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                   <div className="bg-slate-50 dark:bg-slate-950/20 p-3 rounded-xl border border-slate-200/50 dark:border-slate-800/50 text-[11px] text-slate-500 space-y-1">
                     <div>Địa điểm: <strong className="text-slate-700 dark:text-slate-300">{activeAcceptChallenge.location}</strong></div>
                     <div>Cự ly: <strong className="text-slate-700 dark:text-slate-300">{activeAcceptChallenge.distance}m</strong></div>
+                    <div>Mục tiêu: <strong className="text-slate-700 dark:text-slate-300">{getChallengeTargetLabel(activeAcceptChallenge.targetType, activeAcceptChallenge.targetDetail, activeAcceptChallenge.targetName, language)}</strong></div>
                     <div>Quy cách: <strong className="text-slate-700 dark:text-slate-300">{activeAcceptChallenge.setsCount} hiệp - {activeAcceptChallenge.shotsPerSet} viên</strong></div>
                   </div>
                   <p className="text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/20 p-2.5 rounded-lg border border-amber-100 dark:border-amber-900">

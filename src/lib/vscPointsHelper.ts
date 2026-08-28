@@ -160,3 +160,17 @@ export function getVscTitleAndBadge(arg1?: number, arg2?: number): VscBadge {
     elo
   };
 }
+
+export function getChallengeTargetLabel(
+  targetType?: "bia_muc_tieu" | "bia_giay_tinh_diem" | string,
+  targetDetail?: string,
+  targetName?: string,
+  language: "vi" | "en" = "vi"
+): string {
+  const baseType = targetType === "bia_giay_tinh_diem"
+    ? (language === "en" ? "Paper Target" : "Bia giấy tính điểm")
+    : (language === "en" ? "Target Plate" : "Bia mục tiêu");
+  
+  const detail = (targetDetail || targetName || "Bia đường kính 4cm").trim();
+  return detail ? `${baseType} - ${detail}` : baseType;
+}

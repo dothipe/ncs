@@ -68,7 +68,7 @@ import { Club } from "../types";
 import { VscSystemClubsDirectory } from "./VscSystemClubsDirectory";
 import TrainingTracker from "./TrainingTracker";
 import { ChatWidget } from "./ChatWidget";
-import { getVscTitleAndBadge } from "../lib/vscPointsHelper";
+import { getVscTitleAndBadge, getChallengeTargetLabel } from "../lib/vscPointsHelper";
 
 interface ControlPanelProps {
   isGlobalAdmin?: boolean;
@@ -292,6 +292,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   const [editSetsCountCustom, setEditSetsCountCustom] = useState("3");
   const [editWinMechanism, setEditWinMechanism] = useState<"by_sets" | "by_total_points" | "by_target_shots">("by_sets");
   const [editTargetType, setEditTargetType] = useState<"bia_muc_tieu" | "bia_giay_tinh_diem">("bia_muc_tieu");
+  const [editTargetDetail, setEditTargetDetail] = useState<string>("Bia đường kính 4cm");
   const [editTargetTouchShots, setEditTargetTouchShots] = useState<number>(5);
 
   const [editType, setEditType] = useState<"solo_1v1" | "team_vs_team" | "">("solo_1v1");
@@ -445,6 +446,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
     setEditShotsPerSet(challenge.shotsPerSet || 10);
     setEditWinMechanism(challenge.winMechanism || "by_sets");
     setEditTargetType(challenge.targetType || "bia_muc_tieu");
+    setEditTargetDetail(challenge.targetDetail || challenge.targetName || "Bia đường kính 4cm");
     setEditTargetTouchShots(challenge.targetTouchShots || 30);
 
     setEditType(challenge.type || "solo_1v1");
@@ -513,6 +515,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         setsCount: finalSetsCount,
         winMechanism: editWinMechanism,
         targetType: editTargetType,
+        targetDetail: editTargetDetail.trim() || "Bia đường kính 4cm",
         targetTouchShots: Number(editTargetTouchShots) || 30,
         type: editType,
         challengerName: creatorName,
@@ -3213,9 +3216,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                                     <span>🎯</span>
                                     <span>{language === "en" ? "Target:" : "Mục tiêu:"}</span>
                                     <span className="text-gray-800 dark:text-gray-200">
-                                      {challenge.targetType === "bia_giay_tinh_diem" 
-                                        ? (language === "en" ? "Paper Target" : "Bia giấy tính điểm") 
-                                        : (language === "en" ? "Target Plate" : "Bia mục tiêu")}
+                                      {getChallengeTargetLabel(challenge.targetType, challenge.targetDetail, challenge.targetName, language)}
                                     </span>
                                   </span>
                                   <span className="text-gray-300">•</span>
@@ -3457,9 +3458,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                                       <span>🎯</span>
                                       <span>{language === "en" ? "Target:" : "Mục tiêu:"}</span>
                                       <span className="text-gray-800 dark:text-gray-200">
-                                        {match.targetType === "bia_giay_tinh_diem" 
-                                          ? (language === "en" ? "Paper" : "Bia giấy tính điểm") 
-                                          : (language === "en" ? "Plate" : "Bia mục tiêu")}
+                                        {getChallengeTargetLabel(match.targetType, match.targetDetail, match.targetName, language)}
                                       </span>
                                     </span>
                                     <span className="text-gray-300">•</span>
@@ -3897,6 +3896,22 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     <option value="bia_muc_tieu">{language === "en" ? "Target Plate (Default)" : "Bia mục tiêu (mặc định)"}</option>
                     <option value="bia_giay_tinh_diem">{language === "en" ? "Paper Scoreboard" : "Bia giấy tính điểm"}</option>
                   </select>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-1.5">
+                    {language === "en" ? "Target Name / Specification *" : "Tên / Quy cách Mục tiêu thi đấu *"}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ví dụ: Bia đường kính 4cm, Bia nắp chai 3cm, Bia mini 2.5cm..."
+                    value={editTargetDetail}
+                    onChange={(e) => setEditTargetDetail(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:text-white transition-all font-semibold"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    {language === "en" ? "Default: 'Bia đường kính 4cm'. You can change the target name/size as agreed." : "Mặc định: 'Bia đường kính 4cm'. Bạn có thể thay đổi tên hoặc kích thước mục tiêu thỏa thuận."}
+                  </p>
                 </div>
 
                 {editType === "team_vs_team" && (
@@ -4339,9 +4354,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     {language === "en" ? "Target Type" : "Mục tiêu"}
                   </span>
                   <span className="font-semibold text-gray-800 dark:text-gray-250">
-                    {selectedDetailChallenge.targetType === "bia_giay_tinh_diem" 
-                      ? (language === "en" ? "Paper Scoreboard" : "Bia giấy tính điểm") 
-                      : (language === "en" ? "Standard Target" : "Bia mục tiêu")}
+                    {getChallengeTargetLabel(selectedDetailChallenge.targetType, selectedDetailChallenge.targetDetail, selectedDetailChallenge.targetName, language)}
                   </span>
                 </div>
                 <div>

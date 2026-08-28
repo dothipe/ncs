@@ -147,6 +147,8 @@ export interface PKChallenge {
   setsCount?: number;
   winMechanism?: "by_sets" | "by_total_points" | "by_target_shots";
   targetType?: "bia_muc_tieu" | "bia_giay_tinh_diem";
+  targetDetail?: string; // Tên/quy cách mục tiêu thi đấu, mặc định: "Bia đường kính 4cm"
+  targetName?: string;
   targetTouchShots?: number;
   scores?: {
     challengerScores?: number[];
