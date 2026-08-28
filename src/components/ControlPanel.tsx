@@ -3498,7 +3498,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                                       onClick={() => openUpdateVideoModal(match)}
                                       className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 transition-colors cursor-pointer bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-800"
                                     >
-                                      {language === "en" ? "Video 📹" : "Video 📹"}
+                                      {language === "en" ? "Video 📹" : "Cập nhật Video 📹"}
                                     </button>
                                   )}
                                   <button
@@ -3508,7 +3508,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                                     }}
                                     className="text-[9px] font-black text-rose-600 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-300 transition-colors cursor-pointer bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-900/40 px-2.5 py-1 rounded border border-rose-200 dark:border-rose-900/40 shadow-xs"
                                   >
-                                    {language === "en" ? "Details 👁️" : "Chi tiết 👁️"}
+                                    {language === "en" ? "Details 👁️" : "Xem chi tiết 👁️"}
                                   </button>
                                   {isGlobalAdmin && (
                                     <button
@@ -4519,6 +4519,14 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 );
               })()}
 
+              {/* Referee email and system stats */}
+              {selectedDetailChallenge.refereeEmail && (
+                <div className="bg-amber-50 dark:bg-amber-950/20 rounded-xl p-3 border border-amber-100 dark:border-amber-900 text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between">
+                  <span className="font-bold">{language === "en" ? "Referee:" : "Trọng tài giám sát:"}</span>
+                  <span className="font-medium bg-amber-100/50 dark:bg-amber-900/50 px-2.5 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800">{selectedDetailChallenge.refereeEmail}</span>
+                </div>
+              )}
+
               {/* Embedded Videos section with 15-day / empty-video collapse logic matching PkLobbyView */}
               {(() => {
                 const isOlderThan15Days = (() => {
@@ -4717,14 +4725,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 );
               })()}
 
-              {/* Referee email and system stats */}
-              {selectedDetailChallenge.refereeEmail && (
-                <div className="bg-amber-50 dark:bg-amber-950/20 rounded-xl p-3 border border-amber-100 dark:border-amber-900 text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between">
-                  <span className="font-bold">{language === "en" ? "Referee:" : "Trọng tài giám sát:"}</span>
-                  <span className="font-medium bg-amber-100/50 dark:bg-amber-900/50 px-2.5 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800">{selectedDetailChallenge.refereeEmail}</span>
-                </div>
-              )}
-
               {/* 💬 PK MATCH ROOM CHAT */}
               <div className="mt-4 pt-4 border-t border-gray-150 dark:border-slate-800">
                 <ChatWidget
@@ -4742,7 +4742,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   opponentUid={selectedDetailChallenge.opponentUid}
                   systemClubs={systemClubs}
                   systemAthletes={vscSystemAthletes}
-                  defaultExpanded={false}
+                  defaultExpanded={true}
                   className="shadow-sm"
                 />
               </div>
@@ -4849,7 +4849,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <h4 className="text-sm font-black uppercase text-indigo-900 dark:text-indigo-400 tracking-wider flex items-center gap-2">
                 <Video className="w-5 h-5 text-indigo-600" />
-                <span>{language === "en" ? "Update Match Video Proofs" : "Cập Nhật Video Minh Chứng Kèo Đấu"}</span>
+                <span>{language === "en" ? "Update Match Video Proofs" : "Cập Nhật Video Minh Chứng Kèo PK"}</span>
               </h4>
               <button
                 type="button"

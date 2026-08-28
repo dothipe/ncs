@@ -272,7 +272,7 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {openChallenges.slice(0, 10).map((challenge) => {
-              const isOwner = currentUser?.uid === challenge.challengerUid;
+              const isOwner = Boolean(currentUser?.uid && currentUser.uid === challenge.challengerUid);
 
               return (
                 <div 
@@ -765,9 +765,9 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {liveMatches.map((challenge) => {
-              const isChallenger = currentUser?.uid === challenge.challengerUid;
-              const isOpponent = currentUser?.uid === challenge.opponentUid;
-              const isReferee = challenge.refereeEmail && currentUser?.email && challenge.refereeEmail.toLowerCase() === currentUser.email.toLowerCase();
+              const isChallenger = Boolean(currentUser?.uid && currentUser.uid === challenge.challengerUid);
+              const isOpponent = Boolean(currentUser?.uid && currentUser.uid === challenge.opponentUid);
+              const isReferee = Boolean(challenge.refereeEmail && currentUser?.email && challenge.refereeEmail.toLowerCase() === currentUser.email.toLowerCase());
               const isParticipantOrRef = isChallenger || isOpponent || isReferee || isAdmin;
               const isOwner = isChallenger;
 
@@ -1160,7 +1160,7 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                       <span className="text-gray-400">{language === "en" ? "Loc: " : "Địa điểm: "}</span>{match.location}
                     </div>
                     <div className="flex items-center gap-2">
-                      {(currentUser?.uid === match.challengerUid || currentUser?.uid === match.opponentUid || isAdmin) && openUpdateVideoModal && (
+                      {((currentUser?.uid && (currentUser.uid === match.challengerUid || currentUser.uid === match.opponentUid)) || isAdmin) && openUpdateVideoModal && (
                         <button
                           type="button"
                           onClick={() => openUpdateVideoModal(match)}
@@ -1180,7 +1180,7 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                         }}
                         className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded border border-indigo-200"
                       >
-                        {language === "en" ? "Details 👁️" : "Chi tiết 👁️"}
+                        {language === "en" ? "Details 👁️" : "Xem chi tiết 👁️"}
                       </button>
                       {isAdmin && onDeleteChallenge && (
                         <button
