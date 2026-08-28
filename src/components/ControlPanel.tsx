@@ -68,6 +68,7 @@ import { Club } from "../types";
 import { VscSystemClubsDirectory } from "./VscSystemClubsDirectory";
 import TrainingTracker from "./TrainingTracker";
 import { ChatWidget } from "./ChatWidget";
+import { getVscTitleAndBadge } from "../lib/vscPointsHelper";
 
 interface ControlPanelProps {
   isGlobalAdmin?: boolean;
@@ -937,13 +938,13 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
     loadProfile();
   }, [currentUser]);
 
-  // Subscribe to tournaments live database (no need to fetch heavy decoupled payloads)
+  // Subscribe to tournaments live database (including decoupled payloads for full management and achievements)
   useEffect(() => {
     setLoading(true);
     const unsubscribe = subscribeToTournamentsList((list) => {
       setTournaments(list);
       setLoading(false);
-    }, false);
+    }, true);
     return () => unsubscribe();
   }, []);
 
@@ -2087,37 +2088,66 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       <h3 className="text-sm font-black tracking-tight text-rose-900 dark:text-rose-400 flex items-center gap-2 border-b border-rose-100/60 dark:border-rose-900/20 pb-3">
                         <Sword className="w-4 h-4 text-rose-600" /> THÀNH TÍCH ĐẤU TRƯỜNG PK
                       </h3>
-                      
-                      <div className="grid grid-cols-2 gap-3 text-center">
-                        <div className="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-rose-150/40 dark:border-slate-800 shadow-xs">
-                          <div className="text-[10px] font-extrabold text-rose-700/80 dark:text-rose-400 uppercase tracking-wider">
-                            ELO PK HIỆN TẠI
-                          </div>
-                          <div className="text-2xl font-black text-rose-600 mt-1">{myPkStats.elo}</div>
-                        </div>
-                        <div className="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-rose-150/40 dark:border-slate-800 shadow-xs">
-                          <div className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
-                            TỔNG TRẬN ĐẤU
-                          </div>
-                          <div className="text-2xl font-black text-slate-700 dark:text-slate-200 mt-1">{myPkStats.totalMatches}</div>
-                        </div>
-                        <div className="bg-white dark:bg-slate-950 p-3.5 rounded-2xl border border-rose-150/40 dark:border-slate-800 shadow-xs col-span-2 sm:col-span-1">
-                          <div className="text-[9px] font-extrabold text-emerald-600 uppercase tracking-wide">
-                            THẮNG - THUA
-                          </div>
-                          <div className="text-lg font-black text-emerald-600 mt-0.5">
-                            {myPkStats.wins}W - {myPkStats.losses}L
-                          </div>
-                        </div>
-                        <div className="bg-white dark:bg-slate-950 p-3.5 rounded-2xl border border-rose-150/40 dark:border-slate-800 shadow-xs col-span-2 sm:col-span-1">
-                          <div className="text-[9px] font-extrabold text-amber-600 uppercase tracking-wide">
-                            CHUỖI THẮNG LỚN
-                          </div>
-                          <div className="text-lg font-black text-amber-500 mt-0.5">
-                            {myPkStats.streak > 0 ? `🔥 ${myPkStats.streak}` : "---"}
-                          </div>
-                        </div>
-                      </div>
+
+                      {(() => {
+                        const loggedInVscPoints = loggedInAthlete ? (loggedInAthlete.vscPoints !== undefined ? loggedInAthlete.vscPoints : 100) : 100;
+                        const loggedInVscBadge = getVscTitleAndBadge(loggedInVscPoints);
+                        return (
+                          <>
+                            {loggedInAthlete && (
+                              <div className="bg-white/80 dark:bg-slate-950 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/30 flex items-center justify-between shadow-xs">
+                                <div className="flex flex-col">
+                                  <span className="text-[10px] font-extrabold text-amber-700/80 dark:text-amber-450 uppercase tracking-wider">
+                                    CHỨC DANH VSC
+                                  </span>
+                                  <span className="text-sm font-black text-amber-800 dark:text-amber-400 mt-1">
+                                    {loggedInVscBadge.title}
+                                  </span>
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">
+                                    ĐIỂM VSC ĐẶC QUYỀN
+                                  </span>
+                                  <span className="text-xl font-black text-amber-600 dark:text-amber-400">
+                                    {loggedInVscPoints} <span className="text-xs font-bold text-slate-400">pts</span>
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-3 text-center">
+                              <div className="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-rose-150/40 dark:border-slate-800 shadow-xs">
+                                <div className="text-[10px] font-extrabold text-rose-700/80 dark:text-rose-400 uppercase tracking-wider">
+                                  ELO PK HIỆN TẠI
+                                </div>
+                                <div className="text-2xl font-black text-rose-600 mt-1">{myPkStats.elo}</div>
+                              </div>
+                              <div className="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-rose-150/40 dark:border-slate-800 shadow-xs">
+                                <div className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
+                                  TỔNG TRẬN ĐẤU
+                                </div>
+                                <div className="text-2xl font-black text-slate-700 dark:text-slate-200 mt-1">{myPkStats.totalMatches}</div>
+                              </div>
+                              <div className="bg-white dark:bg-slate-950 p-3.5 rounded-2xl border border-rose-150/40 dark:border-slate-800 shadow-xs col-span-2 sm:col-span-1">
+                                <div className="text-[9px] font-extrabold text-emerald-600 uppercase tracking-wide">
+                                  THẮNG - THUA
+                                </div>
+                                <div className="text-lg font-black text-emerald-600 mt-0.5">
+                                  {myPkStats.wins}W - {myPkStats.losses}L
+                                </div>
+                              </div>
+                              <div className="bg-white dark:bg-slate-950 p-3.5 rounded-2xl border border-rose-150/40 dark:border-slate-800 shadow-xs col-span-2 sm:col-span-1">
+                                <div className="text-[9px] font-extrabold text-amber-600 uppercase tracking-wide">
+                                  CHUỖI THẮNG LỚN
+                                </div>
+                                <div className="text-lg font-black text-amber-500 mt-0.5">
+                                  {myPkStats.streak > 0 ? `🔥 ${myPkStats.streak}` : "---"}
+                                </div>
+                              </div>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
 
                     {/* Achievements Box */}

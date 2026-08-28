@@ -184,19 +184,19 @@ service cloud.firestore {
       allow write: if isEmailVerified() && isValidId(challengeId);
     }
 
-    // --- VSC Real-time Chat Messages ---
-    match /vsc_chat_messages/{messageId} {
+    // --- VSC Real-time Chat Messages (Subcollections per Room) ---
+    match /vsc_rooms/{roomId}/messages/{messageId} {
       allow read: if true;
-      allow create: if isEmailVerified() && isValidId(messageId);
-      allow update: if isEmailVerified() && isValidId(messageId);
-      allow delete: if isEmailVerified() && isValidId(messageId);
+      allow create: if isEmailVerified() && isValidId(messageId) && isValidId(roomId);
+      allow update: if isEmailVerified() && isValidId(messageId) && isValidId(roomId);
+      allow delete: if isEmailVerified() && isValidId(messageId) && isValidId(roomId);
     }
 
-    // --- VSC Training Sessions ---
-    match /vsc_training_sessions/{sessionId} {
-      allow read: if isEmailVerified() && resource.data.userId == request.auth.uid;
-      allow create, update: if isEmailVerified() && isValidId(sessionId) && request.resource.data.userId == request.auth.uid;
-      allow delete: if isEmailVerified() && isValidId(sessionId) && resource.data.userId == request.auth.uid;
+    // --- VSC Training Sessions (Subcollections per User) ---
+    match /users/{userId}/training_sessions/{sessionId} {
+      allow read: if isEmailVerified() && userId == request.auth.uid;
+      allow create, update: if isEmailVerified() && isValidId(sessionId) && userId == request.auth.uid && request.resource.data.userId == request.auth.uid;
+      allow delete: if isEmailVerified() && isValidId(sessionId) && userId == request.auth.uid;
     }
 
     // --- VSC Private Direct Messages (DMs) ---

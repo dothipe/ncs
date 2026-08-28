@@ -56,6 +56,7 @@ import {
 } from "firebase/firestore";
 import { subscribeToVscSystemAthletes, subscribeToVscSystemClubs, subscribeToTournamentsList } from "../lib/firebaseService";
 import { getLatestAvatar } from "../utils/avatarHelpers";
+import { getVscTitleAndBadge } from "../lib/vscPointsHelper";
 
 // Helper function to convert Facebook short share/video links to standard formats
 const cleanFacebookUrlForEmbed = (url: string): string => {
@@ -136,7 +137,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
 }) => {
   const { language } = useLanguage();
   const [internalSubTab, setInternalSubTab] = useState<"dashboard" | "lobby" | "leaderboard" | "history">("dashboard");
-  const [leaderboardSubTab, setLeaderboardSubTab] = useState<"personal" | "club">("personal");
+  const [leaderboardSubTab, setLeaderboardSubTab] = useState<"personal" | "club" | "vsc">("personal");
   const activeSubTab = controlledActiveSubTab || internalSubTab;
 
   const setActiveSubTab = useCallback((tab: "dashboard" | "lobby" | "leaderboard" | "history") => {
@@ -286,6 +287,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
   const [formWinMechanism, setFormWinMechanism] = useState<"by_sets" | "by_total_points" | "by_target_shots">("by_sets");
   const [formTargetType, setFormTargetType] = useState<"bia_muc_tieu" | "bia_giay_tinh_diem">("bia_muc_tieu");
   const [formTargetTouchShots, setFormTargetTouchShots] = useState<number>(5);
+  const [formVscWager, setFormVscWager] = useState<number>(0);
 
   // Edit Challenge Modal state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -311,6 +313,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
   const [editDesignatedOpponentAthleteId, setEditDesignatedOpponentAthleteId] = useState("");
   const [editDesignatedOpponentClubId, setEditDesignatedOpponentClubId] = useState("");
   const [editPin, setEditPin] = useState("");
+  const [editVscWager, setEditVscWager] = useState<number>(0);
 
   // Live URL inputs and states
   const [formChallengerLiveUrl, setFormChallengerLiveUrl] = useState("");
@@ -777,6 +780,28 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
     ) || null;
   }, [currentUser, systemAthletes]);
 
+  // Find currently selected athlete in the creation form
+  const selectedAthleteProfile = useMemo(() => {
+    if (!selectedAthleteId) return loggedInAthlete;
+    return systemAthletes.find(a => a.id === selectedAthleteId) || null;
+  }, [selectedAthleteId, systemAthletes, loggedInAthlete]);
+
+  const selectedAthleteVscPoints = useMemo(() => {
+    if (!selectedAthleteProfile) return 0;
+    return selectedAthleteProfile.vscPoints !== undefined ? selectedAthleteProfile.vscPoints : 100;
+  }, [selectedAthleteProfile]);
+
+  // Find currently selected athlete in the edit form
+  const editSelectedAthleteProfile = useMemo(() => {
+    if (!editSelectedAthleteId) return loggedInAthlete;
+    return systemAthletes.find(a => a.id === editSelectedAthleteId) || null;
+  }, [editSelectedAthleteId, systemAthletes, loggedInAthlete]);
+
+  const editSelectedAthleteVscPoints = useMemo(() => {
+    if (!editSelectedAthleteProfile) return 0;
+    return editSelectedAthleteProfile.vscPoints !== undefined ? editSelectedAthleteProfile.vscPoints : 100;
+  }, [editSelectedAthleteProfile]);
+
   // Find linked club for current logged-in user (either creator or member)
   const loggedInClubs = useMemo(() => {
     if (!currentUser?.uid) return [];
@@ -1061,10 +1086,30 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
   const filteredLeaderboard = useMemo(() => {
     if (leaderboardSubTab === "club") {
       return pkLeaderboard.filter(p => p.isClub);
+    } else if (leaderboardSubTab === "vsc") {
+      return systemAthletes.map(ath => {
+        const personalStats = pkLeaderboard.find(p => p.name === ath.name || p.athleteId === ath.id);
+        const pts = ath.vscPoints !== undefined ? ath.vscPoints : 100;
+        return {
+          id: ath.id,
+          uid: ath.id,
+          athleteId: ath.id,
+          name: ath.name,
+          avatarUrl: ath.avatarUrl || ath.avatar,
+          email: ath.email,
+          elo: pts, // Map to elo for unified rendering fallback, handled in JSX below
+          vscPoints: pts,
+          wins: personalStats?.wins || 0,
+          draws: personalStats?.draws || 0,
+          losses: personalStats?.losses || 0,
+          streak: personalStats?.streak || 0,
+          isClub: false
+        };
+      }).sort((a, b) => b.vscPoints - a.vscPoints);
     } else {
       return pkLeaderboard.filter(p => !p.isClub);
     }
-  }, [pkLeaderboard, leaderboardSubTab]);
+  }, [pkLeaderboard, leaderboardSubTab, systemAthletes]);
 
   // Handle Challenge Creation
   const handleCreateChallenge = async (e: React.FormEvent) => {
@@ -1084,6 +1129,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
     try {
       let creatorName = currentUser.displayName || "Cơ thủ";
       let creatorAvatar = currentUser.photoURL || "";
+      let myVscPoints = 0;
 
       // Overwrite with linked system athlete profile info if solo
       if (formType === "solo_1v1" && selectedAthleteId) {
@@ -1091,6 +1137,19 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         if (linkedAth) {
           creatorName = linkedAth.name;
           if (linkedAth.avatarUrl) creatorAvatar = linkedAth.avatarUrl;
+          myVscPoints = linkedAth.vscPoints !== undefined ? linkedAth.vscPoints : 100;
+        }
+      }
+
+      // VSC wager points safety check
+      if (formType === "solo_1v1" && formVscWager > 0) {
+        if (formVscWager > myVscPoints) {
+          alert(language === "en"
+            ? `You do not have enough VSC points to wager! Your current balance is ${myVscPoints} VSC points.`
+            : `Bạn không đủ điểm VSC để đăng kèo thách đấu bằng mức điểm này! Số dư hiện tại của bạn: ${myVscPoints} điểm VSC.`
+          );
+          setActionLoading(false);
+          return;
         }
       }
 
@@ -1118,6 +1177,8 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         challengerUid: currentUser.uid,
         challengerName: creatorName,
         challengerAvatar: creatorAvatar,
+        challengerAthleteId: formType === "solo_1v1" ? (selectedAthleteId || "") : "",
+        vscWager: formType === "solo_1v1" ? (formVscWager || 0) : 0,
         createdAt: new Date().toISOString(),
         distance: formDistance.trim() || "10m",
         shotsPerSet: Number(formShotsPerSet) || 5,
@@ -1191,6 +1252,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
       setFormDesignatedOpponentAthleteId("");
       setFormDesignatedOpponentClubId("");
       setFormChallengerLiveUrl("");
+      setFormVscWager(0);
       setIsCreateModalOpen(false);
 
       alert(language === "en" 
@@ -1241,6 +1303,24 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
     if (acceptPinInput.trim() !== challenge.pin?.trim()) {
       setAcceptError(language === "en" ? "Incorrect PIN!" : "Mã PIN không chính xác!");
       return;
+    }
+
+    if (challenge.vscWager && challenge.vscWager > 0) {
+      if (!loggedInAthlete) {
+        alert(language === "en"
+          ? "This challenge requires wagering VSC points. Please link/create your VSC Athlete profile first to participate."
+          : "Kèo đấu này yêu cầu thách đấu bằng điểm VSC. Vui lòng liên kết hoặc tạo Hồ sơ VĐV của bạn để tham gia."
+        );
+        return;
+      }
+      const myVscPoints = loggedInAthlete.vscPoints !== undefined ? loggedInAthlete.vscPoints : 100;
+      if (myVscPoints < challenge.vscWager) {
+        alert(language === "en"
+          ? `You do not have enough VSC points to accept this challenge! Required: ${challenge.vscWager} VSC, your balance: ${myVscPoints} VSC.`
+          : `Bạn không đủ điểm VSC để nhận thách đấu này! Yêu cầu: ${challenge.vscWager} VSC, số dư của bạn: ${myVscPoints} VSC.`
+        );
+        return;
+      }
     }
 
     setActionLoading(true);
@@ -1300,6 +1380,25 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
 
   const handleRequestJoinWithoutPin = async (challenge: PKChallenge) => {
     if (!currentUser) return;
+
+    if (challenge.vscWager && challenge.vscWager > 0) {
+      if (!loggedInAthlete) {
+        alert(language === "en"
+          ? "This challenge requires wagering VSC points. Please link/create your VSC Athlete profile first to participate."
+          : "Kèo đấu này yêu cầu thách đấu bằng điểm VSC. Vui lòng liên kết hoặc tạo Hồ sơ VĐV của bạn để tham gia."
+        );
+        return;
+      }
+      const myVscPoints = loggedInAthlete.vscPoints !== undefined ? loggedInAthlete.vscPoints : 100;
+      if (myVscPoints < challenge.vscWager) {
+        alert(language === "en"
+          ? `You do not have enough VSC points to request joining this challenge! Required: ${challenge.vscWager} VSC, your balance: ${myVscPoints} VSC.`
+          : `Bạn không đủ điểm VSC để ứng tuyển thách đấu này! Yêu cầu: ${challenge.vscWager} VSC, số dư của bạn: ${myVscPoints} VSC.`
+        );
+        return;
+      }
+    }
+
     setActionLoading(true);
     try {
       let opponentName = currentUser.displayName || "Đối thủ";
@@ -1453,6 +1552,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
     setEditTargetTouchShots(challenge.targetTouchShots || 30);
     setEditChallengerLiveUrl(challenge.challengerLiveUrl || "");
     setEditOpponentLiveUrl(challenge.opponentLiveUrl || "");
+    setEditVscWager(challenge.vscWager || 0);
 
     setEditType(challenge.type || "solo_1v1");
     setEditTeamSize(challenge.teamSize || 3);
@@ -1526,6 +1626,19 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
     if (!currentUser || !editingChallenge) return;
 
     setActionLoading(true);
+
+    // VSC wager points safety check
+    if (editType === "solo_1v1" && editVscWager > 0) {
+      if (editVscWager > editSelectedAthleteVscPoints) {
+        alert(language === "en"
+          ? `You do not have enough VSC points to wager! Your current balance is ${editSelectedAthleteVscPoints} VSC points.`
+          : `Bạn không đủ điểm VSC để đổi cấu hình mức điểm cược này! Số dư hiện tại của bạn: ${editSelectedAthleteVscPoints} điểm VSC.`
+        );
+        setActionLoading(false);
+        return;
+      }
+    }
+
     try {
       const challengeRef = doc(db, "vsc_pk_challenges", editingChallenge.id);
       const finalSetsCount = editSetsCountOption === "custom" 
@@ -1567,7 +1680,8 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         challengerAvatar: creatorAvatar,
         pin: editPin.trim() || "",
         challengerLiveUrl: editChallengerLiveUrl.trim(),
-        opponentLiveUrl: editOpponentLiveUrl.trim()
+        opponentLiveUrl: editOpponentLiveUrl.trim(),
+        vscWager: editType === "solo_1v1" ? (Number(editVscWager) || 0) : 0
       };
 
       if (editType === "team_vs_team") {
@@ -2103,6 +2217,71 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
       }
 
       await updateDoc(challengeRef, updates);
+
+      // Perform VSC Wager points transfer if match completed
+      if (newStatus === "completed" && activeArenaChallenge && activeArenaChallenge.type === "solo_1v1" && activeArenaChallenge.vscWager && activeArenaChallenge.vscWager > 0) {
+        try {
+          const wager = activeArenaChallenge.vscWager;
+          const chScores = finalChallengerScores || [];
+          const opScores = finalOpponentScores || [];
+          const winMechanism = activeArenaChallenge.winMechanism || "by_sets";
+
+          const chSum = chScores.reduce((a: number, b: any) => Number(a) + Number(b), 0);
+          const opSum = opScores.reduce((a: number, b: any) => Number(a) + Number(b), 0);
+
+          let chSetsWon = 0;
+          let opSetsWon = 0;
+          const len = Math.max(chScores.length, opScores.length);
+          for (let i = 0; i < len; i++) {
+            const chS = Number(chScores[i]) || 0;
+            const opS = Number(opScores[i]) || 0;
+            if (chS > opS) chSetsWon++;
+            else if (opS > chS) opSetsWon++;
+          }
+
+          const isBySets = winMechanism === "by_sets";
+          const challengerWin = isBySets ? (chSetsWon > opSetsWon) : (chSum > opSum);
+          const opponentWin = isBySets ? (opSetsWon > chSetsWon) : (opSum > chSum);
+          const draw = isBySets ? (chSetsWon === opSetsWon) : (chSum === opSum);
+
+          if (!draw) {
+            let challengerAth = systemAthletes.find(a => a.id === activeArenaChallenge.challengerAthleteId);
+            if (!challengerAth) {
+              challengerAth = systemAthletes.find(a => a.name?.trim().toLowerCase() === activeArenaChallenge.challengerName?.trim().toLowerCase());
+            }
+
+            let opponentAth = systemAthletes.find(a => a.id === activeArenaChallenge.opponentAthleteId);
+            if (!opponentAth) {
+              opponentAth = systemAthletes.find(a => a.name?.trim().toLowerCase() === activeArenaChallenge.opponentName?.trim().toLowerCase());
+            }
+
+            if (challengerAth && opponentAth) {
+              const chPoints = challengerAth.vscPoints !== undefined ? challengerAth.vscPoints : 100;
+              const opPoints = opponentAth.vscPoints !== undefined ? opponentAth.vscPoints : 100;
+
+              let newChPoints = chPoints;
+              let newOpPoints = opPoints;
+
+              if (challengerWin) {
+                newChPoints = chPoints + wager;
+                newOpPoints = Math.max(0, opPoints - wager);
+              } else if (opponentWin) {
+                newChPoints = Math.max(0, chPoints - wager);
+                newOpPoints = opPoints + wager;
+              }
+
+              const chDocRef = doc(db, "vsc_system_athletes", challengerAth.id);
+              const opDocRef = doc(db, "vsc_system_athletes", opponentAth.id);
+
+              await updateDoc(chDocRef, { vscPoints: newChPoints });
+              await updateDoc(opDocRef, { vscPoints: newOpPoints });
+              console.log(`Successfully transferred ${wager} VSC points inside match completed trigger.`);
+            }
+          }
+        } catch (vscErr) {
+          console.error("Error transferring VSC wager points:", vscErr);
+        }
+      }
 
       alert(language === "en" 
         ? "Scoreboard updated successfully!" 
@@ -3317,6 +3496,14 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                                   {language === "en" ? "Rules: " : "Quy định: "} {challenge.rules}
                                 </span>
                               </div>
+                              {challenge.vscWager && challenge.vscWager > 0 ? (
+                                <div className="flex items-center gap-2 sm:col-span-2 bg-amber-500/5 dark:bg-amber-950/10 border border-amber-250 dark:border-amber-900/30 rounded-xl p-2.5 mt-1 text-amber-800 dark:text-amber-450 font-black text-[11px] shadow-3xs animate-pulse">
+                                  <Flame className="w-4 h-4 text-amber-550 shrink-0" />
+                                  <span>
+                                    ⚡ THÁCH ĐẤU BẰNG ĐIỂM VSC: {challenge.vscWager} VSC
+                                  </span>
+                                </div>
+                              ) : null}
                             </div>
                           </div>
 
@@ -3558,12 +3745,12 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
           /* ========================================================= */
           <div className="max-w-2xl mx-auto space-y-6">
             
-            {/* Small inner sub-tabs for Leaderboard (Personal vs Club) */}
-            <div className="flex bg-gray-100/85 dark:bg-slate-850 p-1 rounded-2xl w-fit mx-auto border border-gray-200/50 shadow-3xs">
+            {/* Small inner sub-tabs for Leaderboard (Personal vs Club vs VSC) */}
+            <div className="flex bg-gray-100/85 dark:bg-slate-850 p-1 rounded-2xl w-fit mx-auto border border-gray-200/50 shadow-3xs flex-wrap justify-center gap-1">
               <button
                 type="button"
                 onClick={() => setLeaderboardSubTab("personal")}
-                className={`px-5 py-2.5 text-xs font-black rounded-xl transition-all flex items-center gap-1.5 cursor-pointer focus:outline-none ${
+                className={`px-4 py-2 text-xs font-black rounded-xl transition-all flex items-center gap-1.5 cursor-pointer focus:outline-none ${
                   leaderboardSubTab === "personal"
                     ? "bg-white dark:bg-slate-900 text-rose-600 shadow-sm border border-gray-100/30"
                     : "text-gray-500 hover:text-gray-850 dark:text-gray-400"
@@ -3575,7 +3762,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
               <button
                 type="button"
                 onClick={() => setLeaderboardSubTab("club")}
-                className={`px-5 py-2.5 text-xs font-black rounded-xl transition-all flex items-center gap-1.5 cursor-pointer focus:outline-none ${
+                className={`px-4 py-2 text-xs font-black rounded-xl transition-all flex items-center gap-1.5 cursor-pointer focus:outline-none ${
                   leaderboardSubTab === "club"
                     ? "bg-white dark:bg-slate-900 text-rose-600 shadow-sm border border-gray-100/30"
                     : "text-gray-500 hover:text-gray-850 dark:text-gray-400"
@@ -3583,6 +3770,18 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
               >
                 <Users className="w-4 h-4" />
                 <span>{language === "en" ? "Club Ratings" : "BXH PK CÂU LẠC BỘ"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setLeaderboardSubTab("vsc")}
+                className={`px-4 py-2 text-xs font-black rounded-xl transition-all flex items-center gap-1.5 cursor-pointer focus:outline-none ${
+                  leaderboardSubTab === "vsc"
+                    ? "bg-white dark:bg-slate-900 text-rose-600 shadow-sm border border-gray-100/30"
+                    : "text-gray-500 hover:text-gray-850 dark:text-gray-400"
+                }`}
+              >
+                <Award className="w-4 h-4 text-amber-550" />
+                <span>{language === "en" ? "VSC Ratings" : "BXH PK VSC"}</span>
               </button>
             </div>
 
@@ -3592,7 +3791,14 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                 <div className="text-center mb-4">
                   <span className="text-[10px] font-black uppercase text-amber-850 bg-amber-100 border border-amber-200 px-4 py-1.5 rounded-full tracking-wider flex items-center justify-center gap-1.5 w-fit mx-auto">
                     <Trophy className="w-4 h-4 text-amber-600 animate-bounce" />
-                    <span>{leaderboardSubTab === "club" ? (language === "en" ? "TOP 3 GLORY CLUBS" : "BẢNG VÀNG TOP 3 CLB PK") : (language === "en" ? "TOP 3 GLORY BOARD" : "BẢNG VÀNG TOP 3 CÁ NHÂN")}</span>
+                    <span>
+                      {leaderboardSubTab === "club" 
+                        ? (language === "en" ? "TOP 3 GLORY CLUBS" : "BẢNG VÀNG TOP 3 CLB PK") 
+                        : leaderboardSubTab === "vsc"
+                        ? (language === "en" ? "TOP 3 GLORY VSC" : "BẢNG VÀNG TOP 3 VSC SYSTEM")
+                        : (language === "en" ? "TOP 3 GLORY BOARD" : "BẢNG VÀNG TOP 3 CÁ NHÂN")
+                      }
+                    </span>
                   </span>
                 </div>
 
@@ -3602,20 +3808,32 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                     <button
                       type="button"
                       onClick={() => handleProfileOrClubClick(filteredLeaderboard[1].name, filteredLeaderboard[1].email, filteredLeaderboard[1].athleteId || filteredLeaderboard[1].uid)}
-                      className="flex flex-col items-center bg-white/85 dark:bg-slate-900/85 p-3 rounded-2xl border border-gray-100 shadow-3xs cursor-pointer text-center relative hover:scale-102 transition-all w-full"
+                      className="flex flex-col items-center bg-white/85 dark:bg-slate-900/85 p-3 rounded-2xl border border-gray-100 shadow-3xs cursor-pointer text-center relative hover:scale-102 transition-all w-full min-h-[140px] justify-between"
                     >
                       <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
                         <span className="bg-gray-100 text-gray-800 text-[10px] font-black px-2 py-0.5 rounded-full border border-gray-200">🥈 #2</span>
                       </div>
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden border border-gray-200 bg-gray-50 flex items-center justify-center mt-2 shadow-xs">
-                        {filteredLeaderboard[1].avatarUrl ? (
-                          <img src={filteredLeaderboard[1].avatarUrl} alt={filteredLeaderboard[1].name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        ) : (
-                          <User className="w-5 h-5 text-gray-300" />
-                        )}
+                      <div className="flex flex-col items-center mt-2">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden border border-gray-200 bg-gray-50 flex items-center justify-center shadow-xs">
+                          {filteredLeaderboard[1].avatarUrl ? (
+                            <img src={filteredLeaderboard[1].avatarUrl} alt={filteredLeaderboard[1].name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <User className="w-5 h-5 text-gray-300" />
+                          )}
+                        </div>
+                        <span className="font-bold text-xs text-gray-900 dark:text-white truncate w-full mt-2 block">{filteredLeaderboard[1].name}</span>
                       </div>
-                      <span className="font-bold text-xs text-gray-900 dark:text-white truncate w-full mt-2 block">{filteredLeaderboard[1].name}</span>
-                      <span className="font-extrabold text-xs text-rose-600 mt-1 block">{filteredLeaderboard[1].elo} ELO</span>
+                      <div className="flex flex-col items-center mt-1">
+                        <span className="font-extrabold text-xs text-rose-600 block">{filteredLeaderboard[1].elo} {leaderboardSubTab === "vsc" ? "VSC" : "ELO"}</span>
+                        {leaderboardSubTab === "vsc" && (() => {
+                          const badge = getVscTitleAndBadge(filteredLeaderboard[1].vscPoints);
+                          return (
+                            <span className={`text-[8px] px-1 py-0.2 rounded font-black mt-1 uppercase scale-90 ${badge.bgClass} ${badge.colorClass}`}>
+                              {badge.title.split(" ")[0]}
+                            </span>
+                          );
+                        })()}
+                      </div>
                     </button>
                   ) : (
                     <div className="flex flex-col items-center justify-center p-3 text-center border border-dashed border-gray-200 rounded-2xl bg-slate-50/50">
@@ -3628,22 +3846,34 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                     <button
                       type="button"
                       onClick={() => handleProfileOrClubClick(filteredLeaderboard[0].name, filteredLeaderboard[0].email, filteredLeaderboard[0].athleteId || filteredLeaderboard[0].uid)}
-                      className="flex flex-col items-center bg-white dark:bg-slate-900 p-4 rounded-2xl border-2 border-amber-350 shadow-sm cursor-pointer text-center relative hover:scale-102 transition-all -translate-y-2 w-full"
+                      className="flex flex-col items-center bg-white dark:bg-slate-900 p-4 rounded-2xl border-2 border-amber-350 shadow-sm cursor-pointer text-center relative hover:scale-102 transition-all -translate-y-2 w-full min-h-[160px] justify-between"
                     >
                       <div className="absolute -top-4 left-1/2 -translate-x-1/2">
                         <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2.5 py-0.5 rounded-full border border-amber-300 flex items-center gap-0.5 shadow-xs">
                           👑 🥇 #1
                         </span>
                       </div>
-                      <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-amber-300 bg-gray-50 flex items-center justify-center mt-2 shadow-sm ring-2 ring-amber-100">
-                        {filteredLeaderboard[0].avatarUrl ? (
-                          <img src={filteredLeaderboard[0].avatarUrl} alt={filteredLeaderboard[0].name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        ) : (
-                          <User className="w-6 h-6 text-gray-300" />
-                        )}
+                      <div className="flex flex-col items-center mt-2">
+                        <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-amber-300 bg-gray-50 flex items-center justify-center shadow-sm ring-2 ring-amber-100">
+                          {filteredLeaderboard[0].avatarUrl ? (
+                            <img src={filteredLeaderboard[0].avatarUrl} alt={filteredLeaderboard[0].name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <User className="w-6 h-6 text-gray-300" />
+                          )}
+                        </div>
+                        <span className="font-black text-sm text-gray-950 dark:text-white truncate w-full mt-2 block">{filteredLeaderboard[0].name}</span>
                       </div>
-                      <span className="font-black text-sm text-gray-950 dark:text-white truncate w-full mt-2 block">{filteredLeaderboard[0].name}</span>
-                      <span className="font-black text-sm text-rose-600 mt-1 block">{filteredLeaderboard[0].elo} ELO</span>
+                      <div className="flex flex-col items-center mt-1">
+                        <span className="font-black text-sm text-rose-600 block">{filteredLeaderboard[0].elo} {leaderboardSubTab === "vsc" ? "VSC" : "ELO"}</span>
+                        {leaderboardSubTab === "vsc" && (() => {
+                          const badge = getVscTitleAndBadge(filteredLeaderboard[0].vscPoints);
+                          return (
+                            <span className={`text-[8px] px-1 py-0.2 rounded font-black mt-1 uppercase scale-90 ${badge.bgClass} ${badge.colorClass}`}>
+                              {badge.title.split(" ")[0]}
+                            </span>
+                          );
+                        })()}
+                      </div>
                     </button>
                   ) : (
                     <div className="flex flex-col items-center justify-center p-3 text-center border border-dashed border-gray-200 rounded-2xl bg-slate-50/50 -translate-y-2">
@@ -3656,20 +3886,32 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                     <button
                       type="button"
                       onClick={() => handleProfileOrClubClick(filteredLeaderboard[2].name, filteredLeaderboard[2].email, filteredLeaderboard[2].athleteId || filteredLeaderboard[2].uid)}
-                      className="flex flex-col items-center bg-white/85 dark:bg-slate-900/85 p-3 rounded-2xl border border-gray-100 shadow-3xs cursor-pointer text-center relative hover:scale-102 transition-all w-full"
+                      className="flex flex-col items-center bg-white/85 dark:bg-slate-900/85 p-3 rounded-2xl border border-gray-100 shadow-3xs cursor-pointer text-center relative hover:scale-102 transition-all w-full min-h-[140px] justify-between"
                     >
                       <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
                         <span className="bg-orange-50 text-orange-700 text-[10px] font-black px-2 py-0.5 rounded-full border border-orange-200">🥉 #3</span>
                       </div>
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden border border-gray-200 bg-gray-50 flex items-center justify-center mt-2 shadow-xs">
-                        {filteredLeaderboard[2].avatarUrl ? (
-                          <img src={filteredLeaderboard[2].avatarUrl} alt={filteredLeaderboard[2].name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        ) : (
-                          <User className="w-5 h-5 text-gray-300" />
-                        )}
+                      <div className="flex flex-col items-center mt-2">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden border border-gray-200 bg-gray-50 flex items-center justify-center shadow-xs">
+                          {filteredLeaderboard[2].avatarUrl ? (
+                            <img src={filteredLeaderboard[2].avatarUrl} alt={filteredLeaderboard[2].name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <User className="w-5 h-5 text-gray-300" />
+                          )}
+                        </div>
+                        <span className="font-bold text-xs text-gray-900 dark:text-white truncate w-full mt-2 block">{filteredLeaderboard[2].name}</span>
                       </div>
-                      <span className="font-bold text-xs text-gray-900 dark:text-white truncate w-full mt-2 block">{filteredLeaderboard[2].name}</span>
-                      <span className="font-extrabold text-xs text-rose-600 mt-1 block">{filteredLeaderboard[2].elo} ELO</span>
+                      <div className="flex flex-col items-center mt-1">
+                        <span className="font-extrabold text-xs text-rose-600 block">{filteredLeaderboard[2].elo} {leaderboardSubTab === "vsc" ? "VSC" : "ELO"}</span>
+                        {leaderboardSubTab === "vsc" && (() => {
+                          const badge = getVscTitleAndBadge(filteredLeaderboard[2].vscPoints);
+                          return (
+                            <span className={`text-[8px] px-1 py-0.2 rounded font-black mt-1 uppercase scale-90 ${badge.bgClass} ${badge.colorClass}`}>
+                              {badge.title.split(" ")[0]}
+                            </span>
+                          );
+                        })()}
+                      </div>
                     </button>
                   ) : (
                     <div className="flex flex-col items-center justify-center p-3 text-center border border-dashed border-gray-200 rounded-2xl bg-slate-50/50">
@@ -3689,14 +3931,17 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                     <span>
                       {leaderboardSubTab === "club"
                         ? (language === "en" ? "Top PK Slingshot Clubs" : "Bảng Xếp Hạng Câu Lạc Bộ PK")
+                        : leaderboardSubTab === "vsc"
+                        ? (language === "en" ? "Top VSC System Rankings" : "Bảng Xếp Hạng Vận Động Viên VSC")
                         : (language === "en" ? "Top PK Slingshot Gladiators" : "Bảng Xếp Hạng Anh Hùng PK")
                       }
                     </span>
                   </h3>
                   <p className="text-[11px] text-gray-500 mt-0.5">
-                    {language === "en" 
-                      ? "ELO rating scores recalculate after every officially synchronized match result." 
-                      : "Điểm ELO tự động cập nhật sau mỗi trận đấu PK hoàn thành."}
+                    {leaderboardSubTab === "vsc"
+                      ? (language === "en" ? "Ranked by current VSC points with assigned honorary titles." : "Chức danh danh hiệu & hạng đấu dựa trên điểm tích lũy VSC.")
+                      : (language === "en" ? "ELO rating scores recalculate after every officially synchronized match result." : "Điểm ELO tự động cập nhật sau mỗi trận đấu PK hoàn thành.")
+                    }
                   </p>
                 </div>
                 <Flame className="w-5 h-5 text-rose-500 animate-pulse" />
@@ -3745,11 +3990,19 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                           </div>
 
                           <div>
-                            <div className="font-bold text-gray-900 text-sm flex items-center gap-1.5">
+                            <div className="font-bold text-gray-900 text-sm flex items-center gap-1.5 flex-wrap">
                               <span>{player.name}</span>
                               {player.isClub && (
                                 <span className="bg-rose-50 text-rose-700 text-[9px] font-black uppercase px-1.5 py-0.2 rounded">CLB</span>
                               )}
+                              {leaderboardSubTab === "vsc" && (() => {
+                                const badge = getVscTitleAndBadge(player.vscPoints);
+                                return (
+                                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider ${badge.bgClass} ${badge.colorClass}`}>
+                                    {badge.title}
+                                  </span>
+                                );
+                              })()}
                             </div>
                             <div className="text-[10px] text-gray-500 mt-0.5 flex items-center gap-2">
                               <span>Win: <b className="text-green-600">{player.wins}</b></span>
@@ -3768,7 +4021,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                         <div className="text-right">
                           <div className="font-black text-rose-600 text-base tracking-tight flex items-center justify-end gap-1">
                             <span>{player.elo}</span>
-                            <span className="text-[10px] font-bold text-gray-400 uppercase">ELO</span>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase">{leaderboardSubTab === "vsc" ? "VSC" : "ELO"}</span>
                           </div>
                           <span className="text-[9px] text-gray-400 font-medium">Ranked #{(idx + 1)}</span>
                         </div>
@@ -4094,6 +4347,50 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                         ? "Note: Your account is not linked to a system athlete. Linking email in VSC System directory will lock this automatically." 
                         : "Lưu ý: Tài khoản của bạn chưa được liên kết với hồ sơ VĐV. Bạn có thể chọn tạm hồ sơ VĐV đại diện thi đấu."}
                     </p>
+                  )}
+                </div>
+              )}
+
+              {/* Thách Đấu Bằng Điểm VSC */}
+              {formType === "solo_1v1" && (
+                <div className="bg-amber-500/5 dark:bg-amber-950/10 border border-amber-300 dark:border-amber-900/30 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-black text-amber-800 dark:text-amber-400 uppercase tracking-wider">
+                      ⚡ THÁCH ĐẤU BẰNG ĐIỂM VSC
+                    </label>
+                    <span className="text-xs font-black text-amber-700 bg-amber-200/50 dark:bg-amber-550/35 px-2 py-0.5 rounded">
+                      Số dư: {selectedAthleteVscPoints} VSC
+                    </span>
+                  </div>
+
+                  {selectedAthleteVscPoints === 0 ? (
+                    <div className="space-y-2">
+                      <input
+                        type="number"
+                        disabled={true}
+                        value=""
+                        placeholder="0"
+                        className="w-full px-4 py-2.5 bg-gray-100 dark:bg-slate-900/50 border border-gray-200 dark:border-slate-850 rounded-xl text-sm opacity-50 cursor-not-allowed text-gray-400"
+                      />
+                      <p className="text-xs font-black text-rose-600 dark:text-rose-400">
+                        ⚠️ Liên hệ admin để nhận điểm VSC
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <input
+                        type="number"
+                        min={0}
+                        max={selectedAthleteVscPoints}
+                        placeholder="Nhập số điểm VSC muốn thách đấu (đặt cược)..."
+                        value={formVscWager || ""}
+                        onChange={(e) => setFormVscWager(Math.min(selectedAthleteVscPoints, Math.max(0, parseInt(e.target.value) || 0)))}
+                        className="w-full px-4 py-2.5 bg-white dark:bg-slate-950 border border-amber-300 dark:border-amber-800 rounded-xl text-sm font-black text-amber-800 dark:text-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+                      />
+                      <p className="text-[10px] text-amber-600 dark:text-amber-400/80 font-medium">
+                        Điểm VSC cược này sẽ bị trừ khỏi người THUA và cộng cho người THẮNG. Kết quả HÒA giữ nguyên điểm.
+                      </p>
+                    </div>
                   )}
                 </div>
               )}
@@ -4641,27 +4938,71 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
 
               {/* Linked Athlete Profile Selection */}
               {editType === "solo_1v1" && (
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-                    {language === "en" ? "Select Athlete Profile *" : "Đại diện hồ sơ VĐV thi đấu *"}
-                  </label>
-                  <select
-                    value={editSelectedAthleteId}
-                    onChange={(e) => setEditSelectedAthleteId(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  >
-                    {loggedInAthlete ? (
-                      <option value={loggedInAthlete.id}>
-                        {loggedInAthlete.name} (VSC-{loggedInAthlete.id}) - Linked Account
-                      </option>
-                    ) : (
-                      systemAthletes.map((ath) => (
-                        <option key={ath.id} value={ath.id}>
-                          {ath.name} (VSC-{ath.id})
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                      {language === "en" ? "Select Athlete Profile *" : "Đại diện hồ sơ VĐV thi đấu *"}
+                    </label>
+                    <select
+                      value={editSelectedAthleteId}
+                      onChange={(e) => setEditSelectedAthleteId(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    >
+                      {loggedInAthlete ? (
+                        <option value={loggedInAthlete.id}>
+                          {loggedInAthlete.name} (VSC-{loggedInAthlete.id}) - Linked Account
                         </option>
-                      ))
+                      ) : (
+                        systemAthletes.map((ath) => (
+                          <option key={ath.id} value={ath.id}>
+                            {ath.name} (VSC-{ath.id})
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+
+                  {/* Thách Đấu Bằng Điểm VSC (Sửa) */}
+                  <div className="bg-amber-500/5 dark:bg-amber-950/10 border border-amber-300 dark:border-amber-900/30 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-black text-amber-800 dark:text-amber-400 uppercase tracking-wider">
+                        ⚡ THÁCH ĐẤU BẰNG ĐIỂM VSC
+                      </label>
+                      <span className="text-xs font-black text-amber-700 bg-amber-200/50 dark:bg-amber-550/35 px-2 py-0.5 rounded">
+                        Số dư: {editSelectedAthleteVscPoints} VSC
+                      </span>
+                    </div>
+
+                    {editSelectedAthleteVscPoints === 0 ? (
+                      <div className="space-y-2">
+                        <input
+                          type="number"
+                          disabled={true}
+                          value=""
+                          placeholder="0"
+                          className="w-full px-4 py-2.5 bg-gray-100 dark:bg-slate-900/50 border border-gray-200 dark:border-slate-850 rounded-xl text-sm opacity-50 cursor-not-allowed text-gray-400"
+                        />
+                        <p className="text-xs font-black text-rose-600 dark:text-rose-400">
+                          ⚠️ Liên hệ admin để nhận điểm VSC
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <input
+                          type="number"
+                          min={0}
+                          max={editSelectedAthleteVscPoints}
+                          placeholder="Nhập số điểm VSC muốn thách đấu (đặt cược)..."
+                          value={editVscWager || ""}
+                          onChange={(e) => setEditVscWager(Math.min(editSelectedAthleteVscPoints, Math.max(0, parseInt(e.target.value) || 0)))}
+                          className="w-full px-4 py-2.5 bg-white dark:bg-slate-950 border border-amber-300 dark:border-amber-800 rounded-xl text-sm font-black text-amber-800 dark:text-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+                        />
+                        <p className="text-[10px] text-amber-600 dark:text-amber-400/80 font-medium">
+                          Điểm VSC cược này sẽ bị trừ khỏi người THUA và cộng cho người THẮNG. Kết quả HÒA giữ nguyên điểm.
+                        </p>
+                      </div>
                     )}
-                  </select>
+                  </div>
                 </div>
               )}
 

@@ -161,9 +161,13 @@
       "schema": "#/entities/PKChallenge",
       "description": "List of active and historical PK match challenges"
     },
-    "vsc_training_sessions/{sessionId}": {
+    "users/{userId}/training_sessions/{sessionId}": {
       "schema": "#/entities/TrainingSession",
       "description": "User specific personal slingshot training logs"
+    },
+    "vsc_rooms/{roomId}/messages/{messageId}": {
+      "schema": { "type": "object" },
+      "description": "Real-time chat messages inside tournament rooms or PK matches"
     },
     "vsc_chats/{chatId}": {
       "schema": "#/entities/DirectChat",

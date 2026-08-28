@@ -944,8 +944,12 @@ export async function saveVscSystemAthletes(athletes: Athlete[]) {
     // 1. Write/update each athlete in the array as an individual document
     const writes = athletes.map((athlete) => {
       if (!athlete || !athlete.id) return Promise.resolve();
+      const updatedAthlete = {
+        ...athlete,
+        vscPoints: (athlete.vscPoints === undefined || athlete.vscPoints === null) ? 100 : athlete.vscPoints
+      };
       const docRef = doc(db, "vsc_system_athletes", athlete.id);
-      return setDoc(docRef, sanitizeFirestoreData(athlete));
+      return setDoc(docRef, sanitizeFirestoreData(updatedAthlete));
     });
     await Promise.all(writes);
 
@@ -1686,11 +1690,8 @@ export function subscribeChatMessages(
   limitCount: number = 80
 ): () => void {
   try {
-    const chatColl = collection(db, "vsc_chat_messages");
-    const q = query(
-      chatColl,
-      where("roomId", "==", roomId)
-    );
+    const chatColl = collection(db, "vsc_rooms", roomId, "messages");
+    const q = query(chatColl);
 
     return onSnapshot(
       q,
@@ -1709,7 +1710,7 @@ export function subscribeChatMessages(
 
           msgs.push({
             id: docSnap.id,
-            roomId: data.roomId,
+            roomId: data.roomId || roomId,
             senderUid: data.senderUid || "",
             senderName: data.senderName || "Ẩn danh",
             senderEmail: data.senderEmail,
@@ -1774,7 +1775,7 @@ export async function sendChatMessage(
     throw new Error("Tin nhắn không được để trống");
   }
 
-  const chatColl = collection(db, "vsc_chat_messages");
+  const chatColl = collection(db, "vsc_rooms", message.roomId, "messages");
   const docRef = doc(chatColl);
 
   const payload: Record<string, any> = {
@@ -1797,7 +1798,7 @@ export async function sendChatMessage(
   }
 
   await setDoc(docRef, sanitizeFirestoreData(payload)).catch((err) => {
-    handleFirestoreError(err, OperationType.CREATE, `vsc_chat_messages/${docRef.id}`);
+    handleFirestoreError(err, OperationType.CREATE, `vsc_rooms/${message.roomId}/messages/${docRef.id}`);
   });
 
   return docRef.id;
@@ -1807,16 +1808,17 @@ export async function sendChatMessage(
  * Pins or unpins a chat message in a room.
  */
 export async function togglePinChatMessage(
+  roomId: string,
   messageId: string,
   isPinned: boolean,
   pinnedByName?: string
 ): Promise<void> {
-  const msgRef = doc(db, "vsc_chat_messages", messageId);
+  const msgRef = doc(db, "vsc_rooms", roomId, "messages", messageId);
   await updateDoc(msgRef, {
     isPinned,
     pinnedBy: isPinned ? (pinnedByName || "BTC") : null
   }).catch((err) => {
-    handleFirestoreError(err, OperationType.UPDATE, `vsc_chat_messages/${messageId}`);
+    handleFirestoreError(err, OperationType.UPDATE, `vsc_rooms/${roomId}/messages/${messageId}`);
   });
 }
 
@@ -1824,11 +1826,12 @@ export async function togglePinChatMessage(
  * Toggles an emoji reaction on a message.
  */
 export async function toggleMessageReaction(
+  roomId: string,
   messageId: string,
   emoji: string,
   userUid: string
 ): Promise<void> {
-  const msgRef = doc(db, "vsc_chat_messages", messageId);
+  const msgRef = doc(db, "vsc_rooms", roomId, "messages", messageId);
   const snap = await getDoc(msgRef);
   if (!snap.exists()) return;
 
@@ -1848,17 +1851,17 @@ export async function toggleMessageReaction(
   await updateDoc(msgRef, {
     reactions
   }).catch((err) => {
-    handleFirestoreError(err, OperationType.UPDATE, `vsc_chat_messages/${messageId}`);
+    handleFirestoreError(err, OperationType.UPDATE, `vsc_rooms/${roomId}/messages/${messageId}`);
   });
 }
 
 /**
  * Deletes a chat message.
  */
-export async function deleteChatMessage(messageId: string): Promise<void> {
-  const msgRef = doc(db, "vsc_chat_messages", messageId);
+export async function deleteChatMessage(roomId: string, messageId: string): Promise<void> {
+  const msgRef = doc(db, "vsc_rooms", roomId, "messages", messageId);
   await deleteDoc(msgRef).catch((err) => {
-    handleFirestoreError(err, OperationType.DELETE, `vsc_chat_messages/${messageId}`);
+    handleFirestoreError(err, OperationType.DELETE, `vsc_rooms/${roomId}/messages/${messageId}`);
   });
 }
 

@@ -5,6 +5,7 @@ import { User, X, FileText, Lock, Award, MessageSquare } from "lucide-react";
 import { AVATAR_MALE } from "./AthleteManagement";
 import { getHitCount } from "../utils/qualification";
 import { db, collection, query, orderBy, onSnapshot } from "../firebase";
+import { getVscTitleAndBadge } from "../lib/vscPointsHelper";
 
 interface AthleteProfileModalProps {
   athlete: Athlete | null;
@@ -178,6 +179,103 @@ export const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({
     };
   }, [isOpen, athlete]);
 
+  const [localTournaments, setLocalTournaments] = useState<any[]>([]);
+  const [decoupledData, setDecoupledData] = useState<{
+    athletes: Record<string, any[]>;
+    teamAthletes: Record<string, any[]>;
+    inputAthletes: Record<string, any[]>;
+    teamInputAthletes: Record<string, any[]>;
+    masterAthletes: Record<string, any[]>;
+    teamMasterAthletes: Record<string, any[]>;
+  }>({
+    athletes: {},
+    teamAthletes: {},
+    inputAthletes: {},
+    teamInputAthletes: {},
+    masterAthletes: {},
+    teamMasterAthletes: {},
+  });
+
+  // Subscribe to tournaments list locally if the prop is empty
+  useEffect(() => {
+    if (!isOpen || !athlete) return;
+    if (onlineTournaments && onlineTournaments.length > 0) {
+      setLocalTournaments([]);
+      return;
+    }
+
+    const q = query(collection(db, "tournaments"), orderBy("createdAt", "desc"));
+    const unsub = onSnapshot(q, (snapshot) => {
+      const list: any[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setLocalTournaments(list);
+    }, (err) => {
+      console.warn("Failed to subscribe to tournaments list in modal:", err);
+    });
+
+    return () => unsub();
+  }, [isOpen, athlete, onlineTournaments]);
+
+  // Subscribe to decoupled datasets inside modal while open
+  useEffect(() => {
+    if (!isOpen || !athlete) return;
+
+    const unsubs: (() => void)[] = [];
+    const payloadCollections = [
+      { key: "masterAthletes", coll: "vsc_tournament_master_athletes" },
+      { key: "athletes", coll: "vsc_tournament_athletes" },
+      { key: "teamAthletes", coll: "vsc_tournament_team_athletes" },
+      { key: "teamMasterAthletes", coll: "vsc_tournament_team_master_athletes" },
+      { key: "inputAthletes", coll: "vsc_tournament_input_athletes" },
+      { key: "teamInputAthletes", coll: "vsc_tournament_team_input_athletes" },
+    ];
+
+    payloadCollections.forEach(({ key, coll }) => {
+      try {
+        const unsub = onSnapshot(collection(db, coll), (snap) => {
+          const map: Record<string, any[]> = {};
+          snap.forEach(docSnap => {
+            map[docSnap.id] = docSnap.data()?.list || [];
+          });
+          setDecoupledData(prev => ({
+            ...prev,
+            [key]: map
+          }));
+        }, (err) => {
+          console.warn(`Could not subscribe to ${coll} inside modal:`, err);
+        });
+        unsubs.push(unsub);
+      } catch (e) {
+        console.warn(`Failed to attach snap listener for ${coll} inside modal:`, e);
+      }
+    });
+
+    return () => {
+      unsubs.forEach(unsub => unsub());
+    };
+  }, [isOpen, athlete]);
+
+  const actualTournaments = useMemo(() => {
+    return (onlineTournaments && onlineTournaments.length > 0) ? onlineTournaments : localTournaments;
+  }, [onlineTournaments, localTournaments]);
+
+  const mergedOnlineTournaments = useMemo(() => {
+    return actualTournaments.map(t => {
+      const id = t.id;
+      return {
+        ...t,
+        athletes: (t.athletes && t.athletes.length > 0) ? t.athletes : (decoupledData.athletes[id] || []),
+        teamAthletes: (t.teamAthletes && t.teamAthletes.length > 0) ? t.teamAthletes : (decoupledData.teamAthletes[id] || []),
+        inputAthletes: (t.inputAthletes && t.inputAthletes.length > 0) ? t.inputAthletes : (decoupledData.inputAthletes[id] || []),
+        teamInputAthletes: (t.teamInputAthletes && t.teamInputAthletes.length > 0) ? t.teamInputAthletes : (decoupledData.teamInputAthletes[id] || []),
+        masterAthletes: (t.masterAthletes && t.masterAthletes.length > 0) ? t.masterAthletes : (decoupledData.masterAthletes[id] || []),
+        teamMasterAthletes: (t.teamMasterAthletes && t.teamMasterAthletes.length > 0) ? t.teamMasterAthletes : (decoupledData.teamMasterAthletes[id] || []),
+      };
+    });
+  }, [actualTournaments, decoupledData]);
+
   // Calculate detailed historical tournament statistics for the athlete
   const athleteStats = useMemo(() => {
     if (!athlete) return null;
@@ -226,7 +324,7 @@ export const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({
 
     const seenMatchKeys = new Set<string>();
     const allMatches = [
-      ...(onlineTournaments || []),
+      ...mergedOnlineTournaments,
       ...(history || [])
     ];
 
@@ -399,11 +497,13 @@ export const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({
       overallHitRate,
       highestRank: highestRank === 9999 ? null : highestRank
     };
-  }, [athlete, onlineTournaments, history, language]);
+  }, [athlete, mergedOnlineTournaments, history, language]);
 
   if (!isOpen || !athlete) return null;
 
   const showIdCard = isGlobalAdmin || (currentUser && athlete.email && athlete.email.trim().toLowerCase() === currentUser.email.trim().toLowerCase());
+  const vscPointsVal = athlete.vscPoints !== undefined ? athlete.vscPoints : 100;
+  const vscBadgeInfo = getVscTitleAndBadge(vscPointsVal);
 
   const handleStartPrivateChat = () => {
     if (!athlete || !athlete.email) return;
@@ -472,6 +572,19 @@ export const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-bold">
                   🛡️ {athlete.team || (language === "en" ? "Independent" : "Tự do")}
                 </p>
+
+                {/* VSC Points & Rank Badge */}
+                <div className="mt-2.5 flex flex-col items-center justify-center gap-1">
+                  <div className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider shadow-2xs ${vscBadgeInfo.bgClass} ${vscBadgeInfo.colorClass}`}>
+                    {vscBadgeInfo.title}
+                  </div>
+                  <div className="text-[11px] font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-1 justify-center mt-0.5">
+                    <span>⚡ Điểm VSC:</span>
+                    <span className="text-sm font-black bg-amber-500/15 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-md">{vscPointsVal}</span>
+                    <span className="text-[9px] text-slate-400 font-bold">(Xếp hạng riêng)</span>
+                  </div>
+                </div>
+
                 {athlete.email && currentUser && currentUser.email?.trim().toLowerCase() !== athlete.email.trim().toLowerCase() && (
                   <button
                     type="button"
@@ -493,7 +606,7 @@ export const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({
               {language === "en" ? "PK ARENA FIGHTING RECORD" : "THÀNH TÍCH ĐẤU TRƯỜNG PK"}
             </h4>
             
-            <div className="grid grid-cols-4 gap-2 text-center">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
               <div className="bg-white dark:bg-slate-950 p-2.5 rounded-xl border border-rose-100/50 dark:border-slate-900">
                 <div className="text-[9px] font-extrabold text-[#9c0c13] dark:text-rose-400 uppercase">
                   ELO PK
@@ -501,12 +614,18 @@ export const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({
                 <div className="text-base font-black text-[#9c0c13] dark:text-rose-400 mt-0.5">{pkStats.elo}</div>
               </div>
               <div className="bg-white dark:bg-slate-950 p-2.5 rounded-xl border border-rose-100/50 dark:border-slate-900">
+                <div className="text-[9px] font-extrabold text-amber-650 dark:text-amber-400 uppercase">
+                  Điểm VSC
+                </div>
+                <div className="text-base font-black text-amber-600 dark:text-amber-400 mt-0.5">{vscPointsVal}</div>
+              </div>
+              <div className="bg-white dark:bg-slate-950 p-2.5 rounded-xl border border-rose-100/50 dark:border-slate-900">
                 <div className="text-[9px] font-extrabold text-slate-500 uppercase">
                   {language === "en" ? "Matches" : "Số Trận"}
                 </div>
                 <div className="text-base font-black text-slate-700 dark:text-slate-200 mt-0.5">{pkStats.totalMatches}</div>
               </div>
-              <div className="bg-white dark:bg-slate-950 p-2.5 rounded-xl border border-rose-100/50 dark:border-slate-900 col-span-2 sm:col-span-1">
+              <div className="bg-white dark:bg-slate-950 p-2.5 rounded-xl border border-rose-100/50 dark:border-slate-900">
                 <div className="text-[9px] font-extrabold text-emerald-600 uppercase">
                   {language === "en" ? "Win-Loss" : "Thắng - Thua"}
                 </div>
@@ -514,8 +633,8 @@ export const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({
                   {pkStats.wins}W - {pkStats.losses}L
                 </div>
               </div>
-              <div className="bg-white dark:bg-slate-950 p-2.5 rounded-xl border border-rose-100/50 dark:border-slate-900 col-span-2 sm:col-span-1">
-                <div className="text-[9px] font-extrabold text-amber-600 uppercase">
+              <div className="bg-white dark:bg-slate-950 p-2.5 rounded-xl border border-rose-100/50 dark:border-slate-900">
+                <div className="text-[9px] font-extrabold text-amber-650 uppercase">
                   {language === "en" ? "Streak" : "Chuỗi Thắng"}
                 </div>
                 <div className="text-base font-black text-amber-500 mt-0.5">

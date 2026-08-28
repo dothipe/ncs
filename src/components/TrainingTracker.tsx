@@ -124,8 +124,7 @@ export default function TrainingTracker({ currentUser }: TrainingTrackerProps) {
 
     setLoading(true);
     const q = query(
-      collection(db, "vsc_training_sessions"),
-      where("userId", "==", currentUser.uid),
+      collection(db, "users", currentUser.uid, "training_sessions"),
       orderBy("createdAt", "desc")
     );
 
@@ -259,7 +258,7 @@ export default function TrainingTracker({ currentUser }: TrainingTrackerProps) {
         sessionData.maxScore = finalMaxScore;
       }
 
-      await addDoc(collection(db, "vsc_training_sessions"), sessionData);
+      await addDoc(collection(db, "users", currentUser.uid, "training_sessions"), sessionData);
       setSuccessMsg(isEng ? "Session saved successfully!" : "Ghi nhận lịch sử tập luyện thành công!");
       handleResetBuilder();
     } catch (err: any) {
@@ -272,8 +271,9 @@ export default function TrainingTracker({ currentUser }: TrainingTrackerProps) {
 
   // Delete session
   const handleDeleteSession = async (id: string) => {
+    if (!currentUser?.uid) return;
     try {
-      await deleteDoc(doc(db, "vsc_training_sessions", id));
+      await deleteDoc(doc(db, "users", currentUser.uid, "training_sessions", id));
       setDeleteConfirmId(null);
     } catch (err: any) {
       alert(isEng ? `Error deleting: ${err.message}` : `Lỗi khi xóa: ${err.message}`);

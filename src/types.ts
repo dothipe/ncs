@@ -43,6 +43,7 @@ export interface Athlete {
   gearBandSpec?: string;  // Khổ thun sử dụng (10-20-150 dày 0.55mm, ...)
   gearAmmoSize?: string;  // Bi sử dụng (7mm, 8mm, ...)
   gearStance?: string;    // Tư thế bắn (Tới má, Semi, Full, ...)
+  vscPoints?: number;     // Số điểm đặc quyền VSC của VĐV
 }
 
 export interface MatchHistoryItem {
@@ -163,6 +164,7 @@ export interface PKChallenge {
   opponentAthleteId?: string;
   challengerLiveUrl?: string;
   opponentLiveUrl?: string;
+  vscWager?: number;      // Số điểm VSC đặt cược cho trận PK này
   joinRequests?: {
     uid: string;
     name: string;

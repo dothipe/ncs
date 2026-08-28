@@ -123,6 +123,7 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
   const [formProvince, setFormProvince] = useState("");
   const [formAvatarUrl, setFormAvatarUrl] = useState(AVATAR_MALE);
   const [formEmail, setFormEmail] = useState("");
+  const [formVscPoints, setFormVscPoints] = useState<number>(100);
   const [formValidationError, setFormValidationError] = useState("");
   const [isCompressingAvatar, setIsCompressingAvatar] = useState(false);
 
@@ -267,6 +268,7 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
     const userGoogleAvatar = currentUser?.photoURL || (currentUser as any)?.avatarUrl || "";
     setFormAvatarUrl(userGoogleAvatar || AVATAR_MALE);
     setFormEmail(currentUser?.email || "");
+    setFormVscPoints(100);
     setTargetAthleteId(null);
     setIsFormOpen(true);
   };
@@ -291,6 +293,7 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
       : (userGoogleAvatar || athlete.avatarUrl || (athlete.gender === "Nữ" ? AVATAR_FEMALE : AVATAR_MALE));
     setFormAvatarUrl(effectiveAvatar);
     setFormEmail(athlete.email || "");
+    setFormVscPoints(athlete.vscPoints !== undefined ? athlete.vscPoints : 100);
     setTargetAthleteId(athlete.id);
     setIsFormOpen(true);
   };
@@ -410,7 +413,8 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
       email: formEmail.trim().toLowerCase(),
       status: "Thi đấu",
       scores: {}, // Empty baseline scores for system profile template
-      nameEditCount: finalNameEditCount
+      nameEditCount: finalNameEditCount,
+      vscPoints: formVscPoints
     };
 
     let newSystemList = [...systemAthletes];
@@ -1153,6 +1157,25 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
                     />
                   </div>
                 </div>
+
+                {/* VSC Points (Admin only setting) */}
+                {userRole === "admin" && (
+                  <div className="bg-amber-500/10 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-900/30 p-3.5 rounded-2xl space-y-2">
+                    <label className="block text-[10px] font-black uppercase text-amber-700 dark:text-amber-400">
+                      ⚡ Cấp Điểm Đặc Quyền VSC (Admin)
+                    </label>
+                    <input
+                      type="number"
+                      value={formVscPoints}
+                      onChange={(e) => setFormVscPoints(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-full bg-white dark:bg-slate-950 border border-amber-300 dark:border-amber-800 rounded-xl px-3 py-2 text-xs font-black text-amber-800 dark:text-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                      placeholder="Nhập số điểm VSC..."
+                    />
+                    <p className="text-[9px] text-amber-600/80 dark:text-amber-400/80 font-medium">
+                      Đặt số điểm VSC mong muốn cho vận động viên này. Giá trị mặc định khi tạo mới là 100 điểm.
+                    </p>
+                  </div>
+                )}
 
                 {/* Personal details fields */}
                 <div className="space-y-3">

@@ -344,6 +344,14 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                             {language === "en" ? "Rules: " : "Quy định: "} {challenge.rules}
                           </span>
                         </div>
+                        {challenge.vscWager && challenge.vscWager > 0 ? (
+                          <div className="flex items-center gap-2 sm:col-span-2 bg-amber-500/5 border border-amber-250 rounded-xl p-2.5 mt-1 text-amber-800 font-black text-[11px] animate-pulse">
+                            <Flame className="w-4 h-4 text-amber-550 shrink-0" />
+                            <span>
+                              ⚡ THÁCH ĐẤU BẰNG ĐIỂM VSC: {challenge.vscWager} VSC
+                            </span>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
 
@@ -848,6 +856,14 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                             {language === "en" ? "Rules: " : "Quy định: "} {challenge.rules}
                           </span>
                         </div>
+                        {challenge.vscWager && challenge.vscWager > 0 ? (
+                          <div className="flex items-center gap-2 sm:col-span-2 bg-amber-500/5 border border-amber-250 rounded-xl p-2.5 mt-1 text-amber-800 font-black text-[11px] animate-pulse">
+                            <Flame className="w-4 h-4 text-amber-550 shrink-0" />
+                            <span>
+                              ⚡ THÁCH ĐẤU BẰNG ĐIỂM VSC: {challenge.vscWager} VSC
+                            </span>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
 
@@ -1073,6 +1089,12 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                           {language === "en" ? "Sets:" : "Số Hiệp:"} <span className="text-gray-800">{match.setsCount || 3}</span>
                         </span>
                       </div>
+                      {match.vscWager && match.vscWager > 0 ? (
+                        <div className="flex items-center justify-center gap-1.5 text-[10px] text-amber-800 bg-amber-50 py-1 px-3 mb-3 max-w-sm mx-auto font-black rounded-lg border border-amber-200/50 animate-pulse shadow-3xs">
+                          <Flame className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                          <span>⚡ THÁCH ĐẤU BẰNG {match.vscWager} ĐIỂM VSC</span>
+                        </div>
+                      ) : null}
                     </div>
                     
                     <div className="flex items-center justify-around gap-4 bg-gray-50 p-3.5 rounded-xl border border-gray-50">

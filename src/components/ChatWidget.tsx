@@ -238,31 +238,31 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
   const handleTogglePin = async (msg: ChatMessage) => {
     if (!currentUser) return;
     try {
-      await togglePinChatMessage(msg.id, !msg.isPinned, currentUser.displayName || "BTC");
+      await togglePinChatMessage(msg.roomId || roomId, msg.id, !msg.isPinned, currentUser.displayName || "BTC");
     } catch (err) {
       console.error("Failed to pin/unpin message:", err);
     }
   };
 
   // Reaction handler
-  const handleReaction = async (msgId: string, emoji: string) => {
+  const handleReaction = async (roomIdParam: string, msgId: string, emoji: string) => {
     if (!currentUser) {
       onOpenAuthModal?.();
       return;
     }
     setShowEmojiPickerFor(null);
     try {
-      await toggleMessageReaction(msgId, emoji, currentUser.uid);
+      await toggleMessageReaction(roomIdParam, msgId, emoji, currentUser.uid);
     } catch (err) {
       console.error("Failed to toggle reaction:", err);
     }
   };
 
   // Delete message handler
-  const handleDelete = async (msgId: string) => {
+  const handleDelete = async (roomIdParam: string, msgId: string) => {
     if (!currentUser) return;
     try {
-      await deleteChatMessage(msgId);
+      await deleteChatMessage(roomIdParam, msgId);
     } catch (err) {
       console.error("Failed to delete message:", err);
     }
@@ -561,7 +561,7 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
                               <button
                                 key={emoji}
                                 type="button"
-                                onClick={() => handleReaction(msg.id, emoji)}
+                                onClick={() => handleReaction(msg.roomId || roomId, msg.id, emoji)}
                                 className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold border transition-all cursor-pointer ${
                                   hasReacted 
                                     ? "bg-blue-50 border-blue-300 text-blue-700 shadow-2xs scale-105" 
@@ -594,7 +594,7 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
                                     <button
                                       key={emoji}
                                       type="button"
-                                      onClick={() => handleReaction(msg.id, emoji)}
+                                      onClick={() => handleReaction(msg.roomId || roomId, msg.id, emoji)}
                                       className="p-1 text-base hover:scale-125 transition-transform cursor-pointer"
                                     >
                                       {emoji}
@@ -638,7 +638,7 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
                             {canManageMsg && (
                               <button
                                 type="button"
-                                onClick={() => handleDelete(msg.id)}
+                                onClick={() => handleDelete(msg.roomId || roomId, msg.id)}
                                 className="p-1 rounded text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                                 title={language === "en" ? "Delete Message" : "Xóa tin nhắn"}
                               >
