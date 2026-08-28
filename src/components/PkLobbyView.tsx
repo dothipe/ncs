@@ -23,6 +23,7 @@ import {
   HelpCircle,
   TrendingUp,
   AlertCircle,
+  AlertTriangle,
   Target,
   Trash2,
   Eye,
@@ -1089,7 +1090,9 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
     } else if (leaderboardSubTab === "vsc") {
       return systemAthletes.map(ath => {
         const personalStats = pkLeaderboard.find(p => p.name === ath.name || p.athleteId === ath.id);
-        const pts = ath.vscPoints !== undefined ? ath.vscPoints : 0;
+        const pts = Math.min(1000, Math.max(0, ath.vscPoints !== undefined ? ath.vscPoints : 0));
+        const eloScore = personalStats ? personalStats.elo : 1000;
+        const totalScore = eloScore + pts;
         return {
           id: ath.id,
           uid: ath.id,
@@ -1097,15 +1100,16 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
           name: ath.name,
           avatarUrl: ath.avatarUrl || ath.avatar,
           email: ath.email,
-          elo: pts, // Map to elo for unified rendering fallback, handled in JSX below
+          elo: eloScore,
           vscPoints: pts,
+          totalScore: totalScore,
           wins: personalStats?.wins || 0,
           draws: personalStats?.draws || 0,
           losses: personalStats?.losses || 0,
           streak: personalStats?.streak || 0,
           isClub: false
         };
-      }).sort((a, b) => b.vscPoints - a.vscPoints);
+      }).sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0));
     } else {
       return pkLeaderboard.filter(p => !p.isClub);
     }
@@ -3824,15 +3828,26 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                         <span className="font-bold text-xs text-gray-900 dark:text-white truncate w-full mt-2 block">{filteredLeaderboard[1].name}</span>
                       </div>
                       <div className="flex flex-col items-center mt-1">
-                        <span className="font-extrabold text-xs text-rose-600 block">{filteredLeaderboard[1].elo} {leaderboardSubTab === "vsc" ? "VSC" : "ELO"}</span>
-                        {leaderboardSubTab === "vsc" && (() => {
-                          const badge = getVscTitleAndBadge(filteredLeaderboard[1].vscPoints);
-                          return (
-                            <span className={`text-[8px] px-1 py-0.2 rounded font-black mt-1 uppercase scale-90 ${badge.bgClass} ${badge.colorClass}`}>
-                              {badge.title.split(" ")[0]}
+                        {leaderboardSubTab === "vsc" ? (
+                          <>
+                            <span className="font-extrabold text-xs text-amber-600 dark:text-amber-400 block">
+                              {filteredLeaderboard[1].totalScore || (filteredLeaderboard[1].elo + (filteredLeaderboard[1].vscPoints || 0))} <span className="text-[9px] font-black uppercase">QH</span>
                             </span>
-                          );
-                        })()}
+                            <span className="text-[8px] text-slate-400 font-bold block">
+                              ELO {filteredLeaderboard[1].elo} + {filteredLeaderboard[1].vscPoints || 0} VSC
+                            </span>
+                            {(() => {
+                              const badge = getVscTitleAndBadge(filteredLeaderboard[1].vscPoints, filteredLeaderboard[1].elo);
+                              return (
+                                <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-black mt-1 uppercase ${badge.bgClass} ${badge.colorClass}`}>
+                                  {badge.title}
+                                </span>
+                              );
+                            })()}
+                          </>
+                        ) : (
+                          <span className="font-extrabold text-xs text-rose-600 block">{filteredLeaderboard[1].elo} ELO</span>
+                        )}
                       </div>
                     </button>
                   ) : (
@@ -3864,15 +3879,26 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                         <span className="font-black text-sm text-gray-950 dark:text-white truncate w-full mt-2 block">{filteredLeaderboard[0].name}</span>
                       </div>
                       <div className="flex flex-col items-center mt-1">
-                        <span className="font-black text-sm text-rose-600 block">{filteredLeaderboard[0].elo} {leaderboardSubTab === "vsc" ? "VSC" : "ELO"}</span>
-                        {leaderboardSubTab === "vsc" && (() => {
-                          const badge = getVscTitleAndBadge(filteredLeaderboard[0].vscPoints);
-                          return (
-                            <span className={`text-[8px] px-1 py-0.2 rounded font-black mt-1 uppercase scale-90 ${badge.bgClass} ${badge.colorClass}`}>
-                              {badge.title.split(" ")[0]}
+                        {leaderboardSubTab === "vsc" ? (
+                          <>
+                            <span className="font-black text-sm text-amber-600 dark:text-amber-400 block">
+                              {filteredLeaderboard[0].totalScore || (filteredLeaderboard[0].elo + (filteredLeaderboard[0].vscPoints || 0))} <span className="text-[10px] font-black uppercase">QUÂN HÀM</span>
                             </span>
-                          );
-                        })()}
+                            <span className="text-[9px] text-slate-400 font-bold block">
+                              ELO {filteredLeaderboard[0].elo} + {filteredLeaderboard[0].vscPoints || 0} VSC
+                            </span>
+                            {(() => {
+                              const badge = getVscTitleAndBadge(filteredLeaderboard[0].vscPoints, filteredLeaderboard[0].elo);
+                              return (
+                                <span className={`text-[9px] px-2 py-0.5 rounded-full font-black mt-1 uppercase ${badge.bgClass} ${badge.colorClass}`}>
+                                  {badge.title}
+                                </span>
+                              );
+                            })()}
+                          </>
+                        ) : (
+                          <span className="font-black text-sm text-rose-600 block">{filteredLeaderboard[0].elo} ELO</span>
+                        )}
                       </div>
                     </button>
                   ) : (
@@ -3902,15 +3928,26 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                         <span className="font-bold text-xs text-gray-900 dark:text-white truncate w-full mt-2 block">{filteredLeaderboard[2].name}</span>
                       </div>
                       <div className="flex flex-col items-center mt-1">
-                        <span className="font-extrabold text-xs text-rose-600 block">{filteredLeaderboard[2].elo} {leaderboardSubTab === "vsc" ? "VSC" : "ELO"}</span>
-                        {leaderboardSubTab === "vsc" && (() => {
-                          const badge = getVscTitleAndBadge(filteredLeaderboard[2].vscPoints);
-                          return (
-                            <span className={`text-[8px] px-1 py-0.2 rounded font-black mt-1 uppercase scale-90 ${badge.bgClass} ${badge.colorClass}`}>
-                              {badge.title.split(" ")[0]}
+                        {leaderboardSubTab === "vsc" ? (
+                          <>
+                            <span className="font-extrabold text-xs text-amber-600 dark:text-amber-400 block">
+                              {filteredLeaderboard[2].totalScore || (filteredLeaderboard[2].elo + (filteredLeaderboard[2].vscPoints || 0))} <span className="text-[9px] font-black uppercase">QH</span>
                             </span>
-                          );
-                        })()}
+                            <span className="text-[8px] text-slate-400 font-bold block">
+                              ELO {filteredLeaderboard[2].elo} + {filteredLeaderboard[2].vscPoints || 0} VSC
+                            </span>
+                            {(() => {
+                              const badge = getVscTitleAndBadge(filteredLeaderboard[2].vscPoints, filteredLeaderboard[2].elo);
+                              return (
+                                <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-black mt-1 uppercase ${badge.bgClass} ${badge.colorClass}`}>
+                                  {badge.title}
+                                </span>
+                              );
+                            })()}
+                          </>
+                        ) : (
+                          <span className="font-extrabold text-xs text-rose-600 block">{filteredLeaderboard[2].elo} ELO</span>
+                        )}
                       </div>
                     </button>
                   ) : (
@@ -3996,7 +4033,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                                 <span className="bg-rose-50 text-rose-700 text-[9px] font-black uppercase px-1.5 py-0.2 rounded">CLB</span>
                               )}
                               {leaderboardSubTab === "vsc" && (() => {
-                                const badge = getVscTitleAndBadge(player.vscPoints);
+                                const badge = getVscTitleAndBadge(player.vscPoints, player.elo);
                                 return (
                                   <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider ${badge.bgClass} ${badge.colorClass}`}>
                                     {badge.title}
@@ -4019,10 +4056,20 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                         </div>
 
                         <div className="text-right">
-                          <div className="font-black text-rose-600 text-base tracking-tight flex items-center justify-end gap-1">
-                            <span>{player.elo}</span>
-                            <span className="text-[10px] font-bold text-gray-400 uppercase">{leaderboardSubTab === "vsc" ? "VSC" : "ELO"}</span>
-                          </div>
+                          {leaderboardSubTab === "vsc" ? (
+                            <>
+                              <div className="font-black text-amber-600 dark:text-amber-400 text-base tracking-tight flex items-center justify-end gap-1">
+                                <span>{player.totalScore || (player.elo + (player.vscPoints || 0))}</span>
+                                <span className="text-[10px] font-bold text-amber-700/70 uppercase">ĐIỂM QH</span>
+                              </div>
+                              <span className="text-[9px] text-slate-400 font-medium block">ELO {player.elo} + {player.vscPoints || 0} VSC</span>
+                            </>
+                          ) : (
+                            <div className="font-black text-rose-600 text-base tracking-tight flex items-center justify-end gap-1">
+                              <span>{player.elo}</span>
+                              <span className="text-[10px] font-bold text-gray-400 uppercase">ELO</span>
+                            </div>
+                          )}
                           <span className="text-[9px] text-gray-400 font-medium">Ranked #{(idx + 1)}</span>
                         </div>
                       </button>
@@ -6591,91 +6638,141 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
       />
 
       {/* Custom Accept Modal */}
-      {activeAcceptChallenge && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[99999] flex flex-col items-center justify-center overflow-y-auto bg-slate-950/65 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-md w-full border border-slate-100 dark:border-slate-800 shadow-2xl text-slate-800 dark:text-slate-101 my-auto">
-            <div className="flex items-center gap-2 border-b border-gray-150 dark:border-slate-800 pb-3 mb-4">
-              <Sword className="w-5 h-5 text-rose-500 animate-pulse" />
-              <h3 className="font-black text-sm uppercase tracking-wide">
-                {activeAcceptChallenge.pin ? "Nhận Kèo Phòng Mật Khẩu" : "Xác Nhận Nhận Kèo PK"}
-              </h3>
-            </div>
+      {activeAcceptChallenge && typeof document !== "undefined" && (() => {
+        const myVscPoints = Math.min(1000, Math.max(0, loggedInAthlete ? (loggedInAthlete.vscPoints !== undefined ? loggedInAthlete.vscPoints : 0) : 0));
+        const hasVscWager = Boolean(activeAcceptChallenge.vscWager && activeAcceptChallenge.vscWager > 0);
+        const isVscSufficient = !hasVscWager || (Boolean(loggedInAthlete) && myVscPoints >= (activeAcceptChallenge.vscWager || 0));
 
-            {activeAcceptChallenge.pin ? (
-              <div className="space-y-4">
-                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-semibold">
-                  Kèo đấu này được bảo vệ bằng mã PIN bảo mật. Vui lòng nhập mật khẩu phòng đấu để tham gia trực tiếp:
-                </p>
-                <div>
-                  <label className="block text-[10px] font-black uppercase text-gray-400 mb-1">Mã PIN Phòng</label>
-                  <input
-                    type="password"
-                    placeholder="••••••"
-                    value={acceptPinInput}
-                    onChange={(e) => {
-                      setAcceptPinInput(e.target.value);
-                      setAcceptError("");
-                    }}
-                    className="w-full bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-rose-400 font-extrabold text-center tracking-widest text-slate-900 dark:text-white"
-                  />
-                </div>
-                {acceptError && (
-                  <p className="text-[10px] text-rose-500 font-bold text-center">{acceptError}</p>
-                )}
-                <div className="flex gap-3 justify-end mt-4">
-                  <button
-                    type="button"
-                    onClick={() => { setActiveAcceptChallenge(null); setAcceptPinInput(""); setAcceptError(""); }}
-                    className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
-                  >
-                    Hủy bỏ
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleImmediateJoinWithPin(activeAcceptChallenge)}
-                    disabled={actionLoading}
-                    className="px-4 py-2 text-xs font-bold bg-green-600 hover:bg-green-700 text-white rounded-xl transition-all shadow-md cursor-pointer disabled:opacity-50"
-                  >
-                    {actionLoading ? "Đang xử lý..." : "Xác nhận & Vào kèo"}
-                  </button>
-                </div>
+        return createPortal(
+          <div className="fixed inset-0 z-[99999] flex flex-col items-center justify-center overflow-y-auto bg-slate-950/65 backdrop-blur-xs p-4">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-md w-full border border-slate-100 dark:border-slate-800 shadow-2xl text-slate-800 dark:text-slate-101 my-auto">
+              <div className="flex items-center gap-2 border-b border-gray-150 dark:border-slate-800 pb-3 mb-4">
+                <Sword className="w-5 h-5 text-rose-500 animate-pulse" />
+                <h3 className="font-black text-sm uppercase tracking-wide">
+                  {activeAcceptChallenge.pin ? "Nhận Kèo Phòng Mật Khẩu" : "Xác Nhận Nhận Kèo PK"}
+                </h3>
               </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-xs text-slate-650 leading-relaxed font-semibold">
-                  Bạn có chắc chắn muốn nhận kèo đấu này của <strong className="text-slate-900 dark:text-white">"{activeAcceptChallenge.challengerName}"</strong> không?
-                </p>
-                <div className="bg-slate-50 dark:bg-slate-950/20 p-3 rounded-xl border border-slate-200/50 dark:border-slate-800/50 text-[11px] text-slate-500 space-y-1">
-                  <div>Địa điểm: <strong className="text-slate-700 dark:text-slate-300">{activeAcceptChallenge.location}</strong></div>
-                  <div>Cự ly: <strong className="text-slate-700 dark:text-slate-300">{activeAcceptChallenge.distance}m</strong></div>
-                  <div>Quy cách: <strong className="text-slate-700 dark:text-slate-300">{activeAcceptChallenge.setsCount} hiệp - {activeAcceptChallenge.shotsPerSet} viên</strong></div>
+
+              {/* CẢNH BÁO KÈO ĐIỂM VSC */}
+              {hasVscWager && (
+                <div className={`mb-4 p-3.5 rounded-2xl border text-xs font-medium space-y-2 ${
+                  isVscSufficient 
+                    ? "bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200" 
+                    : "bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200"
+                }`}>
+                  <div className="flex items-center gap-1.5 font-black text-xs uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                    <Flame className="w-4 h-4 shrink-0 animate-pulse text-amber-500" />
+                    <span>⚡ CẢNH BÁO: KÈO THÁCH ĐẤU BẰNG ĐIỂM VSC</span>
+                  </div>
+                  <div className="text-[11px] leading-relaxed space-y-1">
+                    <div>Kèo yêu cầu mức cược: <strong className="font-black text-amber-600 dark:text-amber-400">{activeAcceptChallenge.vscWager} Điểm VSC</strong></div>
+                    <div>Số dư điểm VSC hiện tại của bạn: <strong className={isVscSufficient ? "text-emerald-600 dark:text-emerald-400 font-black" : "text-rose-600 dark:text-rose-400 font-black"}>{myVscPoints}/1000 VSC</strong></div>
+                  </div>
+
+                  {!isVscSufficient ? (
+                    <div className="p-2.5 rounded-xl bg-rose-100/90 dark:bg-rose-900/50 text-rose-700 dark:text-rose-200 text-[11px] font-black flex items-start gap-2 border border-rose-300 dark:border-rose-700">
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
+                      <div>
+                        <div>❌ Bạn không đủ điểm VSC để gửi yêu cầu tham gia kèo này!</div>
+                        <div className="text-[10px] font-semibold text-rose-600 dark:text-rose-300 mt-0.5">Vui lòng liên hệ Quản trị viên (Admin) để được kiểm tra và cấp điểm VSC.</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-amber-700 dark:text-amber-300/80 font-bold">
+                      ⚠️ Lưu ý: Nếu THẮNG bạn sẽ nhận thêm +{activeAcceptChallenge.vscWager} VSC, nếu THUA bạn sẽ bị trừ -{activeAcceptChallenge.vscWager} VSC.
+                    </div>
+                  )}
                 </div>
-                <p className="text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/20 p-2.5 rounded-lg border border-amber-100 dark:border-amber-900">
-                  ℹ️ Vì phòng không có mật khẩu bảo mật, yêu cầu của bạn sẽ được gửi tới Chủ kèo. Bạn vui lòng chờ duyệt kèo nếu được chấp nhận mới chính thức thi đấu.
-                </p>
-                <div className="flex gap-3 justify-end mt-4">
-                  <button
-                    type="button"
-                    onClick={() => { setActiveAcceptChallenge(null); }}
-                    className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
-                  >
-                    Hủy bỏ
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRequestJoinWithoutPin(activeAcceptChallenge)}
-                    disabled={actionLoading}
-                    className="px-4 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl transition-all shadow-md cursor-pointer disabled:opacity-50"
-                  >
-                    {actionLoading ? "Đang xử lý..." : "Xác nhận gửi yêu cầu"}
-                  </button>
+              )}
+
+              {activeAcceptChallenge.pin ? (
+                <div className="space-y-4">
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-semibold">
+                    Kèo đấu này được bảo vệ bằng mã PIN bảo mật. Vui lòng nhập mật khẩu phòng đấu để tham gia trực tiếp:
+                  </p>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase text-gray-400 mb-1">Mã PIN Phòng</label>
+                    <input
+                      type="password"
+                      placeholder="••••••"
+                      value={acceptPinInput}
+                      onChange={(e) => {
+                        setAcceptPinInput(e.target.value);
+                        setAcceptError("");
+                      }}
+                      className="w-full bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-rose-400 font-extrabold text-center tracking-widest text-slate-900 dark:text-white"
+                    />
+                  </div>
+                  {acceptError && (
+                    <p className="text-[10px] text-rose-500 font-bold text-center">{acceptError}</p>
+                  )}
+                  <div className="flex gap-3 justify-end mt-4">
+                    <button
+                      type="button"
+                      onClick={() => { setActiveAcceptChallenge(null); setAcceptPinInput(""); setAcceptError(""); }}
+                      className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
+                    >
+                      Hủy bỏ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleImmediateJoinWithPin(activeAcceptChallenge)}
+                      disabled={actionLoading || !isVscSufficient}
+                      className={`px-4 py-2 text-xs font-bold text-white rounded-xl transition-all shadow-md ${
+                        !isVscSufficient 
+                          ? "bg-slate-400 dark:bg-slate-700 cursor-not-allowed opacity-60" 
+                          : "bg-green-600 hover:bg-green-700 cursor-pointer disabled:opacity-50"
+                      }`}
+                    >
+                      {!isVscSufficient 
+                        ? "Không đủ điểm VSC (Đã khóa)" 
+                        : (actionLoading ? "Đang xử lý..." : "Xác nhận & Vào kèo")}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        </div>,
-        document.body
-      )}
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-xs text-slate-650 leading-relaxed font-semibold">
+                    Bạn có chắc chắn muốn nhận kèo đấu này của <strong className="text-slate-900 dark:text-white">"{activeAcceptChallenge.challengerName}"</strong> không?
+                  </p>
+                  <div className="bg-slate-50 dark:bg-slate-950/20 p-3 rounded-xl border border-slate-200/50 dark:border-slate-800/50 text-[11px] text-slate-500 space-y-1">
+                    <div>Địa điểm: <strong className="text-slate-700 dark:text-slate-300">{activeAcceptChallenge.location}</strong></div>
+                    <div>Cự ly: <strong className="text-slate-700 dark:text-slate-300">{activeAcceptChallenge.distance}m</strong></div>
+                    <div>Quy cách: <strong className="text-slate-700 dark:text-slate-300">{activeAcceptChallenge.setsCount} hiệp - {activeAcceptChallenge.shotsPerSet} viên</strong></div>
+                  </div>
+                  <p className="text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/20 p-2.5 rounded-lg border border-amber-100 dark:border-amber-900">
+                    ℹ️ Vì phòng không có mật khẩu bảo mật, yêu cầu của bạn sẽ được gửi tới Chủ kèo. Bạn vui lòng chờ duyệt kèo nếu được chấp nhận mới chính thức thi đấu.
+                  </p>
+                  <div className="flex gap-3 justify-end mt-4">
+                    <button
+                      type="button"
+                      onClick={() => { setActiveAcceptChallenge(null); }}
+                      className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
+                    >
+                      Hủy bỏ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRequestJoinWithoutPin(activeAcceptChallenge)}
+                      disabled={actionLoading || !isVscSufficient}
+                      className={`px-4 py-2 text-xs font-bold text-white rounded-xl transition-all shadow-md ${
+                        !isVscSufficient 
+                          ? "bg-slate-400 dark:bg-slate-700 cursor-not-allowed opacity-60" 
+                          : "bg-rose-600 hover:bg-rose-700 cursor-pointer disabled:opacity-50"
+                      }`}
+                    >
+                      {!isVscSufficient 
+                        ? "Không đủ điểm VSC (Đã khóa)" 
+                        : (actionLoading ? "Đang xử lý..." : "Xác nhận gửi yêu cầu")}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>,
+          document.body
+        );
+      })()}
 
       {/* Live Challenger "Modal nổ" Popup Notification */}
       {newApplicantNotification && createPortal(

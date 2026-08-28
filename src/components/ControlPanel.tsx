@@ -2091,17 +2091,20 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
                       {(() => {
                         const loggedInVscPoints = loggedInAthlete ? (loggedInAthlete.vscPoints !== undefined ? loggedInAthlete.vscPoints : 0) : 0;
-                        const loggedInVscBadge = getVscTitleAndBadge(loggedInVscPoints);
+                        const loggedInVscBadge = getVscTitleAndBadge(loggedInVscPoints, myPkStats.elo);
                         return (
                           <>
                             {loggedInAthlete && (
                               <div className="bg-white/80 dark:bg-slate-950 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/30 flex items-center justify-between shadow-xs">
                                 <div className="flex flex-col">
                                   <span className="text-[10px] font-extrabold text-amber-700/80 dark:text-amber-450 uppercase tracking-wider">
-                                    CHỨC DANH VSC
+                                    CHỨC DANH QUÂN HÀM VSC
                                   </span>
                                   <span className="text-sm font-black text-amber-800 dark:text-amber-400 mt-1">
                                     {loggedInVscBadge.title}
+                                  </span>
+                                  <span className="text-[10px] text-slate-500 font-bold mt-0.5">
+                                    Tổng điểm: <strong className="text-slate-800 dark:text-slate-200">{loggedInVscBadge.totalScore}</strong> (ELO: {myPkStats.elo} + VSC: {loggedInVscPoints}/1000)
                                   </span>
                                 </div>
                                 <div className="text-right">
@@ -2109,7 +2112,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                                     ĐIỂM VSC ĐẶC QUYỀN
                                   </span>
                                   <span className="text-xl font-black text-amber-600 dark:text-amber-400">
-                                    {loggedInVscPoints} <span className="text-xs font-bold text-slate-400">pts</span>
+                                    {loggedInVscPoints} <span className="text-xs font-bold text-slate-400">/ 1000 pts</span>
                                   </span>
                                 </div>
                               </div>

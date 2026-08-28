@@ -503,7 +503,7 @@ export const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({
 
   const showIdCard = isGlobalAdmin || (currentUser && athlete.email && athlete.email.trim().toLowerCase() === currentUser.email.trim().toLowerCase());
   const vscPointsVal = athlete.vscPoints !== undefined ? athlete.vscPoints : 0;
-  const vscBadgeInfo = getVscTitleAndBadge(vscPointsVal);
+  const vscBadgeInfo = getVscTitleAndBadge(vscPointsVal, pkStats.elo);
 
   const handleStartPrivateChat = () => {
     if (!athlete || !athlete.email) return;
@@ -578,10 +578,10 @@ export const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({
                   <div className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider shadow-2xs ${vscBadgeInfo.bgClass} ${vscBadgeInfo.colorClass}`}>
                     {vscBadgeInfo.title}
                   </div>
-                  <div className="text-[11px] font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-1 justify-center mt-0.5">
+                  <div className="text-[11px] font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-1.5 justify-center mt-0.5 flex-wrap">
                     <span>⚡ Điểm VSC:</span>
-                    <span className="text-sm font-black bg-amber-500/15 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-md">{vscPointsVal}</span>
-                    <span className="text-[9px] text-slate-400 font-bold">(Xếp hạng riêng)</span>
+                    <span className="text-xs font-black bg-amber-500/15 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-md">{vscPointsVal}/1000</span>
+                    <span className="text-[10px] text-slate-500 font-bold">• Tổng điểm Quân hàm: <strong className="text-slate-800 dark:text-slate-200">{vscBadgeInfo.totalScore}</strong></span>
                   </div>
                 </div>
 
