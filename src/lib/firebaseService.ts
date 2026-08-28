@@ -946,7 +946,7 @@ export async function saveVscSystemAthletes(athletes: Athlete[]) {
       if (!athlete || !athlete.id) return Promise.resolve();
       const updatedAthlete = {
         ...athlete,
-        vscPoints: (athlete.vscPoints === undefined || athlete.vscPoints === null) ? 100 : athlete.vscPoints
+        vscPoints: (athlete.vscPoints === undefined || athlete.vscPoints === null) ? 0 : athlete.vscPoints
       };
       const docRef = doc(db, "vsc_system_athletes", athlete.id);
       return setDoc(docRef, sanitizeFirestoreData(updatedAthlete));

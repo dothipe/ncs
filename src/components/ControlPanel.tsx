@@ -2090,7 +2090,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       </h3>
 
                       {(() => {
-                        const loggedInVscPoints = loggedInAthlete ? (loggedInAthlete.vscPoints !== undefined ? loggedInAthlete.vscPoints : 100) : 100;
+                        const loggedInVscPoints = loggedInAthlete ? (loggedInAthlete.vscPoints !== undefined ? loggedInAthlete.vscPoints : 0) : 0;
                         const loggedInVscBadge = getVscTitleAndBadge(loggedInVscPoints);
                         return (
                           <>

@@ -502,7 +502,7 @@ export const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({
   if (!isOpen || !athlete) return null;
 
   const showIdCard = isGlobalAdmin || (currentUser && athlete.email && athlete.email.trim().toLowerCase() === currentUser.email.trim().toLowerCase());
-  const vscPointsVal = athlete.vscPoints !== undefined ? athlete.vscPoints : 100;
+  const vscPointsVal = athlete.vscPoints !== undefined ? athlete.vscPoints : 0;
   const vscBadgeInfo = getVscTitleAndBadge(vscPointsVal);
 
   const handleStartPrivateChat = () => {

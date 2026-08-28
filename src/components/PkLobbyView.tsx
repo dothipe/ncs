@@ -788,7 +788,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
 
   const selectedAthleteVscPoints = useMemo(() => {
     if (!selectedAthleteProfile) return 0;
-    return selectedAthleteProfile.vscPoints !== undefined ? selectedAthleteProfile.vscPoints : 100;
+    return selectedAthleteProfile.vscPoints !== undefined ? selectedAthleteProfile.vscPoints : 0;
   }, [selectedAthleteProfile]);
 
   // Find currently selected athlete in the edit form
@@ -799,7 +799,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
 
   const editSelectedAthleteVscPoints = useMemo(() => {
     if (!editSelectedAthleteProfile) return 0;
-    return editSelectedAthleteProfile.vscPoints !== undefined ? editSelectedAthleteProfile.vscPoints : 100;
+    return editSelectedAthleteProfile.vscPoints !== undefined ? editSelectedAthleteProfile.vscPoints : 0;
   }, [editSelectedAthleteProfile]);
 
   // Find linked club for current logged-in user (either creator or member)
@@ -1089,7 +1089,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
     } else if (leaderboardSubTab === "vsc") {
       return systemAthletes.map(ath => {
         const personalStats = pkLeaderboard.find(p => p.name === ath.name || p.athleteId === ath.id);
-        const pts = ath.vscPoints !== undefined ? ath.vscPoints : 100;
+        const pts = ath.vscPoints !== undefined ? ath.vscPoints : 0;
         return {
           id: ath.id,
           uid: ath.id,
@@ -1137,7 +1137,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         if (linkedAth) {
           creatorName = linkedAth.name;
           if (linkedAth.avatarUrl) creatorAvatar = linkedAth.avatarUrl;
-          myVscPoints = linkedAth.vscPoints !== undefined ? linkedAth.vscPoints : 100;
+          myVscPoints = linkedAth.vscPoints !== undefined ? linkedAth.vscPoints : 0;
         }
       }
 
@@ -1313,7 +1313,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         );
         return;
       }
-      const myVscPoints = loggedInAthlete.vscPoints !== undefined ? loggedInAthlete.vscPoints : 100;
+      const myVscPoints = loggedInAthlete.vscPoints !== undefined ? loggedInAthlete.vscPoints : 0;
       if (myVscPoints < challenge.vscWager) {
         alert(language === "en"
           ? `You do not have enough VSC points to accept this challenge! Required: ${challenge.vscWager} VSC, your balance: ${myVscPoints} VSC.`
@@ -1389,7 +1389,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         );
         return;
       }
-      const myVscPoints = loggedInAthlete.vscPoints !== undefined ? loggedInAthlete.vscPoints : 100;
+      const myVscPoints = loggedInAthlete.vscPoints !== undefined ? loggedInAthlete.vscPoints : 0;
       if (myVscPoints < challenge.vscWager) {
         alert(language === "en"
           ? `You do not have enough VSC points to request joining this challenge! Required: ${challenge.vscWager} VSC, your balance: ${myVscPoints} VSC.`
@@ -2256,8 +2256,8 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
             }
 
             if (challengerAth && opponentAth) {
-              const chPoints = challengerAth.vscPoints !== undefined ? challengerAth.vscPoints : 100;
-              const opPoints = opponentAth.vscPoints !== undefined ? opponentAth.vscPoints : 100;
+              const chPoints = challengerAth.vscPoints !== undefined ? challengerAth.vscPoints : 0;
+              const opPoints = opponentAth.vscPoints !== undefined ? opponentAth.vscPoints : 0;
 
               let newChPoints = chPoints;
               let newOpPoints = opPoints;
@@ -4388,7 +4388,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                         className="w-full px-4 py-2.5 bg-white dark:bg-slate-950 border border-amber-300 dark:border-amber-800 rounded-xl text-sm font-black text-amber-800 dark:text-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
                       />
                       <p className="text-[10px] text-amber-600 dark:text-amber-400/80 font-medium">
-                        Điểm VSC cược này sẽ bị trừ khỏi người THUA và cộng cho người THẮNG. Kết quả HÒA giữ nguyên điểm.
+                        Điểm VSC cược này sẽ bị trừ khỏi người THUA và cộng cho người THẮNG. Kết quả HÒA giữ nguyên điểm. Hết số điểm này bạn cần phải liên hệ Admin để cấp điểm.
                       </p>
                     </div>
                   )}

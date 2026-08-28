@@ -293,7 +293,7 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
       : (userGoogleAvatar || athlete.avatarUrl || (athlete.gender === "Nữ" ? AVATAR_FEMALE : AVATAR_MALE));
     setFormAvatarUrl(effectiveAvatar);
     setFormEmail(athlete.email || "");
-    setFormVscPoints(athlete.vscPoints !== undefined ? athlete.vscPoints : 100);
+    setFormVscPoints(athlete.vscPoints !== undefined ? athlete.vscPoints : 0);
     setTargetAthleteId(athlete.id);
     setIsFormOpen(true);
   };
