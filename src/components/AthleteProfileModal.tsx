@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Athlete, MatchHistoryItem, PKChallenge } from "../types";
-import { User, X, FileText, Lock, Award } from "lucide-react";
+import { User, X, FileText, Lock, Award, MessageSquare } from "lucide-react";
 import { AVATAR_MALE } from "./AthleteManagement";
 import { getHitCount } from "../utils/qualification";
 import { db, collection, query, orderBy, onSnapshot } from "../firebase";
@@ -405,6 +405,14 @@ export const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({
 
   const showIdCard = isGlobalAdmin || (currentUser && athlete.email && athlete.email.trim().toLowerCase() === currentUser.email.trim().toLowerCase());
 
+  const handleStartPrivateChat = () => {
+    if (!athlete || !athlete.email) return;
+    window.dispatchEvent(new CustomEvent("open_direct_chat", {
+      detail: { email: athlete.email, name: athlete.name, avatarUrl: athlete.avatarUrl || "" }
+    }));
+    onClose();
+  };
+
   return createPortal(
     <div 
       className="fixed inset-0 z-[99999] flex flex-col items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto animate-fadeIn text-slate-800 dark:text-slate-100" 
@@ -464,6 +472,16 @@ export const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-bold">
                   🛡️ {athlete.team || (language === "en" ? "Independent" : "Tự do")}
                 </p>
+                {athlete.email && currentUser && currentUser.email?.trim().toLowerCase() !== athlete.email.trim().toLowerCase() && (
+                  <button
+                    type="button"
+                    onClick={handleStartPrivateChat}
+                    className="mt-3 px-4 py-1.5 rounded-xl text-xs font-extrabold bg-[#004ca3] hover:bg-[#003b80] text-white transition-all shadow-3xs cursor-pointer flex items-center gap-1.5 mx-auto border-none"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>{language === "en" ? "SEND MESSAGE" : "NHẮN TIN RIÊNG"}</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>

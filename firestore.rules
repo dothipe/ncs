@@ -17,7 +17,7 @@ service cloud.firestore {
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_-]+$');
     }
 
     function isAdmin() {
@@ -197,6 +197,55 @@ service cloud.firestore {
       allow read: if isEmailVerified() && resource.data.userId == request.auth.uid;
       allow create, update: if isEmailVerified() && isValidId(sessionId) && request.resource.data.userId == request.auth.uid;
       allow delete: if isEmailVerified() && isValidId(sessionId) && resource.data.userId == request.auth.uid;
+    }
+
+    // --- VSC Private Direct Messages (DMs) ---
+    match /vsc_chats/{chatId} {
+      allow list: if isEmailVerified() && resource.data.participants.hasAny([request.auth.uid]);
+      allow get: if isEmailVerified() && (
+        chatId.matches('.*' + request.auth.uid + '.*') || (
+          resource != null && 
+          'participants' in resource.data && 
+          resource.data.participants is list && 
+          resource.data.participants.hasAny([request.auth.uid])
+        )
+      );
+      allow create: if isEmailVerified() && (
+        chatId.matches('.*' + request.auth.uid + '.*') || (
+          request.resource != null && 
+          'participants' in request.resource.data && 
+          request.resource.data.participants is list && 
+          request.resource.data.participants.hasAny([request.auth.uid])
+        )
+      );
+      allow update: if isEmailVerified() && (
+        chatId.matches('.*' + request.auth.uid + '.*') || (
+          resource != null && 
+          'participants' in resource.data && 
+          resource.data.participants is list && 
+          resource.data.participants.hasAny([request.auth.uid])
+        )
+      );
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read, list, get: if isEmailVerified() && (
+          chatId.matches('.*' + request.auth.uid + '.*') || (
+            get(/databases/$(database)/documents/vsc_chats/$(chatId)).data.participants.hasAny([request.auth.uid])
+          )
+        );
+        allow create: if isEmailVerified() && (
+          chatId.matches('.*' + request.auth.uid + '.*') || (
+            get(/databases/$(database)/documents/vsc_chats/$(chatId)).data.participants.hasAny([request.auth.uid])
+          )
+        ) && request.resource.data.senderId == request.auth.uid;
+        allow update: if isEmailVerified() && (
+          chatId.matches('.*' + request.auth.uid + '.*') || (
+            get(/databases/$(database)/documents/vsc_chats/$(chatId)).data.participants.hasAny([request.auth.uid])
+          )
+        );
+        allow delete: if isAdmin();
+      }
     }
   }
 }

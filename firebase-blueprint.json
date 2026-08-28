@@ -112,6 +112,32 @@
         "createdAt": { "type": "string", "format": "date" }
       },
       "required": ["id", "userId", "date", "targetType", "distance", "targetShots", "accuracy"]
+    },
+    "DirectChat": {
+      "title": "DirectChat",
+      "description": "Represents a private direct message chat session between two users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "participants": { "type": "array" },
+        "updatedAt": { "type": "string" },
+        "lastMessage": { "type": "object" },
+        "unreadCount": { "type": "object" }
+      },
+      "required": ["id", "participants"]
+    },
+    "DirectChatMessage": {
+      "title": "DirectChatMessage",
+      "description": "An individual chat message in a direct message session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderId": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "read": { "type": "boolean" }
+      },
+      "required": ["id", "senderId", "text", "timestamp"]
     }
   },
   "firestore": {
@@ -138,6 +164,14 @@
     "vsc_training_sessions/{sessionId}": {
       "schema": "#/entities/TrainingSession",
       "description": "User specific personal slingshot training logs"
+    },
+    "vsc_chats/{chatId}": {
+      "schema": "#/entities/DirectChat",
+      "description": "Direct message chat session documents"
+    },
+    "vsc_chats/{chatId}/messages/{messageId}": {
+      "schema": "#/entities/DirectChatMessage",
+      "description": "Messages inside a direct message session"
     }
   }
 }

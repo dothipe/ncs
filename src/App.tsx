@@ -73,6 +73,7 @@ import { DashboardView } from "./components/DashboardView";
 import { HistoryView } from "./components/HistoryView";
 import { AdminQltvView } from "./components/AdminQltvView";
 import { PkLobbyView } from "./components/PkLobbyView";
+import { DirectMessageWidget } from "./components/DirectMessageWidget";
 import {
   CompetitionModeSelectionModal,
   MobileRankingSelectionModal,
@@ -4093,6 +4094,12 @@ export default function App() {
         setShowMobileRankingSelection={setShowMobileRankingSelection}
         activePkSubTab={activePkSubTab}
         setActivePkSubTab={setActivePkSubTab}
+      />
+
+      <DirectMessageWidget
+        currentUser={currentUser}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        language={language}
       />
 
     </div>
