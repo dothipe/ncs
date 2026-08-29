@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "motion/react";
 import { 
   Plus, 
   Check,
@@ -39,6 +40,7 @@ import {
 } from "lucide-react";
 import { DistanceConfig, Athlete, MatchHistoryItem, StoredAthleteList, Club, VSC_DEFAULT_LOGO } from "./types";
 import { useLanguage } from "./context/LanguageContext";
+import { showToast } from "./utils/toast";
 import { AthleteCard } from "./components/AthleteCard";
 import { Leaderboard } from "./components/Leaderboard";
 import { ScoringWorkspace } from "./components/ScoringWorkspace";
@@ -109,6 +111,26 @@ import { useTournamentDatabase } from "./hooks/useTournamentDatabase";
 
 export default function App() {
   const { language, setLanguage, t } = useLanguage();
+  const [toasts, setToasts] = useState<{ id: string; message: string }[]>([]);
+
+  useEffect(() => {
+    const handleShowToast = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const message = customEvent.detail?.message || "";
+      if (message) {
+        const id = Math.random().toString(36).substring(2, 9);
+        setToasts((prev) => [...prev, { id, message }]);
+        setTimeout(() => {
+          setToasts((prev) => prev.filter((t) => t.id !== id));
+        }, 2500);
+      }
+    };
+    window.addEventListener("show-toast", handleShowToast);
+    return () => {
+      window.removeEventListener("show-toast", handleShowToast);
+    };
+  }, []);
+
   const [isStorageRestoring, setIsStorageRestoring] = useState(true);
   const [isNewTournamentModalOpen, setIsNewTournamentModalOpen] = useState(false);
 
@@ -288,6 +310,7 @@ export default function App() {
     const shareUrl = `${window.location.origin}${window.location.pathname}?tour=${activeHistoryId}`;
     navigator.clipboard.writeText(shareUrl).then(() => {
       setIsShareCopied(true);
+      showToast(language === "en" ? "Copied tournament link!" : "Đã copy liên kết giải đấu!");
       setTimeout(() => setIsShareCopied(false), 2500);
     }).catch(err => {
       console.error("Failed to copy link:", err);
@@ -336,8 +359,11 @@ export default function App() {
           if (["config", "athletes"].includes(subtabParam)) {
             setSettingsSubTab(subtabParam as any);
           }
-          if (["profile", "created", "referee"].includes(subtabParam)) {
+          if (["profile", "club", "created", "referee", "pk_challenges", "training"].includes(subtabParam)) {
             setControlPanelSubTab(subtabParam as any);
+          }
+          if (["dashboard", "lobby", "leaderboard", "history"].includes(subtabParam)) {
+            setActivePkSubTab(subtabParam as any);
           }
         }
 
@@ -346,6 +372,12 @@ export default function App() {
         if (modeParam === "individual" || modeParam === "team") {
           setCompetitionMode(modeParam);
           setIsSpectatorModeOverridden(true);
+        }
+
+        // 5. Deep Link Challenge/Match ID
+        const challengeIdParam = params.get("challengeId") || params.get("matchId");
+        if (challengeIdParam) {
+          setActivePkChallengeId(challengeIdParam);
         }
       }
     };
@@ -487,7 +519,16 @@ export default function App() {
     return () => unsubscribe();
   }, [activeTab]);
 
-  const [homeFilter, setHomeFilter] = useState<"all" | "all_list" | "active" | "followed">("all");
+  const [homeFilter, setHomeFilter] = useState<"all" | "all_list" | "active" | "followed">(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const subtabParam = params.get("subtab");
+      if (subtabParam === "all" || subtabParam === "all_list" || subtabParam === "active" || subtabParam === "followed") {
+        return subtabParam as any;
+      }
+    }
+    return "all";
+  });
   const [athleteForceTab, setAthleteForceTab] = useState<"athletes" | "clubs" | "vsc_system">(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
@@ -508,12 +549,13 @@ export default function App() {
     }
     return "config";
   });
-  const [controlPanelSubTab, setControlPanelSubTab] = useState<"profile" | "club" | "created" | "referee">(() => {
+  const [controlPanelSubTab, setControlPanelSubTab] = useState<"profile" | "club" | "created" | "referee" | "pk_challenges" | "training">(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const subtabParam = params.get("subtab");
-      if (subtabParam === "profile" || subtabParam === "club" || subtabParam === "created" || subtabParam === "referee") {
-        return subtabParam;
+      const allowed = ["profile", "club", "created", "referee", "pk_challenges", "training"];
+      if (subtabParam && allowed.includes(subtabParam)) {
+        return subtabParam as any;
       }
     }
     return "profile";
@@ -533,7 +575,17 @@ export default function App() {
   // PK Challenge redirect and deep linking states
   const [activePkChallengeId, setActivePkChallengeId] = useState<string | null>(null);
   const [pkChallengeToEditId, setPkChallengeToEditId] = useState<string | null>(null);
-  const [activePkSubTab, setActivePkSubTab] = useState<"dashboard" | "lobby" | "leaderboard" | "history">("dashboard");
+  const [activePkSubTab, setActivePkSubTab] = useState<"dashboard" | "lobby" | "leaderboard" | "history">(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const subtabParam = params.get("subtab");
+      const allowed = ["dashboard", "lobby", "leaderboard", "history"];
+      if (subtabParam && allowed.includes(subtabParam)) {
+        return subtabParam as any;
+      }
+    }
+    return "dashboard";
+  });
 
   // Keep non-logged in guests restricted to public-facing viewing tabs
   useEffect(() => {
@@ -785,7 +837,9 @@ export default function App() {
     params.set("tab", activeTab);
 
     // Sub-tab query parameter depending on active tab
-    if (activeTab === "leaderboard") {
+    if (activeTab === "home") {
+      params.set("subtab", homeFilter);
+    } else if (activeTab === "leaderboard") {
       params.set("subtab", rankingSubTab);
       params.set("mode", competitionMode);
     } else if (activeTab === "athletes") {
@@ -794,6 +848,11 @@ export default function App() {
       params.set("subtab", settingsSubTab);
     } else if (activeTab === "control_panel") {
       params.set("subtab", controlPanelSubTab);
+    } else if (activeTab === "pk_lobby") {
+      params.set("subtab", activePkSubTab);
+      if (activePkChallengeId) {
+        params.set("challengeId", activePkChallengeId);
+      }
     } else if (activeTab === "scoring" || activeTab === "input_scores") {
       params.set("mode", competitionMode);
     }
@@ -930,7 +989,7 @@ export default function App() {
     }
     metaDesc.setAttribute('content', description);
 
-  }, [activeHistoryId, activeTab, rankingSubTab, athleteForceTab, settingsSubTab, controlPanelSubTab, language, matchName, competitionMode]);
+  }, [activeHistoryId, activeTab, rankingSubTab, athleteForceTab, settingsSubTab, controlPanelSubTab, activePkSubTab, activePkChallengeId, language, matchName, competitionMode, homeFilter]);
 
   // Derived role properties for active tournament context
   const isOnlineTournament = activeHistoryId?.startsWith("tour-");
@@ -3741,6 +3800,7 @@ export default function App() {
               onSelectTournament={(id, tournament) => handleSelectTournament(id, tournament, "dashboard")}
               onOpenAuthModal={() => setIsAuthModalOpen(true)}
               forceSubTab={controlPanelSubTab}
+              onSubTabChange={(subTab) => setControlPanelSubTab(subTab)}
               onChangeActiveTab={setActiveTab}
               systemClubs={clubs}
               vscSystemAthletes={vscSystemAthletes}
@@ -4103,6 +4163,24 @@ export default function App() {
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         language={language}
       />
+
+      {/* Floating Dynamic Toast Notifications */}
+      <div className="fixed bottom-24 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
+        <AnimatePresence>
+          {toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, y: 15, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9, y: -10, transition: { duration: 0.15 } }}
+              className="bg-slate-900/95 dark:bg-slate-950/95 text-white text-xs font-semibold px-4 py-3 rounded-2xl shadow-xl border border-slate-800 flex items-center gap-2 pointer-events-auto backdrop-blur-md"
+            >
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>{toast.message}</span>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
 
     </div>
   );

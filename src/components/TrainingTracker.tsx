@@ -1112,14 +1112,19 @@ export default function TrainingTracker({ currentUser }: TrainingTrackerProps) {
                           {distanceBarData.map((bar, idx) => {
                             const heightPct = Math.max(5, bar.accuracy); // Min height of 5% for readability
                             return (
-                              <div key={idx} className="flex flex-col items-center gap-1.5 w-[45px] group relative cursor-help">
+                              <div key={idx} className="flex flex-col items-center gap-1 w-[45px] group relative cursor-help">
+                                {/* Static value label shown directly on top of the column */}
+                                <span className="text-[10px] font-black text-slate-800 dark:text-slate-200 mb-0.5 animate-bounce">
+                                  {bar.accuracy}%
+                                </span>
+
                                 {/* Hover Tooltip inside bar */}
                                 <div className="text-[9px] font-black bg-slate-900 text-white px-1.5 py-0.5 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity absolute -top-8 text-center pointer-events-none shadow-md z-10">
                                   {bar.accuracy}%
                                 </div>
                                 
-                                {/* Bar Pillar with an explicit height wrapper of h-28 */}
-                                <div className="w-full relative bg-slate-200/60 dark:bg-slate-800/60 rounded-t-md overflow-hidden h-28 flex items-end">
+                                {/* Bar Pillar with an explicit height wrapper of h-24 */}
+                                <div className="w-full relative bg-slate-200/60 dark:bg-slate-800/60 rounded-t-md overflow-hidden h-24 flex items-end">
                                   <div
                                     style={{ height: `${heightPct}%` }}
                                     className="w-full bg-gradient-to-t from-indigo-500 to-emerald-400 rounded-t-md transition-all duration-500"
@@ -1127,7 +1132,7 @@ export default function TrainingTracker({ currentUser }: TrainingTrackerProps) {
                                 </div>
 
                                 {/* Label */}
-                                <span className="text-[9px] font-bold text-slate-500">{bar.distance}m</span>
+                                <span className="text-[9px] font-bold text-slate-500 mt-1">{bar.distance}m</span>
                               </div>
                             );
                           })}

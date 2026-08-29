@@ -22,9 +22,11 @@ import {
 } from "../lib/firebaseService";
 import { auth, db, collection, query, orderBy, onSnapshot, doc, deleteDoc, updateDoc, addDoc } from "../firebase";
 import { motion } from "motion/react";
+import { showToast } from "../utils/toast";
 import { VIETNAM_PROVINCES } from "../utils/provinces";
 import { 
   Activity,
+  Flame,
   Trophy, 
   Users, 
   Calendar, 
@@ -59,7 +61,8 @@ import {
   Target,
   Tv,
   Video,
-  ExternalLink
+  ExternalLink,
+  Share2
 } from "lucide-react";
 import { Athlete, DistanceConfig, SystemClub, PKChallenge, TrainingSession } from "../types";
 import { getHitCount } from "../utils/qualification";
@@ -83,6 +86,7 @@ interface ControlPanelProps {
   onSelectPkChallenge?: (id: string, subTab?: "dashboard" | "lobby" | "leaderboard" | "history") => void;
   onEditPkChallenge?: (id: string) => void;
   onViewClubHub?: (club: SystemClub) => void;
+  onSubTabChange?: (subTab: "profile" | "club" | "created" | "referee" | "pk_challenges" | "training") => void;
 }
 
 const cleanFacebookUrlForEmbed = (url: string): string => {
@@ -267,7 +271,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   onChangeActiveTab,
   onSelectPkChallenge,
   onEditPkChallenge,
-  onViewClubHub
+  onViewClubHub,
+  onSubTabChange
 }) => {
   const { language } = useLanguage();
   const [tournaments, setTournaments] = useState<TournamentData[]>([]);
@@ -294,10 +299,12 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   const [editTargetType, setEditTargetType] = useState<"bia_muc_tieu" | "bia_giay_tinh_diem">("bia_muc_tieu");
   const [editTargetDetail, setEditTargetDetail] = useState<string>("Bia đường kính 4cm");
   const [editTargetTouchShots, setEditTargetTouchShots] = useState<number>(5);
+  const [editVscWager, setEditVscWager] = useState<number>(0);
 
   const [editType, setEditType] = useState<"solo_1v1" | "team_vs_team" | "">("solo_1v1");
   const [editTeamSize, setEditTeamSize] = useState<number>(3);
   const [editSelectedAthleteId, setEditSelectedAthleteId] = useState("");
+
   const [editSelectedClubId, setEditSelectedClubId] = useState("");
   const [editDesignateOpponent, setEditDesignateOpponent] = useState(false);
   const [editDesignatedOpponentAthleteId, setEditDesignatedOpponentAthleteId] = useState("");
@@ -365,6 +372,17 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
     const myEmail = currentUser.email?.toLowerCase().trim();
     return vscSystemAthletes.find(a => a.email && a.email.toLowerCase().trim() === myEmail) || null;
   }, [currentUser, vscSystemAthletes]);
+
+  // Find currently selected athlete in the edit form
+  const editSelectedAthleteProfile = useMemo(() => {
+    if (!editSelectedAthleteId) return loggedInAthlete;
+    return vscSystemAthletes.find(a => a.id === editSelectedAthleteId) || null;
+  }, [editSelectedAthleteId, vscSystemAthletes, loggedInAthlete]);
+
+  const editSelectedAthleteVscPoints = useMemo(() => {
+    if (!editSelectedAthleteProfile) return 0;
+    return editSelectedAthleteProfile.vscPoints !== undefined ? editSelectedAthleteProfile.vscPoints : 0;
+  }, [editSelectedAthleteProfile]);
 
   const loggedInClubs = useMemo(() => {
     if (!currentUser || !systemClubs) return [];
@@ -448,6 +466,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
     setEditTargetType(challenge.targetType || "bia_muc_tieu");
     setEditTargetDetail(challenge.targetDetail || challenge.targetName || "Bia đường kính 4cm");
     setEditTargetTouchShots(challenge.targetTouchShots || 30);
+    setEditVscWager(challenge.vscWager || 0);
 
     setEditType(challenge.type || "solo_1v1");
     setEditTeamSize(challenge.teamSize || 3);
@@ -478,6 +497,17 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   const handleUpdateChallengeSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser || !editingChallenge) return;
+
+    if (editType === "solo_1v1" && editVscWager > 0) {
+      if (editVscWager > editSelectedAthleteVscPoints) {
+        alert(
+          language === "en"
+            ? `You do not have enough VSC points to wager! Your current balance is ${editSelectedAthleteVscPoints} VSC points.`
+            : `Bạn không đủ điểm VSC để đổi cấu hình mức điểm cược này! Số dư hiện tại của bạn: ${editSelectedAthleteVscPoints} điểm VSC.`
+        );
+        return;
+      }
+    }
 
     setActionLoading(true);
     try {
@@ -517,6 +547,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         targetType: editTargetType,
         targetDetail: editTargetDetail.trim() || "Bia đường kính 4cm",
         targetTouchShots: Number(editTargetTouchShots) || 30,
+        vscWager: editType === "solo_1v1" ? (Number(editVscWager) || 0) : 0,
         type: editType,
         challengerName: creatorName,
         challengerAvatar: creatorAvatar,
@@ -815,6 +846,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
       setSubTab(forceSubTab);
     }
   }, [forceSubTab]);
+
+  // Notify parent on sub-tab change
+  useEffect(() => {
+    onSubTabChange?.(subTab);
+  }, [subTab, onSubTabChange]);
 
   // Profile management state
   const [profile, setProfile] = useState<any>(null);
@@ -2127,6 +2163,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                                   ELO PK HIỆN TẠI
                                 </div>
                                 <div className="text-2xl font-black text-rose-600 mt-1">{myPkStats.elo}</div>
+                                <div className="text-[10px] font-bold text-amber-500 mt-1.5 flex items-center justify-center gap-0.5">
+                                  <Flame className="w-3.5 h-3.5 fill-current text-amber-500" />
+                                  <span>{loggedInVscPoints} VSC</span>
+                                </div>
                               </div>
                               <div className="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-rose-150/40 dark:border-slate-800 shadow-xs">
                                 <div className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
@@ -3124,6 +3164,19 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                           <Sword className="w-4 h-4 fill-rose-500 text-rose-500" />
                           <span>{myPkStats.elo}</span>
                         </div>
+                        <div className="text-[10px] font-bold text-amber-500 mt-1 flex items-center justify-center sm:justify-end gap-0.5">
+                          <Flame className="w-3 h-3 fill-current text-amber-500" />
+                          <span>{loggedInAthlete ? (loggedInAthlete.vscPoints !== undefined ? loggedInAthlete.vscPoints : 0) : 0} VSC</span>
+                        </div>
+                      </div>
+
+                      {/* VSC Points */}
+                      <div className="text-center sm:text-right bg-white dark:bg-slate-950/40 p-3 rounded-2xl border border-slate-100 dark:border-slate-800/20 min-w-[90px] shadow-xs">
+                        <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider block">{language === "en" ? "VSC Points" : "Điểm VSC"}</span>
+                        <div className="text-xl font-black text-amber-500 flex items-center justify-center sm:justify-end gap-1 mt-0.5">
+                          <Flame className="w-4 h-4 fill-amber-500 text-amber-500" />
+                          <span>{loggedInAthlete ? (loggedInAthlete.vscPoints !== undefined ? loggedInAthlete.vscPoints : 0) : 0}</span>
+                        </div>
                       </div>
 
                       {/* Record Wins/Losses */}
@@ -3189,8 +3242,21 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                               key={`ctrl-pk-active-${challenge.id}`}
                               className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 flex flex-col justify-between shadow-xs hover:border-rose-200 transition-all relative overflow-hidden"
                             >
-                              {/* Status Tag */}
-                              <div className="absolute top-4 right-4">
+                              {/* Status Tag and Share */}
+                              <div className="absolute top-4 right-4 flex items-center gap-1.5 z-10">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const url = `${window.location.origin}${window.location.pathname}?tab=pk_lobby&subtab=lobby&challengeId=${challenge.id}`;
+                                    navigator.clipboard.writeText(url).then(() => {
+                                      showToast(language === "en" ? "Challenge link copied!" : "Đã sao chép liên kết kèo đấu!");
+                                    });
+                                  }}
+                                  className="p-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-md transition-all cursor-pointer border border-slate-200/50 dark:border-slate-800/80"
+                                  title={language === "en" ? "Copy share link" : "Sao chép liên kết chia sẻ"}
+                                >
+                                  <Share2 className="w-3 h-3" />
+                                </button>
                                 {challenge.status === "open" ? (
                                   <span className="text-[8px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-100 px-2 py-0.5 rounded-md animate-pulse">
                                     {language === "en" ? "Awaiting opponent" : "Đang tìm đối thủ"}
@@ -3228,6 +3294,15 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                                     {language === "en" ? "Sets:" : "Số Hiệp:"} <span className="text-gray-800 dark:text-gray-200">{challenge.setsCount || 3}</span>
                                   </span>
                                 </div>
+
+                                {challenge.vscWager && challenge.vscWager > 0 ? (
+                                  <div className="flex items-center gap-2 bg-amber-500/5 dark:bg-amber-950/10 border border-amber-250 dark:border-amber-900/30 rounded-xl p-2.5 mb-2 text-amber-800 dark:text-amber-450 font-black text-[11px] shadow-3xs animate-pulse">
+                                    <Flame className="w-4 h-4 text-amber-550 shrink-0" />
+                                    <span>
+                                      ⚡ THÁCH ĐẤU BẰNG ĐIỂM VSC: {challenge.vscWager} VSC
+                                    </span>
+                                  </div>
+                                ) : null}
 
                                 <div className="text-xs text-slate-500 mt-1 space-y-1 bg-slate-50/50 dark:bg-slate-950/10 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800/10">
                                   <div>{language === "en" ? "Location: " : "Địa điểm: "} <strong className="text-slate-700 dark:text-slate-300">{challenge.location}</strong></div>
@@ -3435,7 +3510,22 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                             >
                               {/* Top Bar */}
                               <div className="px-4 py-2 bg-slate-50/50 dark:bg-slate-950/30 border-b border-slate-100 dark:border-slate-800/60 flex items-center justify-between text-[9px] text-slate-400 font-bold uppercase tracking-wider">
-                                <span>{formattedDate}</span>
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const url = `${window.location.origin}${window.location.pathname}?tab=pk_lobby&subtab=history&challengeId=${match.id}`;
+                                      navigator.clipboard.writeText(url).then(() => {
+                                        showToast(language === "en" ? "Match link copied!" : "Đã sao chép liên kết trận đấu!");
+                                      });
+                                    }}
+                                    className="p-0.5 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 rounded transition-all cursor-pointer border border-slate-200/45 dark:border-slate-800"
+                                    title={language === "en" ? "Copy share link" : "Sao chép liên kết chia sẻ"}
+                                  >
+                                    <Share2 className="w-2.5 h-2.5" />
+                                  </button>
+                                  <span>{formattedDate}</span>
+                                </div>
                                 <span>
                                   {match.type === "solo_1v1" ? "1v1 Solo" : "Club Team"}
                                   {" • "}
@@ -3470,6 +3560,15 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                                       {language === "en" ? "Sets:" : "Số Hiệp:"} <span className="text-gray-800 dark:text-gray-200">{match.setsCount || 3}</span>
                                     </span>
                                   </div>
+
+                                  {match.vscWager && match.vscWager > 0 ? (
+                                    <div className="flex items-center justify-center gap-1.5 bg-amber-500/5 dark:bg-amber-950/10 border border-amber-250 dark:border-amber-900/30 rounded-xl p-2 mb-3 text-amber-800 dark:text-amber-450 font-black text-[10px] shadow-3xs animate-pulse max-w-sm mx-auto">
+                                      <Flame className="w-3.5 h-3.5 text-amber-550 shrink-0" />
+                                      <span>
+                                        ⚡ THÁCH ĐẤU BẰNG ĐIỂM VSC: {match.vscWager} VSC
+                                      </span>
+                                    </div>
+                                  ) : null}
                                 </div>
 
                                 <div className="flex items-center justify-around gap-4 bg-slate-50/50 dark:bg-slate-950/10 p-3 rounded-2xl border border-slate-100 dark:border-slate-800/10">
@@ -3935,27 +4034,71 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
               {/* Linked Athlete Profile Selection */}
               {editType === "solo_1v1" && (
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-1.5">
-                    {language === "en" ? "Select Athlete Profile *" : "Đại diện hồ sơ VĐV thi đấu *"}
-                  </label>
-                  <select
-                    value={editSelectedAthleteId}
-                    onChange={(e) => setEditSelectedAthleteId(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:text-white transition-all font-bold"
-                  >
-                    {loggedInAthlete ? (
-                      <option value={loggedInAthlete.id}>
-                        {loggedInAthlete.name} (VSC-{loggedInAthlete.id}) - Linked Account
-                      </option>
-                    ) : (
-                      vscSystemAthletes.map((ath) => (
-                        <option key={ath.id} value={ath.id}>
-                          {ath.name} (VSC-{ath.id})
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-1.5">
+                      {language === "en" ? "Select Athlete Profile *" : "Đại diện hồ sơ VĐV thi đấu *"}
+                    </label>
+                    <select
+                      value={editSelectedAthleteId}
+                      onChange={(e) => setEditSelectedAthleteId(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:text-white transition-all font-bold"
+                    >
+                      {loggedInAthlete ? (
+                        <option value={loggedInAthlete.id}>
+                          {loggedInAthlete.name} (VSC-{loggedInAthlete.id}) - Linked Account
                         </option>
-                      ))
+                      ) : (
+                        vscSystemAthletes.map((ath) => (
+                          <option key={ath.id} value={ath.id}>
+                            {ath.name} (VSC-{ath.id})
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+
+                  {/* Thách Đấu Bằng Điểm VSC (Sửa) */}
+                  <div className="bg-amber-550/5 dark:bg-amber-950/10 border border-amber-300 dark:border-amber-900/30 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-black text-amber-800 dark:text-amber-400 uppercase tracking-wider">
+                        ⚡ THÁCH ĐẤU BẰNG ĐIỂM VSC
+                      </label>
+                      <span className="text-xs font-black text-amber-700 bg-amber-200/50 dark:bg-amber-550/35 px-2 py-0.5 rounded">
+                        Số dư: {editSelectedAthleteVscPoints} VSC
+                      </span>
+                    </div>
+
+                    {editSelectedAthleteVscPoints === 0 ? (
+                      <div className="space-y-2">
+                        <input
+                          type="number"
+                          disabled={true}
+                          value=""
+                          placeholder="0"
+                          className="w-full px-4 py-2.5 bg-gray-100 dark:bg-slate-900/50 border border-gray-200 dark:border-slate-800 rounded-xl text-sm opacity-50 cursor-not-allowed text-gray-450"
+                        />
+                        <p className="text-xs font-black text-rose-600 dark:text-rose-400">
+                          ⚠️ Liên hệ admin để nhận điểm VSC
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <input
+                          type="number"
+                          min={0}
+                          max={editSelectedAthleteVscPoints}
+                          placeholder="Nhập số điểm VSC muốn thách đấu (đặt cược)..."
+                          value={editVscWager || ""}
+                          onChange={(e) => setEditVscWager(Math.min(editSelectedAthleteVscPoints, Math.max(0, parseInt(e.target.value) || 0)))}
+                          className="w-full px-4 py-2.5 bg-white dark:bg-slate-950 border border-amber-300 dark:border-amber-800 rounded-xl text-sm font-black text-amber-800 dark:text-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+                        />
+                        <p className="text-[10px] text-amber-600 dark:text-amber-400/80 font-medium">
+                          Điểm VSC cược này sẽ bị trừ khỏi người THUA và cộng cho người THẮNG. Kết quả HÒA giữ nguyên điểm.
+                        </p>
+                      </div>
                     )}
-                  </select>
+                  </div>
                 </div>
               )}
 

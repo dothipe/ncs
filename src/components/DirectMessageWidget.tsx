@@ -39,6 +39,7 @@ export const DirectMessageWidget: React.FC<DirectMessageWidgetProps> = ({
   language = "vi",
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isBubbleDismissed, setIsBubbleDismissed] = useState(false);
   const [chats, setChats] = useState<DirectChat[]>([]);
   const [activeChat, setActiveChat] = useState<DirectChat | null>(null);
   const [messages, setMessages] = useState<DirectMessage[]>([]);
@@ -72,10 +73,26 @@ export const DirectMessageWidget: React.FC<DirectMessageWidgetProps> = ({
   useEffect(() => {
     const handleOpenVscMessenger = () => {
       setIsOpen(true);
+      setIsBubbleDismissed(false);
     };
     window.addEventListener("open_vsc_messenger", handleOpenVscMessenger);
     return () => window.removeEventListener("open_vsc_messenger", handleOpenVscMessenger);
   }, []);
+
+  // Show bubble again when there is a new unread message in any chat thread
+  const prevUnreadRef = useRef(0);
+  useEffect(() => {
+    const currentUnread = chats.reduce((sum, c) => {
+      if (currentUser && c.unreadCount) {
+        return sum + (c.unreadCount[currentUser.uid] || 0);
+      }
+      return sum;
+    }, 0);
+    if (currentUnread > prevUnreadRef.current) {
+      setIsBubbleDismissed(false);
+    }
+    prevUnreadRef.current = currentUnread;
+  }, [chats, currentUser]);
 
   // Listen to active conversations when user is logged in
   useEffect(() => {
@@ -282,21 +299,37 @@ export const DirectMessageWidget: React.FC<DirectMessageWidgetProps> = ({
     );
   });
 
+  if (isBubbleDismissed && !isOpen) return null;
+
   return (
     <div className="fixed bottom-20 right-4 sm:bottom-24 sm:right-6 z-[9999]">
       {/* 🔮 Floating Chat Bubble Trigger */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-14 h-14 bg-gradient-to-tr from-[#9c0c13] to-rose-600 text-white rounded-full flex items-center justify-center shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer border border-rose-500/20 relative"
-        title={language === "en" ? "VSC Private Messages" : "Trò chuyện riêng Hội viên"}
-      >
-        <MessageSquare className="w-6 h-6 animate-pulse" />
-        {totalUnread > 0 && (
-          <span className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-[#9c0c13] text-[10px] font-black rounded-full h-5 min-w-5 px-1 flex items-center justify-center border-2 border-white animate-bounce shadow-sm">
-            {totalUnread}
-          </span>
-        )}
-      </button>
+      <div className="relative group">
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="w-14 h-14 bg-gradient-to-tr from-[#9c0c13] to-rose-600 text-white rounded-full flex items-center justify-center shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer border border-rose-500/20 relative"
+          title={language === "en" ? "VSC Private Messages" : "Trò chuyện riêng Hội viên"}
+        >
+          <MessageSquare className="w-6 h-6 animate-pulse" />
+          {totalUnread > 0 && (
+            <span className="absolute -top-1.5 -left-1.5 bg-yellow-400 text-[#9c0c13] text-[10px] font-black rounded-full h-5 min-w-5 px-1 flex items-center justify-center border-2 border-white animate-bounce shadow-sm">
+              {totalUnread}
+            </span>
+          )}
+        </button>
+
+        {/* ❌ Tiny close button at 2 o'clock (top-right) */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsBubbleDismissed(true);
+          }}
+          className="absolute -top-1 -right-1 bg-slate-900 hover:bg-rose-600 text-white border-2 border-white rounded-full w-5.5 h-5.5 flex items-center justify-center shadow-md cursor-pointer hover:scale-115 active:scale-90 transition-all z-20"
+          title={language === "en" ? "Close bubble" : "Tắt bong bóng chat"}
+        >
+          <X className="w-3 h-3 font-bold" />
+        </button>
+      </div>
 
       {/* 📬 Messaging Slide-out / Pop-up Dialog */}
       <AnimatePresence>

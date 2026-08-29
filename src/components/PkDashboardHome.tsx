@@ -17,10 +17,12 @@ import {
   UserCheck,
   Eye,
   Video,
-  Tv
+  Tv,
+  Share2
 } from "lucide-react";
 import { PKChallenge } from "../types";
 import { ChatWidget } from "./ChatWidget";
+import { showToast } from "../utils/toast";
 import { getChallengeTargetLabel } from "../lib/vscPointsHelper";
 
 interface PkDashboardHomeProps {
@@ -294,9 +296,24 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                       )}
                     </div>
 
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                      {challenge.type === "solo_1v1" ? "Solo 1v1" : `${challenge.teamSize}v${challenge.teamSize} Team`}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        {challenge.type === "solo_1v1" ? "Solo 1v1" : `${challenge.teamSize}v${challenge.teamSize} Team`}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const url = `${window.location.origin}${window.location.pathname}?tab=pk_lobby&subtab=lobby&challengeId=${challenge.id}`;
+                          navigator.clipboard.writeText(url).then(() => {
+                            showToast(language === "en" ? "Challenge link copied!" : "Đã sao chép liên kết kèo đấu!");
+                          });
+                        }}
+                        className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-all cursor-pointer border border-transparent hover:border-gray-200"
+                        title={language === "en" ? "Copy share link" : "Sao chép liên kết chia sẻ"}
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Content Body */}
@@ -806,9 +823,24 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                       )}
                     </div>
 
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                      {challenge.type === "solo_1v1" ? "Solo 1v1" : `${challenge.teamSize}v${challenge.teamSize} Team`}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        {challenge.type === "solo_1v1" ? "Solo 1v1" : `${challenge.teamSize}v${challenge.teamSize} Team`}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const url = `${window.location.origin}${window.location.pathname}?tab=pk_lobby&subtab=lobby&challengeId=${challenge.id}`;
+                          navigator.clipboard.writeText(url).then(() => {
+                            showToast(language === "en" ? "Challenge link copied!" : "Đã sao chép liên kết kèo đấu!");
+                          });
+                        }}
+                        className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-all cursor-pointer border border-transparent hover:border-gray-200"
+                        title={language === "en" ? "Copy share link" : "Sao chép liên kết chia sẻ"}
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Content Body */}
@@ -1053,7 +1085,22 @@ export const PkDashboardHome: React.FC<PkDashboardHomeProps> = ({
                 >
                   {/* Match metadata bar */}
                   <div className="px-5 py-3 bg-gray-50/50 border-b border-gray-100 flex items-center justify-between text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-                    <span>{formatDate(match.dateTime || match.createdAt)}</span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const url = `${window.location.origin}${window.location.pathname}?tab=pk_lobby&subtab=history&challengeId=${match.id}`;
+                          navigator.clipboard.writeText(url).then(() => {
+                            showToast(language === "en" ? "Match link copied!" : "Đã sao chép liên kết trận đấu!");
+                          });
+                        }}
+                        className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 rounded transition-all cursor-pointer border border-transparent hover:border-gray-200"
+                        title={language === "en" ? "Copy share link" : "Sao chép liên kết chia sẻ"}
+                      >
+                        <Share2 className="w-2.5 h-2.5" />
+                      </button>
+                      <span>{formatDate(match.dateTime || match.createdAt)}</span>
+                    </div>
                     <span>
                       {match.type === "solo_1v1" ? "1v1 Solo" : "Club Team"}
                       {" • "}

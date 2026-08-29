@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useLanguage } from "../context/LanguageContext";
+import { showToast } from "../utils/toast";
+import { Share2 } from "lucide-react";
 import { SystemClub, MatchHistoryItem, Athlete } from "../types";
 import { db } from "../firebase";
 import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
@@ -608,6 +610,21 @@ export const VscSystemClubsDirectory: React.FC<VscSystemClubsDirectoryProps> = (
       }
     }
   }, [selectedClub, onCloseExternalSelectedClub]);
+
+  // Deep link to selected club if clubId in URL
+  useEffect(() => {
+    if (clubs.length > 0) {
+      const params = new URLSearchParams(window.location.search);
+      const clubId = params.get("clubId");
+      if (clubId) {
+        const found = clubs.find(c => c.id === clubId);
+        if (found) {
+          setSelectedClub(found);
+          setDrawerTab("overview");
+        }
+      }
+    }
+  }, [clubs]);
 
   // Selected Athlete Profile Modal state for looking up club members
   const [selectedAthleteProfile, setSelectedAthleteProfile] = useState<Athlete | null>(null);
@@ -1369,10 +1386,23 @@ export const VscSystemClubsDirectory: React.FC<VscSystemClubsDirectoryProps> = (
                       }}
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-extrabold text-slate-800 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-sm font-extrabold text-slate-800 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors flex-1">
                           {club.name}
                         </h3>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const url = `${window.location.origin}${window.location.pathname}?tab=vsc_clubs_directory&clubId=${club.id}`;
+                            navigator.clipboard.writeText(url).then(() => {
+                              showToast(language === "en" ? "Copied Club link!" : "Đã copy liên kết Câu lạc bộ!");
+                            });
+                          }}
+                          className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-500 rounded-md transition-all cursor-pointer border border-transparent hover:border-slate-200"
+                          title={language === "en" ? "Copy share link" : "Sao chép liên kết chia sẻ"}
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                       <p className="text-[10px] text-slate-400 mt-0.5 font-bold flex items-center gap-1 uppercase tracking-wider">
                         <MapPin className="w-3 h-3 text-slate-400" />

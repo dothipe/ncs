@@ -1229,6 +1229,27 @@ export function HeaderNavigation({
                   <span>{language === "en" ? "My Bio & History" : "Hồ Sơ & Lịch Sử VĐV"}</span>
                 </button>
 
+                {/* Training Tracker */}
+                <button
+                  onClick={() => {
+                    if (currentUser) {
+                      setActiveTab("control_panel");
+                      setControlPanelSubTab("training");
+                    } else {
+                      setIsAuthModalOpen(true);
+                    }
+                    setIsMobileDrawerOpen(false);
+                  }}
+                  className={`w-full px-3 py-2.5 rounded-lg text-xs font-extrabold flex items-center gap-3 transition-all border-none bg-transparent ${
+                    activeTab === "control_panel" && controlPanelSubTab === "training"
+                      ? "bg-red-50 text-[#9c0c13] dark:bg-red-950/20 dark:text-red-400"
+                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                  }`}
+                >
+                  <TrendingUp className="w-4 h-4 shrink-0 text-amber-500" />
+                  <span>{language === "en" ? "Training Tracker" : "Tiến Trình Luyện Tập"}</span>
+                </button>
+
                 {/* Logged in User actions */}
                 {currentUser && (
                   <>

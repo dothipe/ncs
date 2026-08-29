@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useLanguage } from "../context/LanguageContext";
+import { showToast } from "../utils/toast";
 import { Athlete, MatchHistoryItem, Club } from "../types";
 import { 
   subscribeToVscSystemAthletes, 
@@ -33,7 +34,8 @@ import {
   Filter,
   RefreshCw,
   Sparkles,
-  Info
+  Info,
+  Share2
 } from "lucide-react";
 import { AVATAR_MALE, AVATAR_FEMALE } from "./AthleteManagement";
 import { getHitCount } from "../utils/qualification";
@@ -193,6 +195,20 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
       if (unsubscribeClubs) unsubscribeClubs();
     };
   }, []);
+
+  // Deep link to selected athlete if athleteId in URL
+  useEffect(() => {
+    if (systemAthletes.length > 0) {
+      const params = new URLSearchParams(window.location.search);
+      const athleteId = params.get("athleteId");
+      if (athleteId) {
+        const found = systemAthletes.find(a => a.id === athleteId);
+        if (found) {
+          setSelectedAthlete(found);
+        }
+      }
+    }
+  }, [systemAthletes]);
 
   // Determine if the logged-in user already has a linked profile in the system
   const myLinkedProfile = useMemo(() => {
@@ -1002,32 +1018,48 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
                 }`}
               >
                 {/* Card Top Header */}
-                <div className="flex items-center gap-3 mb-3.5">
-                  <div className="relative shrink-0">
-                    <img 
-                      src={athlete.avatarUrl || AVATAR_MALE} 
-                      alt={athlete.name} 
-                      className={`w-12 h-12 rounded-full object-cover bg-slate-50 border shadow-inner ${
-                        isMine ? "border-emerald-400" : "border-slate-100 dark:border-slate-800"
-                      }`}
-                      referrerPolicy="no-referrer"
-                    />
-                    <span className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border border-white flex items-center justify-center text-[7px] text-white ${
-                      athlete.gender === "Nữ" ? "bg-pink-500" : "bg-blue-500"
-                    }`}>
-                      {athlete.gender === "Nữ" ? "♀" : "♂"}
-                    </span>
-                  </div>
-                  <div className="overflow-hidden">
-                    <div className="text-[10px] text-slate-400 dark:text-slate-500 font-extrabold flex items-center gap-1">
-                      <span className="font-black text-[#9c0c13] dark:text-red-400 bg-red-50 dark:bg-red-950/20 px-1.5 py-0.5 rounded text-[9px] border border-red-100 dark:border-red-900/30">
-                        {athlete.id}
+                <div className="flex items-center justify-between gap-3 mb-3.5">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className="relative shrink-0">
+                      <img 
+                        src={athlete.avatarUrl || AVATAR_MALE} 
+                        alt={athlete.name} 
+                        className={`w-12 h-12 rounded-full object-cover bg-slate-50 border shadow-inner ${
+                          isMine ? "border-emerald-400" : "border-slate-100 dark:border-slate-800"
+                        }`}
+                        referrerPolicy="no-referrer"
+                      />
+                      <span className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border border-white flex items-center justify-center text-[7px] text-white ${
+                        athlete.gender === "Nữ" ? "bg-pink-500" : "bg-blue-500"
+                      }`}>
+                        {athlete.gender === "Nữ" ? "♀" : "♂"}
                       </span>
                     </div>
-                    <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 truncate group-hover:text-[#9c0c13] transition-colors mt-1">
-                      {athlete.name}
-                    </h4>
+                    <div className="overflow-hidden">
+                      <div className="text-[10px] text-slate-400 dark:text-slate-500 font-extrabold flex items-center gap-1">
+                        <span className="font-black text-[#9c0c13] dark:text-red-400 bg-red-50 dark:bg-red-950/20 px-1.5 py-0.5 rounded text-[9px] border border-red-100 dark:border-red-900/30">
+                          {athlete.id}
+                        </span>
+                      </div>
+                      <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 truncate group-hover:text-[#9c0c13] transition-colors mt-1">
+                        {athlete.name}
+                      </h4>
+                    </div>
                   </div>
+                  
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const url = `${window.location.origin}${window.location.pathname}?tab=vsc_system_directory&athleteId=${athlete.id}`;
+                      navigator.clipboard.writeText(url).then(() => {
+                        showToast(language === "en" ? "Copied Athlete profile link!" : "Đã copy liên kết hồ sơ VĐV!");
+                      });
+                    }}
+                    className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-[#9c0c13] rounded-md transition-all cursor-pointer border border-transparent hover:border-slate-200 shrink-0 self-start mt-1"
+                    title={language === "en" ? "Copy share link" : "Sao chép liên kết chia sẻ"}
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
 
                 {/* Details Section */}

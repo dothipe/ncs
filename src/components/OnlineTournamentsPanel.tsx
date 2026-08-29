@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useLanguage } from "../context/LanguageContext";
+import { showToast } from "../utils/toast";
 import { 
   subscribeToTournamentsList, 
   deleteOnlineTournament,
@@ -356,6 +357,7 @@ export const OnlineTournamentsPanel: React.FC<OnlineTournamentsPanelProps> = ({
     const shareUrl = `${window.location.origin}${window.location.pathname}?tour=${tourId}`;
     navigator.clipboard.writeText(shareUrl).then(() => {
       setCopiedId(tourId);
+      showToast(language === "en" ? "Copied tournament link!" : "Đã copy liên kết giải đấu!");
       setTimeout(() => setCopiedId(null), 2500);
     }).catch(err => {
       console.error("Failed to copy link:", err);
@@ -1543,15 +1545,14 @@ export const OnlineTournamentsPanel: React.FC<OnlineTournamentsPanelProps> = ({
 
           <button
             onClick={(e) => handleShare(tour.id, e)}
-            className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-95 border shrink-0 ${
+            className={`p-1.5 rounded-lg flex items-center justify-center cursor-pointer transition-all active:scale-95 border shrink-0 ${
               copiedId === tour.id
                 ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
                 : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:border-slate-700 dark:text-slate-300"
             }`}
             title={language === "en" ? "Copy share link" : "Copy link chia sẻ"}
           >
-            <Share2 className="w-3 h-3" />
-            <span>{copiedId === tour.id ? (language === "en" ? "Copied!" : "Đã copy!") : (language === "en" ? "Share" : "Chia sẻ")}</span>
+            <Share2 className="w-3.5 h-3.5" />
           </button>
 
           <button
