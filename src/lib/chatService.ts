@@ -165,6 +165,20 @@ export async function sendDirectMessage(chatId: string, senderId: string, recipi
       },
       [`unreadCount.${recipientId}`]: currentUnread + 1
     });
+
+    // Write to notifications collection for real-time notification bell
+    await addDoc(collection(db, "vsc_notifications"), {
+      recipientUid: recipientId,
+      type: "chat_reply",
+      title: "Tin nhắn riêng mới",
+      message: `Bạn nhận được tin nhắn mới từ đồng đội: "${text.trim().substring(0, 50)}${text.trim().length > 50 ? "..." : ""}"`,
+      link: "tab=home",
+      isRead: false,
+      senderUid: senderId,
+      senderName: "Đồng đội VSC",
+      senderAvatar: "",
+      createdAt: timestamp || serverTimestamp()
+    }).catch(err => console.error("Error creating direct message notification:", err));
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, pathMsg);
     throw error;

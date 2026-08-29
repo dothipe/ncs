@@ -58,6 +58,7 @@ import {
   arrayRemove
 } from "firebase/firestore";
 import { subscribeToVscSystemAthletes, subscribeToVscSystemClubs, subscribeToTournamentsList } from "../lib/firebaseService";
+import { sendNotification } from "../lib/notificationService";
 import { getLatestAvatar } from "../utils/avatarHelpers";
 import { getVscTitleAndBadge, getChallengeTargetLabel } from "../lib/vscPointsHelper";
 
@@ -732,7 +733,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
     });
 
     return () => unsubscribe();
-  }, [currentUser]);
+  }, [currentUser?.uid, currentUser?.email]);
 
   // Auto cleanup expired/stale challenges based on criteria:
   // - Deletes "open" challenges 24h after the scheduled match time if not accepted.
@@ -933,8 +934,18 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         return prev;
       });
     } else {
-      setChallengerScoresInput(dbChScores);
-      setChallengerShotsInput(dbChShots);
+      setChallengerScoresInput((prev) => {
+        if (JSON.stringify(prev) !== JSON.stringify(dbChScores)) {
+          return dbChScores;
+        }
+        return prev;
+      });
+      setChallengerShotsInput((prev) => {
+        if (JSON.stringify(prev) !== JSON.stringify(dbChShots)) {
+          return dbChShots;
+        }
+        return prev;
+      });
     }
 
     if (canEditOp) {
@@ -951,8 +962,18 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         return prev;
       });
     } else {
-      setOpponentScoresInput(dbOpScores);
-      setOpponentShotsInput(dbOpShots);
+      setOpponentScoresInput((prev) => {
+        if (JSON.stringify(prev) !== JSON.stringify(dbOpScores)) {
+          return dbOpScores;
+        }
+        return prev;
+      });
+      setOpponentShotsInput((prev) => {
+        if (JSON.stringify(prev) !== JSON.stringify(dbOpShots)) {
+          return dbOpShots;
+        }
+        return prev;
+      });
     }
   }, [activeArenaChallenge, currentUser?.uid]);
 
@@ -1387,6 +1408,23 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         ? "Successfully joined the challenge! Match has started."
         : "Vào kèo thành công! Kèo đấu chính thức bắt đầu."
       );
+
+      // Send persistent notification to the challenger
+      if (challenge.challengerUid) {
+        await sendNotification(
+          challenge.challengerUid,
+          "pk_approved",
+          language === "en" ? "Challenge Joined with PIN" : "Kèo đấu PK được nhận bằng PIN",
+          language === "en"
+            ? `${opponentName} has joined your PK challenge "${challenge.title}" using PIN! The match has officially started.`
+            : `${opponentName} đã vào kèo PK "${challenge.title}" của bạn bằng PIN! Kèo đấu chính thức bắt đầu.`,
+          "tab=control_panel&subtab=pk_challenges",
+          currentUser.uid,
+          opponentName,
+          opponentAvatar
+        );
+      }
+
       setActiveAcceptChallenge(null);
       setAcceptPinInput("");
     } catch (err: any) {
@@ -1452,6 +1490,23 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         ? "Successfully submitted join request! Please wait for the Challenger to approve you."
         : "Gửi yêu cầu ứng tuyển kèo thành công! Hãy đợi Chủ kèo duyệt."
       );
+
+      // Send persistent notification to the challenger
+      if (challenge.challengerUid) {
+        await sendNotification(
+          challenge.challengerUid,
+          "pk_request",
+          language === "en" ? "New PK Challenge Applicant" : "Yêu cầu thách đấu PK mới",
+          language === "en"
+            ? `${opponentName} requested to join your challenge "${challenge.title}".`
+            : `${opponentName} đã gửi yêu cầu nhận kèo PK "${challenge.title}" của bạn.`,
+          "tab=control_panel&subtab=pk_challenges",
+          currentUser.uid,
+          opponentName,
+          opponentAvatar
+        );
+      }
+
       setActiveAcceptChallenge(null);
     } catch (err: any) {
       console.error("Error request join:", err);
@@ -1500,6 +1555,40 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
         ? "Successfully matched with opponent! Match has started." 
         : "Ghép cặp thi đấu thành công! Kèo đấu chính thức bắt đầu."
       );
+
+      // Notify the chosen opponent
+      await sendNotification(
+        request.uid,
+        "pk_approved",
+        language === "en" ? "PK Challenge Approved" : "Yêu cầu thách đấu PK được duyệt",
+        language === "en"
+          ? `Your request to join "${challenge.title}" has been approved! The match has started.`
+          : `Yêu cầu thách đấu kèo "${challenge.title}" của bạn đã được chủ kèo phê duyệt! Trận đấu chính thức bắt đầu.`,
+        "tab=control_panel&subtab=pk_challenges",
+        currentUser.uid,
+        challenge.challengerName || currentUser.displayName || "",
+        challenge.challengerAvatar || currentUser.photoURL || ""
+      );
+
+      // Notify other applicants they were declined
+      if (challenge.joinRequests) {
+        for (const req of challenge.joinRequests) {
+          if (req.uid !== request.uid) {
+            await sendNotification(
+              req.uid,
+              "pk_declined",
+              language === "en" ? "PK Challenge Declined" : "Yêu cầu thách đấu PK bị từ chối",
+              language === "en"
+                ? `The challenger has chosen another opponent for "${challenge.title}".`
+                : `Chủ kèo đã lựa chọn đối thủ khác cho kèo đấu "${challenge.title}".`,
+              "tab=control_panel&subtab=pk_challenges",
+              currentUser.uid,
+              challenge.challengerName || currentUser.displayName || "",
+              challenge.challengerAvatar || currentUser.photoURL || ""
+            );
+          }
+        }
+      }
     } catch (err) {
       console.error("Error approving request:", err);
       alert("Lỗi khi phê duyệt đối thủ: " + (err as Error).message);
@@ -1524,6 +1613,20 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
       await updateDoc(challengeRef, {
         joinRequests: arrayRemove(request)
       });
+
+      // Send persistent notification to the declined user
+      await sendNotification(
+        request.uid,
+        "pk_declined",
+        language === "en" ? "PK Challenge Declined" : "Yêu cầu thách đấu PK bị từ chối",
+        language === "en"
+          ? `Your request to join "${challenge.title}" has been declined by the challenger.`
+          : `Yêu cầu nhận kèo "${challenge.title}" của bạn đã bị chủ kèo từ chối.`,
+        "tab=control_panel&subtab=pk_challenges",
+        currentUser.uid,
+        challenge.challengerName || currentUser.displayName || "",
+        challenge.challengerAvatar || currentUser.photoURL || ""
+      );
     } catch (err) {
       console.error("Error declining request:", err);
       alert("Lỗi khi từ chối yêu cầu: " + (err as Error).message);

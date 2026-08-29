@@ -263,7 +263,7 @@ export const useTournamentDatabase = ({
     });
 
     return () => unsubscribe();
-  }, [activeHistoryId, currentUser, isGlobalAdmin]);
+  }, [activeHistoryId, currentUser?.uid, isGlobalAdmin]);
 
   // Cloud state publisher effect (Debounced to aggregate scoring events)
   useEffect(() => {

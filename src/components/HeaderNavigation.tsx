@@ -15,12 +15,14 @@ import {
   TrendingUp, 
   Menu, 
   User,
-  MessageSquare
+  MessageSquare,
+  Sword
 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import { VSCLogo } from "./VSCLogo";
 import { auth } from "../firebase";
 import { HeroBanner } from "./HeroBanner";
+import { NotificationBell } from "./NotificationBell";
 
 interface HeaderNavigationProps {
   activeHistoryId: string | null;
@@ -201,69 +203,100 @@ export function HeaderNavigation({
 
               {/* Login dropdown if authenticated */}
               {currentUser ? (
-                <div className="relative" id="user-header-menu-container">
-                  <button
-                    type="button"
-                    onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                    className="flex items-center gap-1.5 cursor-pointer hover:opacity-90 transition-all text-left font-bold border-none bg-transparent"
-                  >
-                    <div className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center text-[9px] text-white font-black uppercase shrink-0">
-                      {currentUser.displayName?.[0] || currentUser.email?.[0] || "U"}
-                    </div>
-                    <span className="truncate max-w-[120px] text-white">
-                      {currentUser.displayName || currentUser.email}
-                    </span>
-                    <ChevronDown className="w-3 h-3 text-zinc-350 shrink-0" />
-                  </button>
+                <div className="flex items-center gap-3">
+                  <NotificationBell
+                    currentUser={currentUser}
+                    setActiveTab={setActiveTab || changeTab}
+                    setControlPanelSubTab={setControlPanelSubTab}
+                    setSettingsSubTab={setSettingsSubTab}
+                    language={language}
+                  />
+                  <div className="relative" id="user-header-menu-container">
+                    <button
+                      type="button"
+                      onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                      className="flex items-center gap-1.5 cursor-pointer hover:opacity-90 transition-all text-left font-bold border-none bg-transparent"
+                    >
+                      <div className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center text-[9px] text-white font-black uppercase shrink-0">
+                        {currentUser.displayName?.[0] || currentUser.email?.[0] || "U"}
+                      </div>
+                      <span className="truncate max-w-[120px] text-white">
+                        {currentUser.displayName || currentUser.email}
+                      </span>
+                      <ChevronDown className="w-3 h-3 text-zinc-350 shrink-0" />
+                    </button>
 
-                  {isUserMenuOpen && (
-                    <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-slate-905 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl z-50 p-1 flex flex-col text-slate-700 dark:text-slate-200 text-left">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveTab("control_panel");
-                          setControlPanelSubTab("profile");
-                          setIsUserMenuOpen(false);
-                        }}
-                        className="w-full text-left px-3 py-1.5 text-xs font-bold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors flex items-center gap-2 cursor-pointer border-none bg-transparent"
-                      >
-                        👤 {language === "en" ? "My Athlete Bio" : "Hồ Sơ VĐV của Tôi"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveTab("control_panel");
-                          setControlPanelSubTab("created");
-                          setIsUserMenuOpen(false);
-                        }}
-                        className="w-full text-left px-3 py-1.5 text-xs font-bold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors flex items-center gap-2 cursor-pointer border-none bg-transparent"
-                      >
-                        🏆 {language === "en" ? "My Created Tournaments" : "Giải Tôi Tạo"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveTab("control_panel");
-                          setControlPanelSubTab("referee");
-                          setIsUserMenuOpen(false);
-                        }}
-                        className="w-full text-left px-3 py-1.5 text-xs font-bold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors flex items-center gap-2 cursor-pointer border-none bg-transparent"
-                      >
-                        ⏱️ {language === "en" ? "Tournaments I Referee" : "Giải Tôi Làm Trọng Tài"}
-                      </button>
-                      <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          auth.signOut();
-                          setIsUserMenuOpen(false);
-                        }}
-                        className="w-full text-left px-3 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-colors flex items-center gap-2 cursor-pointer border-none bg-transparent"
-                      >
-                        🚪 {language === "en" ? "Logout" : "Thoát"}
-                      </button>
-                    </div>
-                  )}
+                    {isUserMenuOpen && (
+                      <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-slate-905 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl z-50 p-1 flex flex-col text-slate-700 dark:text-slate-200 text-left">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTab("control_panel");
+                            setControlPanelSubTab("profile");
+                            setIsUserMenuOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-1.5 text-xs font-bold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors flex items-center gap-2 cursor-pointer border-none bg-transparent"
+                        >
+                          👤 {language === "en" ? "My Athlete Bio" : "Hồ Sơ VĐV của Tôi"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTab("control_panel");
+                            setControlPanelSubTab("training");
+                            setIsUserMenuOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-1.5 text-xs font-bold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors flex items-center gap-2 cursor-pointer border-none bg-transparent"
+                        >
+                          📈 {language === "en" ? "Training Progress" : "Tiến Trình Luyện Tập"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTab("control_panel");
+                            setControlPanelSubTab("pk_challenges");
+                            setIsUserMenuOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-1.5 text-xs font-bold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors flex items-center gap-2 cursor-pointer border-none bg-transparent"
+                        >
+                          ⚔️ {language === "en" ? "PK Challenges" : "Thách Đấu PK"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTab("control_panel");
+                            setControlPanelSubTab("created");
+                            setIsUserMenuOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-1.5 text-xs font-bold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors flex items-center gap-2 cursor-pointer border-none bg-transparent"
+                        >
+                          🏆 {language === "en" ? "My Created Tournaments" : "Giải Tôi Tạo"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTab("control_panel");
+                            setControlPanelSubTab("referee");
+                            setIsUserMenuOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-1.5 text-xs font-bold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors flex items-center gap-2 cursor-pointer border-none bg-transparent"
+                        >
+                          ⏱️ {language === "en" ? "Tournaments I Referee" : "Giải Tôi Làm Trọng Tài"}
+                        </button>
+                        <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            auth.signOut();
+                            setIsUserMenuOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-colors flex items-center gap-2 cursor-pointer border-none bg-transparent"
+                        >
+                          🚪 {language === "en" ? "Logout" : "Thoát"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <button
@@ -688,7 +721,16 @@ export function HeaderNavigation({
         </div>
 
         {/* Right Side: Profile drop-down */}
-        <div className="relative" id="user-header-menu-container-mobile">
+        <div className="flex items-center gap-3 relative" id="user-header-menu-container-mobile">
+          {currentUser && (
+            <NotificationBell
+              currentUser={currentUser}
+              setActiveTab={setActiveTab || changeTab}
+              setControlPanelSubTab={setControlPanelSubTab}
+              setSettingsSubTab={setSettingsSubTab}
+              language={language}
+            />
+          )}
           {currentUser ? (
             <button
               type="button"
@@ -724,6 +766,28 @@ export function HeaderNavigation({
                 className="w-full text-left px-3 py-1.5 text-xs font-bold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors flex items-center gap-2 cursor-pointer border-none bg-transparent"
               >
                 👤 {language === "en" ? "My Athlete Bio" : "Hồ Sơ VĐV của Tôi"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("control_panel");
+                  setControlPanelSubTab("training");
+                  setIsUserMenuOpen(false);
+                }}
+                className="w-full text-left px-3 py-1.5 text-xs font-bold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors flex items-center gap-2 cursor-pointer border-none bg-transparent"
+              >
+                📈 {language === "en" ? "Training Progress" : "Tiến Trình Luyện Tập"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("control_panel");
+                  setControlPanelSubTab("pk_challenges");
+                  setIsUserMenuOpen(false);
+                }}
+                className="w-full text-left px-3 py-1.5 text-xs font-bold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors flex items-center gap-2 cursor-pointer border-none bg-transparent"
+              >
+                ⚔️ {language === "en" ? "PK Challenges" : "Thách Đấu PK"}
               </button>
               <button
                 type="button"
@@ -1248,6 +1312,27 @@ export function HeaderNavigation({
                 >
                   <TrendingUp className="w-4 h-4 shrink-0 text-amber-500" />
                   <span>{language === "en" ? "Training Tracker" : "Tiến Trình Luyện Tập"}</span>
+                </button>
+
+                {/* PK Challenges */}
+                <button
+                  onClick={() => {
+                    if (currentUser) {
+                      setActiveTab("control_panel");
+                      setControlPanelSubTab("pk_challenges");
+                    } else {
+                      setIsAuthModalOpen(true);
+                    }
+                    setIsMobileDrawerOpen(false);
+                  }}
+                  className={`w-full px-3 py-2.5 rounded-lg text-xs font-extrabold flex items-center gap-3 transition-all border-none bg-transparent ${
+                    activeTab === "control_panel" && controlPanelSubTab === "pk_challenges"
+                      ? "bg-red-50 text-[#9c0c13] dark:bg-red-950/20 dark:text-red-400"
+                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                  }`}
+                >
+                  <Sword className="w-4 h-4 shrink-0 text-rose-500" />
+                  <span>{language === "en" ? "PK Challenges" : "Thách Đấu PK"}</span>
                 </button>
 
                 {/* Logged in User actions */}

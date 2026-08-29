@@ -186,7 +186,7 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [currentUser]);
+  }, [currentUser?.uid]);
 
   const updateVscSystemAthletesAndKeepSync = async (newList: Athlete[]) => {
     const deduplicated = deduplicateAthletes(newList);

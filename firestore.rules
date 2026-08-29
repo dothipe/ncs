@@ -184,6 +184,20 @@ service cloud.firestore {
       allow write: if isEmailVerified() && isValidId(challengeId);
     }
 
+    // --- VSC Notifications ---
+    match /vsc_notifications/{notificationId} {
+      allow read, list, get: if isEmailVerified() && (
+        resource.data.recipientUid == request.auth.uid || 
+        resource.data.recipientUid == "all" ||
+        isAdmin()
+      );
+      allow create: if isEmailVerified() && isValidId(notificationId);
+      allow update, delete: if isEmailVerified() && (
+        resource.data.recipientUid == request.auth.uid || 
+        isAdmin()
+      );
+    }
+
     // --- VSC Real-time Chat Messages (Subcollections per Room) ---
     match /vsc_rooms/{roomId}/messages/{messageId} {
       allow read: if true;

@@ -26,7 +26,8 @@ import {
   query,
   where,
   orderBy,
-  serverTimestamp
+  serverTimestamp,
+  writeBatch
 } from "firebase/firestore";
 
 import firebaseConfig from "../firebase-applet-config.json";
@@ -76,6 +77,7 @@ export {
   query,
   where,
   orderBy,
-  serverTimestamp
+  serverTimestamp,
+  writeBatch
 };
 export type { User };

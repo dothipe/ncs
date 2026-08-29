@@ -141,7 +141,7 @@ export default function TrainingTracker({ currentUser }: TrainingTrackerProps) {
     });
 
     return () => unsub();
-  }, [currentUser]);
+  }, [currentUser?.uid]);
 
   // Handle adding Hit/Miss (true for hit, false for miss)
   const handleAddShot = (isHit: boolean) => {

@@ -212,6 +212,7 @@ export interface ChatMessage {
     id: string;
     senderName: string;
     content: string;
+    senderUid?: string;
   };
 }
 

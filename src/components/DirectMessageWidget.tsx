@@ -92,7 +92,7 @@ export const DirectMessageWidget: React.FC<DirectMessageWidgetProps> = ({
       setIsBubbleDismissed(false);
     }
     prevUnreadRef.current = currentUnread;
-  }, [chats, currentUser]);
+  }, [chats, currentUser?.uid]);
 
   // Listen to active conversations when user is logged in
   useEffect(() => {
@@ -140,7 +140,7 @@ export const DirectMessageWidget: React.FC<DirectMessageWidgetProps> = ({
     });
 
     return () => unsub();
-  }, [currentUser, language]);
+  }, [currentUser?.uid, language]);
 
   // Load user directory for searching new connections
   useEffect(() => {
@@ -154,7 +154,7 @@ export const DirectMessageWidget: React.FC<DirectMessageWidgetProps> = ({
         })
         .finally(() => setIsSearching(false));
     }
-  }, [view, currentUser]);
+  }, [view, currentUser?.uid]);
 
   // Subscribe to messages when an active chat is selected
   useEffect(() => {
@@ -177,7 +177,7 @@ export const DirectMessageWidget: React.FC<DirectMessageWidgetProps> = ({
     });
 
     return () => unsub();
-  }, [activeChat?.id, currentUser]);
+  }, [activeChat?.id, currentUser?.uid]);
 
   // Intercept global custom event "open_direct_chat" to open chat dynamically from other components
   useEffect(() => {
@@ -229,7 +229,7 @@ export const DirectMessageWidget: React.FC<DirectMessageWidgetProps> = ({
 
     window.addEventListener("open_direct_chat", handleOpenDirectChatEvent);
     return () => window.removeEventListener("open_direct_chat", handleOpenDirectChatEvent);
-  }, [currentUser, language]);
+  }, [currentUser?.uid, language]);
 
   // Handle sending a message
   const handleSendMessage = async (e: React.FormEvent) => {

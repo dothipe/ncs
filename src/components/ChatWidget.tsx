@@ -221,7 +221,8 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
         replyTo: replyingTo ? {
           id: replyingTo.id,
           senderName: replyingTo.senderName,
-          content: replyingTo.content.substring(0, 80)
+          content: replyingTo.content.substring(0, 80),
+          senderUid: replyingTo.senderUid
         } : undefined
       });
 

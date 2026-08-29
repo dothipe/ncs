@@ -1358,6 +1358,21 @@ export async function requestToJoinClub(
   }).catch(err => {
     handleFirestoreError(err, OperationType.UPDATE, `vsc_system_clubs/${clubId}`);
   });
+
+  if (clubData.leaderId) {
+    await addDoc(collection(db, "vsc_notifications"), {
+      recipientUid: clubData.leaderId,
+      type: "club_join",
+      title: "Yêu cầu gia nhập CLB mới",
+      message: `${name} đã gửi yêu cầu xin gia nhập CLB "${clubData.name}" của bạn.`,
+      link: "tab=control_panel&subtab=club",
+      isRead: false,
+      senderUid: userId,
+      senderName: name,
+      senderAvatar: "",
+      createdAt: serverTimestamp()
+    }).catch(err => console.error("Error creating club join notification:", err));
+  }
 }
 
 /**
@@ -1430,6 +1445,34 @@ export async function handleClubJoinRequest(
   }).catch(err => {
     handleFirestoreError(err, OperationType.UPDATE, `vsc_system_clubs/${clubId}`);
   });
+
+  if (action === "approve") {
+    await addDoc(collection(db, "vsc_notifications"), {
+      recipientUid: requestUserId,
+      type: "club_join",
+      title: "Yêu cầu gia nhập CLB được duyệt",
+      message: `Chúc mừng! Yêu cầu gia nhập CLB "${clubData.name}" của bạn đã được phê duyệt.`,
+      link: "tab=control_panel&subtab=club",
+      isRead: false,
+      senderUid: clubData.leaderId || "",
+      senderName: clubData.name,
+      senderAvatar: clubData.logoUrl || "",
+      createdAt: serverTimestamp()
+    }).catch(err => console.error("Error creating club approval notification:", err));
+  } else {
+    await addDoc(collection(db, "vsc_notifications"), {
+      recipientUid: requestUserId,
+      type: "club_join",
+      title: "Yêu cầu gia nhập CLB bị từ chối",
+      message: `Yêu cầu gia nhập CLB "${clubData.name}" của bạn đã bị từ chối.`,
+      link: "tab=control_panel&subtab=club",
+      isRead: false,
+      senderUid: clubData.leaderId || "",
+      senderName: clubData.name,
+      senderAvatar: clubData.logoUrl || "",
+      createdAt: serverTimestamp()
+    }).catch(err => console.error("Error creating club rejection notification:", err));
+  }
 }
 
 /**
@@ -1767,6 +1810,7 @@ export async function sendChatMessage(
       id: string;
       senderName: string;
       content: string;
+      senderUid?: string;
     };
   }
 ): Promise<string> {
@@ -1800,6 +1844,22 @@ export async function sendChatMessage(
   await setDoc(docRef, sanitizeFirestoreData(payload)).catch((err) => {
     handleFirestoreError(err, OperationType.CREATE, `vsc_rooms/${message.roomId}/messages/${docRef.id}`);
   });
+
+  // Write notification for replies
+  if (message.replyTo && message.replyTo.senderUid && message.replyTo.senderUid !== message.senderUid) {
+    await addDoc(collection(db, "vsc_notifications"), {
+      recipientUid: message.replyTo.senderUid,
+      type: "chat_reply",
+      title: "Phản hồi tin nhắn mới",
+      message: `${message.senderName || "Ai đó"} đã phản hồi tin nhắn của bạn: "${cleanContent.substring(0, 50)}${cleanContent.length > 50 ? "..." : ""}"`,
+      link: "tab=home", // or whichever page/tab handles chat
+      isRead: false,
+      senderUid: message.senderUid,
+      senderName: message.senderName || "Xạ thủ",
+      senderAvatar: message.senderAvatar || "",
+      createdAt: serverTimestamp()
+    }).catch(err => console.error("Error creating chat reply notification:", err));
+  }
 
   return docRef.id;
 }

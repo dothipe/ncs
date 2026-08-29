@@ -21,6 +21,7 @@ import {
   getUserProfileByEmail
 } from "../lib/firebaseService";
 import { auth, db, collection, query, orderBy, onSnapshot, doc, deleteDoc, updateDoc, addDoc } from "../firebase";
+import { sendNotification } from "../lib/notificationService";
 import { motion } from "motion/react";
 import { showToast } from "../utils/toast";
 import { VIETNAM_PROVINCES } from "../utils/provinces";
@@ -811,6 +812,42 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         ? "Successfully matched with opponent! Match has started." 
         : "Ghép cặp thi đấu thành công! Kèo đấu chính thức bắt đầu."
       );
+
+      // Notify the chosen opponent
+      if (currentUser) {
+        await sendNotification(
+          request.uid,
+          "pk_approved",
+          language === "en" ? "PK Challenge Approved" : "Yêu cầu thách đấu PK được duyệt",
+          language === "en"
+            ? `Your request to join "${challenge.title}" has been approved! The match has started.`
+            : `Yêu cầu thách đấu kèo "${challenge.title}" của bạn đã được chủ kèo phê duyệt! Trận đấu chính thức bắt đầu.`,
+          "tab=control_panel&subtab=pk_challenges",
+          currentUser.uid,
+          challenge.challengerName || currentUser.displayName || "",
+          challenge.challengerAvatar || currentUser.photoURL || ""
+        );
+
+        // Notify other applicants they were declined
+        if (challenge.joinRequests) {
+          for (const req of challenge.joinRequests) {
+            if (req.uid !== request.uid) {
+              await sendNotification(
+                req.uid,
+                "pk_declined",
+                language === "en" ? "PK Challenge Declined" : "Yêu cầu thách đấu PK bị từ chối",
+                language === "en"
+                  ? `The challenger has chosen another opponent for "${challenge.title}".`
+                  : `Chủ kèo đã lựa chọn đối thủ khác cho kèo đấu "${challenge.title}".`,
+                "tab=control_panel&subtab=pk_challenges",
+                currentUser.uid,
+                challenge.challengerName || currentUser.displayName || "",
+                challenge.challengerAvatar || currentUser.photoURL || ""
+              );
+            }
+          }
+        }
+      }
     } catch (err: any) {
       console.error("Error approving request:", err);
       alert("Lỗi khi phê duyệt đối thủ: " + err.message);
@@ -831,6 +868,22 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         joinRequests: challenge.joinRequests?.filter(r => r.uid !== request.uid) || []
       });
       alert(language === "en" ? "Declined request." : "Đã từ chối yêu cầu ứng tuyển.");
+
+      // Send persistent notification to the declined user
+      if (currentUser) {
+        await sendNotification(
+          request.uid,
+          "pk_declined",
+          language === "en" ? "PK Challenge Declined" : "Yêu cầu thách đấu PK bị từ chối",
+          language === "en"
+            ? `Your request to join "${challenge.title}" has been declined by the challenger.`
+            : `Yêu cầu nhận kèo "${challenge.title}" của bạn đã bị chủ kèo từ chối.`,
+          "tab=control_panel&subtab=pk_challenges",
+          currentUser.uid,
+          challenge.challengerName || currentUser.displayName || "",
+          challenge.challengerAvatar || currentUser.photoURL || ""
+        );
+      }
     } catch (err: any) {
       console.error("Error declining request:", err);
       alert("Lỗi khi từ chối yêu cầu: " + err.message);
@@ -975,7 +1028,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
       }
     };
     loadProfile();
-  }, [currentUser]);
+  }, [currentUser?.uid]);
 
   // Subscribe to tournaments live database (including decoupled payloads for full management and achievements)
   useEffect(() => {

@@ -1366,7 +1366,7 @@ export default function App() {
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [currentUser]);
+  }, [currentUser?.uid]);
 
   // Subscribe to real-time system athletes
   useEffect(() => {
@@ -1591,43 +1591,60 @@ export default function App() {
       const updated = prevActive.map((activeAth) => {
         const masterAth = masterAthletes.find((m) => m.id === activeAth.id);
         if (masterAth) {
+          const nextName = masterAth.name || "";
+          const nextTeam = masterAth.team || "";
+          const nextGender = masterAth.gender || "";
+          const nextAvatarUrl = masterAth.avatarUrl || "";
+          const nextIdCard = masterAth.idCard || "";
+          const nextDob = masterAth.dob || "";
+          const nextHometown = masterAth.hometown || "";
+          const nextProvince = masterAth.province || "";
+          const nextCountry = masterAth.country || "";
+          const nextCountryCode = masterAth.countryCode || "";
+          const nextStatus = masterAth.status || "";
+          const nextSlingName = masterAth.gearSlingName || "";
+          const nextForkWidth = masterAth.gearForkWidth || "";
+          const nextBandSpec = masterAth.gearBandSpec || "";
+          const nextAmmoSize = masterAth.gearAmmoSize || "";
+          const nextStance = masterAth.gearStance || "";
+
           if (
-            activeAth.name !== masterAth.name ||
-            activeAth.team !== masterAth.team ||
-            activeAth.gender !== masterAth.gender ||
-            activeAth.avatarUrl !== masterAth.avatarUrl ||
-            activeAth.idCard !== masterAth.idCard ||
-            activeAth.dob !== masterAth.dob ||
-            activeAth.hometown !== masterAth.hometown ||
-            activeAth.province !== masterAth.province ||
-            activeAth.country !== masterAth.country ||
-            activeAth.countryCode !== masterAth.countryCode ||
-            activeAth.status !== masterAth.status ||
-            activeAth.gearSlingName !== masterAth.gearSlingName ||
-            activeAth.gearForkWidth !== masterAth.gearForkWidth ||
-            activeAth.gearBandSpec !== masterAth.gearBandSpec ||
-            activeAth.gearAmmoSize !== masterAth.gearAmmoSize ||
-            activeAth.gearStance !== masterAth.gearStance
+            (activeAth.name || "") !== nextName ||
+            (activeAth.team || "") !== nextTeam ||
+            (activeAth.gender || "") !== nextGender ||
+            (activeAth.avatarUrl || "") !== nextAvatarUrl ||
+            (activeAth.idCard || "") !== nextIdCard ||
+            (activeAth.dob || "") !== nextDob ||
+            (activeAth.hometown || "") !== nextHometown ||
+            (activeAth.province || "") !== nextProvince ||
+            (activeAth.country || "") !== nextCountry ||
+            (activeAth.countryCode || "") !== nextCountryCode ||
+            (activeAth.status || "") !== nextStatus ||
+            (activeAth.gearSlingName || "") !== nextSlingName ||
+            (activeAth.gearForkWidth || "") !== nextForkWidth ||
+            (activeAth.gearBandSpec || "") !== nextBandSpec ||
+            (activeAth.gearAmmoSize || "") !== nextAmmoSize ||
+            (activeAth.gearStance || "") !== nextStance
           ) {
             changed = true;
             return {
               ...activeAth,
-              name: masterAth.name,
-              team: masterAth.team,
-              gender: masterAth.gender,
-              avatarUrl: masterAth.avatarUrl,
-              idCard: masterAth.idCard,
-              dob: masterAth.dob,
-              hometown: masterAth.hometown,
-              province: masterAth.province,
-              country: masterAth.country,
-              countryCode: masterAth.countryCode,
-              status: masterAth.status,
-              gearSlingName: masterAth.gearSlingName || "",
-              gearForkWidth: masterAth.gearForkWidth || "",
-              gearBandSpec: masterAth.gearBandSpec || "",
-              gearAmmoSize: masterAth.gearAmmoSize || "",
-              gearStance: masterAth.gearStance || "",
+              name: nextName,
+              team: nextTeam,
+              gender: nextGender,
+              avatarUrl: nextAvatarUrl,
+              idCard: nextIdCard,
+              dob: nextDob,
+              hometown: nextHometown,
+              province: nextProvince,
+              country: nextCountry,
+              countryCode: nextCountryCode,
+              status: nextStatus,
+              gearSlingName: nextSlingName,
+              gearForkWidth: nextForkWidth,
+              gearBandSpec: nextBandSpec,
+              gearAmmoSize: nextAmmoSize,
+              gearStance: nextStance,
             };
           }
         }
@@ -1641,43 +1658,60 @@ export default function App() {
       const updated = prevTeam.map((activeAth) => {
         const masterAth = masterAthletes.find((m) => m.id === activeAth.id);
         if (masterAth) {
+          const nextName = masterAth.name || "";
+          const nextTeam = masterAth.team || "";
+          const nextGender = masterAth.gender || "";
+          const nextAvatarUrl = masterAth.avatarUrl || "";
+          const nextIdCard = masterAth.idCard || "";
+          const nextDob = masterAth.dob || "";
+          const nextHometown = masterAth.hometown || "";
+          const nextProvince = masterAth.province || "";
+          const nextCountry = masterAth.country || "";
+          const nextCountryCode = masterAth.countryCode || "";
+          const nextStatus = masterAth.status || "";
+          const nextSlingName = masterAth.gearSlingName || "";
+          const nextForkWidth = masterAth.gearForkWidth || "";
+          const nextBandSpec = masterAth.gearBandSpec || "";
+          const nextAmmoSize = masterAth.gearAmmoSize || "";
+          const nextStance = masterAth.gearStance || "";
+
           if (
-            activeAth.name !== masterAth.name ||
-            activeAth.team !== masterAth.team ||
-            activeAth.gender !== masterAth.gender ||
-            activeAth.avatarUrl !== masterAth.avatarUrl ||
-            activeAth.idCard !== masterAth.idCard ||
-            activeAth.dob !== masterAth.dob ||
-            activeAth.hometown !== masterAth.hometown ||
-            activeAth.province !== masterAth.province ||
-            activeAth.country !== masterAth.country ||
-            activeAth.countryCode !== masterAth.countryCode ||
-            activeAth.status !== masterAth.status ||
-            activeAth.gearSlingName !== masterAth.gearSlingName ||
-            activeAth.gearForkWidth !== masterAth.gearForkWidth ||
-            activeAth.gearBandSpec !== masterAth.gearBandSpec ||
-            activeAth.gearAmmoSize !== masterAth.gearAmmoSize ||
-            activeAth.gearStance !== masterAth.gearStance
+            (activeAth.name || "") !== nextName ||
+            (activeAth.team || "") !== nextTeam ||
+            (activeAth.gender || "") !== nextGender ||
+            (activeAth.avatarUrl || "") !== nextAvatarUrl ||
+            (activeAth.idCard || "") !== nextIdCard ||
+            (activeAth.dob || "") !== nextDob ||
+            (activeAth.hometown || "") !== nextHometown ||
+            (activeAth.province || "") !== nextProvince ||
+            (activeAth.country || "") !== nextCountry ||
+            (activeAth.countryCode || "") !== nextCountryCode ||
+            (activeAth.status || "") !== nextStatus ||
+            (activeAth.gearSlingName || "") !== nextSlingName ||
+            (activeAth.gearForkWidth || "") !== nextForkWidth ||
+            (activeAth.gearBandSpec || "") !== nextBandSpec ||
+            (activeAth.gearAmmoSize || "") !== nextAmmoSize ||
+            (activeAth.gearStance || "") !== nextStance
           ) {
             changed = true;
             return {
               ...activeAth,
-              name: masterAth.name,
-              team: masterAth.team,
-              gender: masterAth.gender,
-              avatarUrl: masterAth.avatarUrl,
-              idCard: masterAth.idCard,
-              dob: masterAth.dob,
-              hometown: masterAth.hometown,
-              province: masterAth.province,
-              country: masterAth.country,
-              countryCode: masterAth.countryCode,
-              status: masterAth.status,
-              gearSlingName: masterAth.gearSlingName || "",
-              gearForkWidth: masterAth.gearForkWidth || "",
-              gearBandSpec: masterAth.gearBandSpec || "",
-              gearAmmoSize: masterAth.gearAmmoSize || "",
-              gearStance: masterAth.gearStance || "",
+              name: nextName,
+              team: nextTeam,
+              gender: nextGender,
+              avatarUrl: nextAvatarUrl,
+              idCard: nextIdCard,
+              dob: nextDob,
+              hometown: nextHometown,
+              province: nextProvince,
+              country: nextCountry,
+              countryCode: nextCountryCode,
+              status: nextStatus,
+              gearSlingName: nextSlingName,
+              gearForkWidth: nextForkWidth,
+              gearBandSpec: nextBandSpec,
+              gearAmmoSize: nextAmmoSize,
+              gearStance: nextStance,
             };
           }
         }
