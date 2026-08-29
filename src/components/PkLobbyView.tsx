@@ -170,6 +170,10 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
   const [approvedNotification, setApprovedNotification] = useState<{ items: { challengeTitle: string; challengerName: string; challengeId: string }[] } | null>(null);
   const appliedChallengesRef = useRef<Record<string, { title: string; challengerName: string }>>({});
 
+  // Keep track of challenges that the user voluntarily cancelled joining, to suppress the "Kèo đấu bị từ chối" modal
+  const selfCancelledChallengeIdsRef = useRef<Set<string>>(new Set());
+  const [cancelRequestTarget, setCancelRequestTarget] = useState<PKChallenge | null>(null);
+
   // Club Hub modal state
   const [selectedClubHub, setSelectedClubHub] = useState<SystemClub | null>(null);
 
@@ -656,6 +660,11 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
           Object.entries(prevApplied).forEach(([challengeId, infoVal]) => {
             const info = infoVal as { title: string; challengerName: string };
             if (!currentlyApplied[challengeId]) {
+              // Skip if voluntarily cancelled by the user themselves
+              if (selfCancelledChallengeIdsRef.current.has(challengeId)) {
+                selfCancelledChallengeIdsRef.current.delete(challengeId);
+                return;
+              }
               const updatedChallenge = list.find(c => c.id === challengeId);
 
               if (!updatedChallenge) {
@@ -1521,28 +1530,39 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
     }
   };
 
-  // Cancel/Withdraw own Join Request
-  const handleCancelJoinRequest = async (challenge: PKChallenge) => {
+  // Cancel/Withdraw own Join Request (Triggers the beautiful custom confirmation modal)
+  const handleCancelJoinRequest = (challenge: PKChallenge) => {
+    if (!currentUser) return;
+    const request = challenge.joinRequests?.find(r => r.uid === currentUser.uid);
+    if (!request) return;
+    setCancelRequestTarget(challenge);
+  };
+
+  // Confirm Cancel/Withdraw own Join Request from the custom modal
+  const handleConfirmCancelJoinRequest = async (challenge: PKChallenge) => {
     if (!currentUser) return;
     
     const request = challenge.joinRequests?.find(r => r.uid === currentUser.uid);
-    if (!request) return;
+    if (!request) {
+      setCancelRequestTarget(null);
+      return;
+    }
 
-    const confirmCancel = window.confirm(
-      language === "en"
-        ? "Are you sure you want to withdraw your join request?"
-        : "Bạn có chắc chắn muốn hủy yêu cầu nhận kèo PK này không?"
-    );
-    if (!confirmCancel) return;
-
+    setActionLoading(true);
     try {
+      // Register this challenge ID as voluntarily self-cancelled so the rejection modal is suppressed
+      selfCancelledChallengeIdsRef.current.add(challenge.id);
+
       const challengeRef = doc(db, "vsc_pk_challenges", challenge.id);
       await updateDoc(challengeRef, {
         joinRequests: arrayRemove(request)
       });
+      setCancelRequestTarget(null);
     } catch (err) {
       console.error("Error cancelling join request:", err);
       alert("Lỗi khi hủy yêu cầu nhận kèo: " + (err as Error).message);
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -5682,6 +5702,78 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
       )}
 
       {/* ========================================================= */}
+      {/* 🛑 CANCEL JOIN REQUEST CONFIRMATION MODAL                   */}
+      {/* ========================================================= */}
+      {cancelRequestTarget && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[99999] bg-black/70 backdrop-blur-xs flex flex-col items-center justify-center p-4 overflow-y-auto">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden my-auto"
+          >
+            {/* Modal Header */}
+            <div className="bg-amber-900 text-white px-5 py-4 flex items-center justify-between">
+              <h3 className="font-bold text-sm flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-300 shrink-0" />
+                <span>
+                  {language === "en" ? "Cancel Join Request" : "Xác nhận hủy nhận kèo"}
+                </span>
+              </h3>
+              <button 
+                onClick={() => setCancelRequestTarget(null)}
+                className="text-white/80 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-700 leading-relaxed">
+                {language === "en" 
+                  ? "Are you sure you want to withdraw your join request for this PK challenge?" 
+                  : "Bạn có chắc chắn muốn hủy yêu cầu nhận kèo PK này không?"}
+              </p>
+              <div className="bg-amber-50 rounded-xl p-3 border border-amber-200 text-xs text-amber-800 flex gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>
+                  {language === "en" 
+                    ? "Your request will be permanently removed from this challenge's waiting list." 
+                    : "Yêu cầu của bạn sẽ được gỡ bỏ hoàn toàn khỏi danh sách chờ duyệt của kèo đấu này."}
+                </span>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setCancelRequestTarget(null)}
+                  className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
+                >
+                  {language === "en" ? "Cancel" : "Hủy bỏ"}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={actionLoading}
+                  onClick={async () => {
+                    if (cancelRequestTarget) {
+                      await handleConfirmCancelJoinRequest(cancelRequestTarget);
+                    }
+                  }}
+                  className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-md cursor-pointer transition-colors flex items-center gap-1"
+                >
+                  {actionLoading && <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
+                  <span>{language === "en" ? "Confirm Withdrawal" : "Xác nhận hủy kèo"}</span>
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>,
+        document.body
+      )}
+
+      {/* ========================================================= */}
       {/* 🗑️ TWO-STEP INDIVIDUAL SET DELETE CONFIRMATION MODAL        */}
       {/* ========================================================= */}
       {deleteSetConfirmStep > 0 && deletingSetIndex !== null && typeof document !== "undefined" && createPortal(
@@ -6803,7 +6895,7 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                   </p>
                   <div className="bg-slate-50 dark:bg-slate-950/20 p-3 rounded-xl border border-slate-200/50 dark:border-slate-800/50 text-[11px] text-slate-500 space-y-1">
                     <div>Địa điểm: <strong className="text-slate-700 dark:text-slate-300">{activeAcceptChallenge.location}</strong></div>
-                    <div>Cự ly: <strong className="text-slate-700 dark:text-slate-300">{activeAcceptChallenge.distance}m</strong></div>
+                    <div>Cự ly: <strong className="text-slate-700 dark:text-slate-300">{activeAcceptChallenge.distance} (met)</strong></div>
                     <div>Mục tiêu: <strong className="text-slate-700 dark:text-slate-300">{getChallengeTargetLabel(activeAcceptChallenge.targetType, activeAcceptChallenge.targetDetail, activeAcceptChallenge.targetName, language)}</strong></div>
                     <div>Quy cách: <strong className="text-slate-700 dark:text-slate-300">{activeAcceptChallenge.setsCount} hiệp - {activeAcceptChallenge.shotsPerSet} viên</strong></div>
                   </div>

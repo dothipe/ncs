@@ -626,6 +626,25 @@ export const VscSystemClubsDirectory: React.FC<VscSystemClubsDirectoryProps> = (
     }
   }, [clubs]);
 
+  // Sync selectedClub state back to the URL search parameter
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      const currentClubId = url.searchParams.get("clubId");
+      if (selectedClub) {
+        if (currentClubId !== selectedClub.id) {
+          url.searchParams.set("clubId", selectedClub.id);
+          window.history.pushState({}, "", url.toString());
+        }
+      } else {
+        if (currentClubId) {
+          url.searchParams.delete("clubId");
+          window.history.pushState({}, "", url.toString());
+        }
+      }
+    }
+  }, [selectedClub]);
+
   // Selected Athlete Profile Modal state for looking up club members
   const [selectedAthleteProfile, setSelectedAthleteProfile] = useState<Athlete | null>(null);
 

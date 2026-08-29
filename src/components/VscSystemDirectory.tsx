@@ -210,6 +210,25 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
     }
   }, [systemAthletes]);
 
+  // Sync selectedAthlete state back to the URL search parameter
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      const currentAthleteId = url.searchParams.get("athleteId");
+      if (selectedAthlete) {
+        if (currentAthleteId !== selectedAthlete.id) {
+          url.searchParams.set("athleteId", selectedAthlete.id);
+          window.history.pushState({}, "", url.toString());
+        }
+      } else {
+        if (currentAthleteId) {
+          url.searchParams.delete("athleteId");
+          window.history.pushState({}, "", url.toString());
+        }
+      }
+    }
+  }, [selectedAthlete]);
+
   // Determine if the logged-in user already has a linked profile in the system
   const myLinkedProfile = useMemo(() => {
     if (!currentUser || !currentUser.email) return null;

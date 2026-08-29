@@ -503,6 +503,13 @@ export default function App() {
         return tabParam as any;
       }
 
+      if (params.has("athleteId")) {
+        return "vsc_system_directory";
+      }
+      if (params.has("clubId")) {
+        return "vsc_clubs_directory";
+      }
+
       const tourParam = params.get("tour") || params.get("id");
       if (tourParam && tourParam.startsWith("tour-")) {
         return "dashboard";
@@ -855,6 +862,16 @@ export default function App() {
       }
     } else if (activeTab === "scoring" || activeTab === "input_scores") {
       params.set("mode", competitionMode);
+    } else if (activeTab === "vsc_system_directory") {
+      const currentParams = new URLSearchParams(window.location.search);
+      if (currentParams.has("athleteId")) {
+        params.set("athleteId", currentParams.get("athleteId")!);
+      }
+    } else if (activeTab === "vsc_clubs_directory") {
+      const currentParams = new URLSearchParams(window.location.search);
+      if (currentParams.has("clubId")) {
+        params.set("clubId", currentParams.get("clubId")!);
+      }
     }
 
     const newSearch = params.toString();
