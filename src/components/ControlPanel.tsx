@@ -891,19 +891,19 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   };
 
   // Tab can be profile (hồ sơ của tôi), club (câu lạc bộ), created (giải tôi tạo), referee (giải tôi trọng tài), pk_challenges (thách đấu PK), training (tiến trình tập luyện)
-  const [subTab, setSubTab] = useState<"profile" | "club" | "created" | "referee" | "pk_challenges" | "training">("profile");
+  const [subTab, setSubTab] = useState<"profile" | "club" | "created" | "referee" | "pk_challenges" | "training">(forceSubTab || "profile");
 
   // Sync subtab if forceSubTab changes
   useEffect(() => {
-    if (forceSubTab) {
+    if (forceSubTab && forceSubTab !== subTab) {
       setSubTab(forceSubTab);
     }
   }, [forceSubTab]);
 
-  // Notify parent on sub-tab change
-  useEffect(() => {
-    onSubTabChange?.(subTab);
-  }, [subTab, onSubTabChange]);
+  const handleSubTabChange = (newTab: "profile" | "club" | "created" | "referee" | "pk_challenges" | "training") => {
+    setSubTab(newTab);
+    onSubTabChange?.(newTab);
+  };
 
   // Profile management state
   const [profile, setProfile] = useState<any>(null);
@@ -1805,7 +1805,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           <div className="flex flex-col sm:flex-row justify-between items-center bg-slate-100/70 dark:bg-slate-950/40 p-1.5 rounded-2xl border border-slate-200/60 dark:border-slate-800/80 gap-3">
             <div className="flex gap-2 w-full sm:w-auto overflow-x-auto">
               <button
-                onClick={() => setSubTab("profile")}
+                onClick={() => handleSubTabChange("profile")}
                 className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap ${
                   subTab === "profile"
                     ? "bg-white dark:bg-slate-800 shadow-xs text-indigo-700 dark:text-indigo-400 border border-slate-200/40 dark:border-slate-700/40"
@@ -1817,7 +1817,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               </button>
               {/* Removed My Club tab button per request */}
               <button
-                onClick={() => setSubTab("training")}
+                onClick={() => handleSubTabChange("training")}
                 className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap ${
                   subTab === "training"
                     ? "bg-white dark:bg-slate-800 shadow-xs text-indigo-700 dark:text-indigo-400 border border-slate-200/40 dark:border-slate-700/40"
@@ -1828,7 +1828,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 {language === "en" ? "Practice Progress" : "Tiến Trình Tập Luyện"}
               </button>
               <button
-                onClick={() => setSubTab("pk_challenges")}
+                onClick={() => handleSubTabChange("pk_challenges")}
                 className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap ${
                   subTab === "pk_challenges"
                     ? "bg-white dark:bg-slate-800 shadow-xs text-rose-600 dark:text-rose-400 border border-slate-200/40 dark:border-slate-700/40"
@@ -1839,7 +1839,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 {language === "en" ? `PK Challenges (${userPkChallenges.length})` : `Thách đấu PK (${userPkChallenges.length})`}
               </button>
               <button
-                onClick={() => setSubTab("created")}
+                onClick={() => handleSubTabChange("created")}
                 className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap ${
                   subTab === "created"
                     ? "bg-white dark:bg-slate-800 shadow-xs text-indigo-700 dark:text-indigo-400 border border-slate-200/40 dark:border-slate-700/40"
@@ -1850,7 +1850,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 {language === "en" ? `Created Tournaments (${myCreatedTournaments.length})` : `Giải tôi tạo (${myCreatedTournaments.length})`}
               </button>
               <button
-                onClick={() => setSubTab("referee")}
+                onClick={() => handleSubTabChange("referee")}
                 className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap ${
                   subTab === "referee"
                     ? "bg-white dark:bg-slate-800 shadow-xs text-amber-750 dark:text-amber-400 border border-slate-200/40 dark:border-slate-700/40"

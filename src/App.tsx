@@ -426,73 +426,70 @@ export default function App() {
 
   // Deduplication safety effects
   useEffect(() => {
-    const seen = new Set<string>();
-    const hasDuplicates = athletes.some((a) => {
-      if (!a || !a.id) return true;
-      const stripped = a.id.trim();
-      if (seen.has(stripped)) return true;
-      seen.add(stripped);
-      return false;
-    });
-
-    if (hasDuplicates) {
-      const cleanSeen = new Set<string>();
-      const cleaned = athletes.filter((a) => {
-        if (!a || !a.id) return false;
+    setAthletes((prev) => {
+      if (!prev || prev.length === 0) return prev;
+      const seen = new Set<string>();
+      let hasDup = false;
+      const cleaned = prev.filter((a) => {
+        if (!a || !a.id || !a.id.trim()) {
+          hasDup = true;
+          return false;
+        }
         const stripped = a.id.trim();
-        if (cleanSeen.has(stripped)) return false;
-        cleanSeen.add(stripped);
+        if (seen.has(stripped)) {
+          hasDup = true;
+          return false;
+        }
+        seen.add(stripped);
         return true;
       });
-      setAthletes(cleaned);
-    }
-  }, [athletes]);
+      return hasDup ? cleaned : prev;
+    });
+  }, [athletes.length]);
 
   useEffect(() => {
-    const seen = new Set<string>();
-    const hasDuplicates = teamAthletes.some((a) => {
-      if (!a || !a.id) return true;
-      const stripped = a.id.trim();
-      if (seen.has(stripped)) return true;
-      seen.add(stripped);
-      return false;
-    });
-
-    if (hasDuplicates) {
-      const cleanSeen = new Set<string>();
-      const cleaned = teamAthletes.filter((a) => {
-        if (!a || !a.id) return false;
+    setTeamAthletes((prev) => {
+      if (!prev || prev.length === 0) return prev;
+      const seen = new Set<string>();
+      let hasDup = false;
+      const cleaned = prev.filter((a) => {
+        if (!a || !a.id || !a.id.trim()) {
+          hasDup = true;
+          return false;
+        }
         const stripped = a.id.trim();
-        if (cleanSeen.has(stripped)) return false;
-        cleanSeen.add(stripped);
+        if (seen.has(stripped)) {
+          hasDup = true;
+          return false;
+        }
+        seen.add(stripped);
         return true;
       });
-      setTeamAthletes(cleaned);
-    }
-  }, [teamAthletes]);
+      return hasDup ? cleaned : prev;
+    });
+  }, [teamAthletes.length]);
 
   useEffect(() => {
-    const seen = new Set<string>();
-    const hasDuplicates = masterAthletes.some((a) => {
-      if (!a || !a.id) return true;
-      const stripped = a.id.trim();
-      if (seen.has(stripped)) return true;
-      seen.add(stripped);
-      return false;
-    });
-
-    if (hasDuplicates) {
-      const cleanSeen = new Set<string>();
-      const cleaned = masterAthletes.filter((a) => {
-        if (!a || !a.id) return false;
+    setMasterAthletes((prev) => {
+      if (!prev || prev.length === 0) return prev;
+      const seen = new Set<string>();
+      let hasDup = false;
+      const cleaned = prev.filter((a) => {
+        if (!a || !a.id || !a.id.trim()) {
+          hasDup = true;
+          return false;
+        }
         const stripped = a.id.trim();
-        if (cleanSeen.has(stripped)) return false;
-        cleanSeen.add(stripped);
+        if (seen.has(stripped)) {
+          hasDup = true;
+          return false;
+        }
+        seen.add(stripped);
         return true;
       });
-      setMasterAthletes(cleaned);
-    }
-  }, [masterAthletes]);
+      return hasDup ? cleaned : prev;
+    });
+  }, [masterAthletes.length]);
 
   const [activeTab, setActiveTab] = useState<"home" | "desktop" | "dashboard" | "scoring" | "input_scores" | "leaderboard" | "teams" | "athletes" | "settings" | "history" | "control_panel" | "qltv" | "vsc_system_directory" | "vsc_clubs_directory" | "pk_lobby">(() => {
     if (typeof window !== "undefined") {
@@ -3851,7 +3848,7 @@ export default function App() {
               onSelectTournament={(id, tournament) => handleSelectTournament(id, tournament, "dashboard")}
               onOpenAuthModal={() => setIsAuthModalOpen(true)}
               forceSubTab={controlPanelSubTab}
-              onSubTabChange={(subTab) => setControlPanelSubTab(subTab)}
+              onSubTabChange={setControlPanelSubTab}
               onChangeActiveTab={setActiveTab}
               systemClubs={clubs}
               vscSystemAthletes={vscSystemAthletes}

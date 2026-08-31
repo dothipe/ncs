@@ -200,7 +200,7 @@ export const AthleteProfileModal: React.FC<AthleteProfileModalProps> = ({
   useEffect(() => {
     if (!isOpen || !athlete) return;
     if (onlineTournaments && onlineTournaments.length > 0) {
-      setLocalTournaments([]);
+      setLocalTournaments((prev) => prev.length === 0 ? prev : []);
       return;
     }
 

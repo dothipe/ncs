@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useLanguage } from "../context/LanguageContext";
 import { showToast } from "../utils/toast";
@@ -602,14 +602,17 @@ export const VscSystemClubsDirectory: React.FC<VscSystemClubsDirectoryProps> = (
     }
   }, [externalSelectedClub]);
 
+  const onCloseRef = useRef(onCloseExternalSelectedClub);
+  useEffect(() => {
+    onCloseRef.current = onCloseExternalSelectedClub;
+  }, [onCloseExternalSelectedClub]);
+
   // Sync back close event to parent
   useEffect(() => {
     if (selectedClub === null && externalSelectedClub) {
-      if (onCloseExternalSelectedClub) {
-        onCloseExternalSelectedClub();
-      }
+      onCloseRef.current?.();
     }
-  }, [selectedClub, onCloseExternalSelectedClub]);
+  }, [selectedClub, externalSelectedClub]);
 
   // Deep link to selected club if clubId in URL
   useEffect(() => {
@@ -894,7 +897,7 @@ export const VscSystemClubsDirectory: React.FC<VscSystemClubsDirectoryProps> = (
   useEffect(() => {
     if (selectedClub) {
       const updated = clubs.find(c => c.id === selectedClub.id);
-      if (updated) {
+      if (updated && JSON.stringify(updated) !== JSON.stringify(selectedClub)) {
         setSelectedClub(updated);
       }
     }
