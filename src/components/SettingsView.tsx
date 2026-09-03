@@ -182,6 +182,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {settingsSubTab === "config" ? (
         <SettingsPanel
+          currentTournamentDoc={currentTournamentDoc}
           matchName={matchName}
           setMatchName={setMatchName}
           bannerUrl={bannerUrl}
@@ -270,6 +271,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           currentUser={currentUser}
           forceTab={athleteForceTab}
           userRole={userRole}
+          hideVscSystemTab={true}
         />
       )}
     </div>

@@ -63,6 +63,7 @@ interface HeaderNavigationProps {
   history: any[];
   tournamentType: "individual" | "team" | "combined";
   onlineTournaments: any[];
+  currentTournamentDoc?: any;
 }
 
 export function HeaderNavigation({
@@ -104,8 +105,17 @@ export function HeaderNavigation({
   history,
   tournamentType,
   onlineTournaments,
+  currentTournamentDoc,
 }: HeaderNavigationProps) {
   const { language, setLanguage, t } = useLanguage();
+
+  const isExecutor = isGlobalAdmin || 
+    (currentTournamentDoc && currentUser && (
+      currentTournamentDoc.subAdmins?.map((e: string) => e.toLowerCase()).includes(currentUser.email?.toLowerCase()) ||
+      currentTournamentDoc.creatorEmail?.toLowerCase() === currentUser.email?.toLowerCase() ||
+      currentTournamentDoc.creatorUid === currentUser.uid ||
+      currentTournamentDoc.headReferee?.toLowerCase() === currentUser.email?.toLowerCase()
+    ));
 
   // Local UI States
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -636,6 +646,18 @@ export function HeaderNavigation({
                     </div>
                   )}
                 </div>
+              )}
+
+              {activeHistoryId && currentTournamentDoc?.isNational && isExecutor && (
+                <button
+                  onClick={() => changeTab("tournament_execution")}
+                  className={`px-4.5 py-4 text-xs sm:text-sm font-extrabold uppercase tracking-wider transition-all hover:bg-black/15 flex items-center gap-1.5 border-none bg-transparent ${
+                    activeTab === "tournament_execution" ? "bg-black/25 text-yellow-400 border-b-4 border-yellow-400 font-black" : "text-white"
+                  }`}
+                >
+                  <Sword className="w-4 h-4 text-amber-400" />
+                  {language === "en" ? "Executive Hub" : "Điều Hành"}
+                </button>
               )}
 
               {activeHistoryId && userRole === "admin" && (
@@ -1208,6 +1230,23 @@ export function HeaderNavigation({
                         </span>
                       </button>
                     </div>
+                  )}
+
+                  {activeHistoryId && currentTournamentDoc?.isNational && isExecutor && (
+                    <button
+                      onClick={() => {
+                        changeTab("tournament_execution");
+                        setIsMobileDrawerOpen(false);
+                      }}
+                      className={`w-full px-3 py-2.5 rounded-lg text-xs font-extrabold flex items-center gap-3 transition-all border-none bg-transparent ${
+                        activeTab === "tournament_execution"
+                          ? "bg-red-50 text-[#9c0c13] dark:bg-red-950/20 dark:text-red-400"
+                          : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                      }`}
+                    >
+                      <Sword className="w-4 h-4 shrink-0 text-amber-500" />
+                      <span>{language === "en" ? "Executive Hub" : "Điều Hành Giải Đấu"}</span>
+                    </button>
                   )}
 
                   {/* Configuration Settings (Admins only) */}

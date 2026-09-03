@@ -8,6 +8,7 @@ import { createOnlineTournament, updateOnlineTournament, getVscSystemAthletes, g
 import { useLanguage } from "../context/LanguageContext";
 
 interface SettingsPanelProps {
+  currentTournamentDoc?: any;
   matchName: string;
   setMatchName: (name: string) => void;
   distances: DistanceConfig[];
@@ -111,6 +112,7 @@ const compressImage = (base64Str: string, maxWidth = 150, maxHeight = 150): Prom
 };
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({
+  currentTournamentDoc,
   matchName,
   setMatchName,
   distances,
@@ -240,6 +242,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
   const [isResolvingSubAdmin, setIsResolvingSubAdmin] = useState(false);
   const [isResolvingReferee, setIsResolvingReferee] = useState(false);
+  const [isResolvingHeadRef, setIsResolvingHeadRef] = useState(false);
 
   const handleResolveAndAddSubAdmin = async () => {
     const inputEl = document.getElementById("subadmin-email-input") as HTMLInputElement;
@@ -313,6 +316,67 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
       console.error("Resolve Sub Admin failed:", err);
     } finally {
       setIsResolvingSubAdmin(false);
+    }
+  };
+
+  const handleResolveAndSetHeadReferee = async () => {
+    const inputEl = document.getElementById("headref-email-input") as HTMLInputElement;
+    const rawVal = inputEl?.value?.trim();
+    if (!rawVal) {
+      alert(language === "en" ? "Please enter email, Athlete ID, or Athlete Name!" : "Vui lòng nhập Email, Mã VĐV, hoặc Tên VĐV!");
+      return;
+    }
+
+    setIsResolvingHeadRef(true);
+    try {
+      const systemAthletes = await getVscSystemAthletes();
+      const cleanVal = rawVal.toLowerCase().trim();
+      let found = systemAthletes.find(a => a.id && a.id.trim().toLowerCase() === cleanVal);
+      if (!found) {
+        found = systemAthletes.find(a => a.name && a.name.trim().toLowerCase() === cleanVal);
+      }
+      if (!found && cleanVal.startsWith("vsc-")) {
+        const numPart = cleanVal.replace("vsc-", "");
+        found = systemAthletes.find(a => a.id && a.id.trim().toLowerCase().endsWith(numPart));
+      }
+      if (!found) {
+        found = systemAthletes.find(a => a.email && a.email.trim().toLowerCase() === cleanVal);
+      }
+
+      let emailToAdd = "";
+      if (found) {
+        if (found.email && found.email.trim()) {
+          emailToAdd = found.email.trim().toLowerCase();
+        } else {
+          alert(language === "en" 
+            ? `Found athlete "${found.name}" (${found.id}) but they have not linked an email account yet!` 
+            : `Tìm thấy VĐV "${found.name}" (${found.id}) nhưng chưa liên kết email tài khoản!`);
+          setIsResolvingHeadRef(false);
+          return;
+        }
+      } else {
+        if (cleanVal.includes("@")) {
+          emailToAdd = cleanVal;
+        } else {
+          alert(language === "en"
+            ? `Could not find any VSC System Athlete with ID/Name: "${rawVal}" and it is not a valid email!`
+            : `Không tìm thấy VĐV Hệ thống nào có ID/Tên: "${rawVal}" và đây không phải là email hợp lệ!`);
+          setIsResolvingHeadRef(false);
+          return;
+        }
+      }
+
+      if (activeHistoryId && activeHistoryId.startsWith("tour-")) {
+        await updateOnlineTournament(activeHistoryId, { headReferee: emailToAdd });
+        onAddAuditLog?.(language === "en"
+          ? `Designated Head Referee email: ${emailToAdd}`
+          : `Đã chỉ định email Trưởng ban trọng tài: ${emailToAdd}`);
+        if (inputEl) inputEl.value = "";
+      }
+    } catch (err) {
+      console.error("Resolve Head Referee failed:", err);
+    } finally {
+      setIsResolvingHeadRef(false);
     }
   };
 
@@ -446,6 +510,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const [modalTeamDirectMaxShots, setModalTeamDirectMaxShots] = useState(10);
   const [modalTeamDirectMaxPoints, setModalTeamDirectMaxPoints] = useState<number | undefined>(undefined);
   const [modalTournamentType, setModalTournamentType] = useState<"individual" | "team" | "combined">("combined");
+  const [modalIsNational, setModalIsNational] = useState(false);
+  const [modalHeadReferee, setModalHeadReferee] = useState("");
 
   useEffect(() => {
     if (isNewTournamentModalOpen && !modalTournamentId) {
@@ -480,6 +546,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
       setModalTeamDirectMaxShots(teamDirectMaxShots || 10);
       setModalTeamDirectMaxPoints(teamDirectMaxPoints);
       setModalTournamentType("combined");
+      setModalIsNational(false);
+      setModalHeadReferee("");
       setTournamentError("");
     } else if (!isNewTournamentModalOpen) {
       setModalTournamentId("");
@@ -847,18 +915,39 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
               <span className="text-[10px] bg-rose-500 text-white px-2 py-0.5 rounded font-extrabold uppercase animate-pulse">{language === "en" ? "WARNING" : "Chú ý chạm"}</span>
             </div>
 
-            {/* ID Input */}
-            <div>
-              <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1 flex justify-between">
-                <span>{language === "en" ? "Tournament ID Code" : "Mã ID Giải Đấu"}</span>
-                <span className="text-[8px] bg-gray-200 dark:bg-slate-800 text-gray-500 dark:text-gray-400 px-1 py-0.5 rounded font-black font-mono">{language === "en" ? "AUTO GENERATED" : "LỢI ÍCH TỰ ĐỘNG"}</span>
-              </label>
-              <input
-                type="text"
-                value={tournamentId}
-                readOnly
-                className="w-full px-3 py-1.5 text-xs bg-gray-100 dark:bg-slate-900 border border-gray-200 dark:border-slate-850 rounded-lg text-slate-500 font-mono font-black cursor-not-allowed outline-none select-none"
-              />
+            {/* ID Input + National Toggle Side-by-Side */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+              <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-gray-150 dark:border-slate-800 h-[34px]">
+                <input
+                  type="checkbox"
+                  id="quickIsNational"
+                  checked={!!currentTournamentDoc?.isNational}
+                  onChange={(e) => {
+                    const nextVal = e.target.checked;
+                    if (activeHistoryId && activeHistoryId.startsWith("tour-")) {
+                      updateOnlineTournament(activeHistoryId, { isNational: nextVal })
+                        .catch((err) => console.error("Failed to update isNational:", err));
+                    }
+                  }}
+                  className="w-4 h-4 text-rose-600 border-gray-350 rounded focus:ring-rose-500 cursor-pointer"
+                />
+                <label htmlFor="quickIsNational" className="text-[10px] font-black text-slate-700 dark:text-slate-300 cursor-pointer select-none leading-none">
+                  {language === "en" ? "National / Large-scale" : "Giải Quốc gia / Quy mô lớn"}
+                </label>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1 flex justify-between">
+                  <span>{language === "en" ? "Tournament ID Code" : "Mã ID Giải Đấu"}</span>
+                  <span className="text-[8px] bg-gray-200 dark:bg-slate-800 text-gray-500 dark:text-gray-400 px-1 py-0.5 rounded font-black font-mono">{language === "en" ? "AUTO GENERATED" : "LỢI ÍCH TỰ ĐỘNG"}</span>
+                </label>
+                <input
+                  type="text"
+                  value={tournamentId}
+                  readOnly
+                  className="w-full px-3 py-1.5 text-xs bg-gray-100 dark:bg-slate-900 border border-gray-200 dark:border-slate-850 rounded-lg text-slate-500 font-mono font-black cursor-not-allowed outline-none select-none"
+                />
+              </div>
             </div>
 
             {/* Tournament Name Input */}
@@ -907,6 +996,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <option value="combined">{language === "en" ? "Individual + Team (Combined)" : "Cá Nhân + Đồng Đội (Kết Hợp)"}</option>
               </select>
             </div>
+
+
 
             {/* Match Dates Inputs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1487,6 +1578,76 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   </div>
                 ) : (
                   <p className="text-[10px] text-slate-405 italic">{language === "en" ? "No referees assigned yet" : "Chưa chỉ định trọng tài nào"}</p>
+                )}
+              </div>
+
+              {/* TRƯỞNG BAN TRỌNG TÀI MANAGER */}
+              <div className="flex flex-col gap-3 pb-4 pt-3 border-t border-gray-150 dark:border-slate-800/60 font-sans">
+                <span className="text-[11px] font-black text-rose-500 uppercase tracking-widest block flex items-center gap-1">
+                  <Shield className="w-4 h-4 animate-pulse" /> {language === "en" ? "HEAD REFEREE (NATIONAL)" : "TRƯỞNG BAN TRỌNG TÀI (GIẢI QUỐC GIA)"}
+                </span>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                  {language === "en" ? "Enter email, Athlete ID, or Athlete Name to designate the official Head Referee with administrative control." : "Nhập email, Mã VĐV, hoặc Tên VĐV hệ thống để chỉ định Trưởng Ban Trọng Tài có quyền điều hành thượng tầng giải đấu."}
+                </p>
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    placeholder={language === "en" ? "email@domain.com, ID, or Name" : "Email, Mã VĐV, hoặc Tên VĐV..."}
+                    id="headref-email-input"
+                    disabled={isResolvingHeadRef}
+                    className="flex-1 px-2.5 py-1.5 text-xs bg-slate-55 dark:bg-slate-800 border border-slate-205 dark:border-slate-700/80 rounded focus:outline-none disabled:opacity-50 font-sans"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleResolveAndSetHeadReferee();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleResolveAndSetHeadReferee}
+                    disabled={isResolvingHeadRef}
+                    className="px-3 bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold rounded-lg cursor-pointer flex items-center justify-center min-w-[60px] disabled:opacity-50"
+                  >
+                    {isResolvingHeadRef ? (
+                      <span className="inline-block animate-spin rounded-full h-3 w-3 border-b-2 border-white"></span>
+                    ) : (
+                      language === "en" ? "Set" : "Chỉ định"
+                    )}
+                  </button>
+                </div>
+                {currentTournamentDoc?.headReferee ? (
+                  <div className="flex justify-between items-center text-xs text-rose-700 dark:text-rose-400 border border-rose-100 dark:border-rose-950/60 p-2.5 rounded-xl bg-rose-500/5 dark:bg-rose-950/20">
+                    <div className="flex flex-col">
+                      <span className="font-extrabold text-[10px] uppercase tracking-wide text-rose-600 dark:text-rose-400">
+                        {language === "en" ? "Current Designated Head Referee:" : "Trưởng Ban Trọng Tài hiện tại:"}
+                      </span>
+                      <span className="font-mono mt-0.5 select-all">{currentTournamentDoc.headReferee}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (activeHistoryId) {
+                          const confirmClear = window.confirm(
+                            language === "en" 
+                              ? "Are you sure you want to remove the Head Referee?" 
+                              : "Bạn có chắc chắn muốn gỡ tư cách Trưởng Ban Trọng Tài?"
+                          );
+                          if (!confirmClear) return;
+                          await updateOnlineTournament(activeHistoryId, { headReferee: "" });
+                          onAddAuditLog?.(language === "en"
+                            ? "Removed Designated Head Referee"
+                            : "Đã gỡ tư cách Trưởng ban trọng tài");
+                        }
+                      }}
+                      className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer"
+                      title={language === "en" ? "Remove Head Referee" : "Gỡ Trưởng ban trọng tài"}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-slate-405 italic">{language === "en" ? "No Head Referee assigned yet" : "Chưa chỉ định Trưởng Ban Trọng Tài"}</p>
                 )}
               </div>
             </div>
@@ -2795,11 +2956,23 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
             {/* Scrollable Form Body */}
             <div className="p-6 space-y-4 overflow-y-auto flex-1">
               {/* ID + Name section */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end animate-fadeIn">
+                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-gray-150 dark:border-slate-800 h-[38px]">
+                  <input
+                    type="checkbox"
+                    id="modalIsNational"
+                    checked={modalIsNational}
+                    onChange={(e) => setModalIsNational(e.target.checked)}
+                    className="w-4 h-4 text-rose-600 border-gray-350 rounded focus:ring-rose-500 cursor-pointer"
+                  />
+                  <label htmlFor="modalIsNational" className="text-[10px] font-black text-slate-700 dark:text-slate-300 cursor-pointer select-none leading-none">
+                    {language === "en" ? "National" : "Giải Quốc gia"}
+                  </label>
+                </div>
+
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 flex justify-between items-center">
-                    <span>{language === "en" ? "Tournament ID *" : "Mã ID Giải Đấu *"}</span>
-                    <span className="text-[7px] bg-indigo-950 text-indigo-400 border border-indigo-900 px-1 py-0.2 rounded font-black font-mono">{language === "en" ? "AUTO-INCREMENT" : "TỰ ĐỘNG TĂNG"}</span>
+                    <span>{language === "en" ? "Tournament ID *" : "Mã ID *"}</span>
                   </label>
                   <input
                     type="text"
@@ -2808,6 +2981,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     className="w-full px-3 py-2 bg-gray-100 dark:bg-slate-955 border border-gray-200 dark:border-slate-850 rounded-xl text-slate-500 font-black font-mono text-xs cursor-not-allowed outline-none select-none"
                   />
                 </div>
+
                 <div className="sm:col-span-2">
                   <label className="block text-[10px] font-black text-gray-555 uppercase tracking-widest mb-1">{language === "en" ? "Tournament Name *" : "Tên Giải Đấu *"}</label>
                   <input
@@ -2884,6 +3058,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   <option value="combined">{language === "en" ? "Combined (Individual + Team)" : "Cá Nhân + Đồng Đội (Kết Hợp)"}</option>
                 </select>
               </div>
+
+
 
               {/* Lane Capacity & Shots config */}
               <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-gray-150 dark:border-slate-800 space-y-3.5">
@@ -3114,6 +3290,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         laneCapacity: modalLaneCapacity,
                         distances: defaultDistances,
                         teamDistances: defaultTeamDistances,
+                        isNational: modalIsNational,
+                        headReferee: modalHeadReferee.trim().toLowerCase(),
+                        isDrawingOpen: false,
+                        drawnNumbers: {},
+                        forcedRefMode: "free",
                         athletes: [],
                         teamAthletes: [],
                         inputAthletes: [],

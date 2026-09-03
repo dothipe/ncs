@@ -60,6 +60,12 @@ export interface TournamentData {
   laneCapacity?: number;
   clubs?: Club[];
   auditLog?: string;
+  isNational?: boolean;
+  isDrawingOpen?: boolean;
+  drawnNumbers?: Record<string, number>;
+  forcedRefMode?: "individual" | "team" | "free";
+  headReferee?: string;
+  sortedAthleteOrder?: string[];
 }
 
 export enum OperationType {
@@ -277,6 +283,12 @@ export async function createOnlineTournament(
     subAdmins?: string[];
     startDate?: string;
     endDate?: string;
+    isNational?: boolean;
+    isDrawingOpen?: boolean;
+    drawnNumbers?: Record<string, number>;
+    forcedRefMode?: "individual" | "team" | "free";
+    headReferee?: string;
+    sortedAthleteOrder?: string[];
   }
 ): Promise<string> {
   // 1. Fetch user profile and check for existing bans/restrictions

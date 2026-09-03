@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { 
   HelpCircle, 
@@ -87,6 +87,14 @@ export function ScoringWorkspace({
   const [tourAddSearch, setTourAddSearch] = useState("");
   const [selectedTourAthleteIds, setSelectedTourAthleteIds] = useState<string[]>([]);
 
+  useEffect(() => {
+    if (currentTournamentDoc?.forcedRefMode === "individual" && competitionMode !== "individual") {
+      setCompetitionMode("individual");
+    } else if (currentTournamentDoc?.forcedRefMode === "team" && competitionMode !== "team") {
+      setCompetitionMode("team");
+    }
+  }, [currentTournamentDoc?.forcedRefMode, competitionMode, setCompetitionMode]);
+
   const isScoringAuthorized = userRole === "admin" && isScoringEditAuthorized;
 
   return (
@@ -94,37 +102,49 @@ export function ScoringWorkspace({
 
       {/* Environment Switcher for Combined Tournament */}
       {tournamentType === "combined" && (
-        <div className="flex w-full bg-gray-100 dark:bg-slate-850 p-1.5 rounded-xl mb-2 gap-1.5 border border-gray-200/50 dark:border-slate-700/50">
-          <button
-            onClick={() => {
-              setCompetitionMode("individual");
-              localStorage.setItem("slingshot_competition_mode", "individual");
-              setIsSpectatorModeOverridden(true);
-            }}
-            className={`flex-1 w-1/2 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${
-              competitionMode === "individual"
-                ? "bg-indigo-650 text-white shadow-md scale-[1.02]"
-                : "text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-200"
-            }`}
-          >
-            <User className="w-4 h-4" />
-            {language === "en" ? "Individual" : "Cá Nhân"}
-          </button>
-          <button
-            onClick={() => {
-              setCompetitionMode("team");
-              localStorage.setItem("slingshot_competition_mode", "team");
-              setIsSpectatorModeOverridden(true);
-            }}
-            className={`flex-1 w-1/2 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${
-              competitionMode === "team"
-                ? "bg-indigo-650 text-white shadow-md scale-[1.02]"
-                : "text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-200"
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            {language === "en" ? "Team" : "Đồng Đội"}
-          </button>
+        <div className="flex flex-col gap-1.5 mb-2">
+          {currentTournamentDoc?.forcedRefMode && currentTournamentDoc.forcedRefMode !== "free" && (
+            <div className="flex items-center gap-1 text-[10px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-wider px-1">
+              <Lock className="w-3 h-3 text-rose-500 shrink-0" />
+              <span>{language === "en" ? "Competition mode locked by executive" : "Môi trường thi đấu đang khóa bởi ban điều hành"}</span>
+            </div>
+          )}
+          <div className="flex w-full bg-gray-100 dark:bg-slate-850 p-1.5 rounded-xl gap-1.5 border border-gray-200/50 dark:border-slate-700/50 relative overflow-hidden">
+            <button
+              onClick={() => {
+                if (currentTournamentDoc?.forcedRefMode && currentTournamentDoc.forcedRefMode !== "free") return;
+                setCompetitionMode("individual");
+                localStorage.setItem("slingshot_competition_mode", "individual");
+                setIsSpectatorModeOverridden(true);
+              }}
+              disabled={currentTournamentDoc?.forcedRefMode && currentTournamentDoc.forcedRefMode !== "free"}
+              className={`flex-1 w-1/2 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+                competitionMode === "individual"
+                  ? "bg-indigo-650 text-white shadow-md scale-[1.02]"
+                  : "text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-200"
+              } ${(currentTournamentDoc?.forcedRefMode && currentTournamentDoc.forcedRefMode !== "free" && competitionMode !== "individual") ? "opacity-40 cursor-not-allowed hover:text-gray-500" : ""}`}
+            >
+              <User className="w-4 h-4" />
+              {language === "en" ? "Individual" : "Cá Nhân"}
+            </button>
+            <button
+              onClick={() => {
+                if (currentTournamentDoc?.forcedRefMode && currentTournamentDoc.forcedRefMode !== "free") return;
+                setCompetitionMode("team");
+                localStorage.setItem("slingshot_competition_mode", "team");
+                setIsSpectatorModeOverridden(true);
+              }}
+              disabled={currentTournamentDoc?.forcedRefMode && currentTournamentDoc.forcedRefMode !== "free"}
+              className={`flex-1 w-1/2 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+                competitionMode === "team"
+                  ? "bg-indigo-650 text-white shadow-md scale-[1.02]"
+                  : "text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-200"
+              } ${(currentTournamentDoc?.forcedRefMode && currentTournamentDoc.forcedRefMode !== "free" && competitionMode !== "team") ? "opacity-40 cursor-not-allowed hover:text-gray-500" : ""}`}
+            >
+              <Users className="w-4 h-4" />
+              {language === "en" ? "Team" : "Đồng Đội"}
+            </button>
+          </div>
         </div>
       )}
 
