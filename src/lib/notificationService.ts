@@ -38,8 +38,8 @@ export async function sendNotification(
   senderUid?: string,
   senderName?: string,
   senderAvatar?: string
-): Promise<void> {
-  if (!recipientUid) return;
+): Promise<boolean> {
+  if (!recipientUid) return false;
   try {
     await addDoc(collection(db, "vsc_notifications"), {
       recipientUid,
@@ -53,9 +53,34 @@ export async function sendNotification(
       senderAvatar: senderAvatar || "",
       createdAt: serverTimestamp()
     });
+    return true;
   } catch (error) {
     console.error("Error sending notification:", error);
+    return false;
   }
+}
+
+/**
+ * Sends an instant test notification to the current user
+ */
+export async function sendTestNotification(
+  currentUser: { uid: string; displayName?: string; email?: string; photoURL?: string },
+  language: "vi" | "en" = "vi"
+): Promise<boolean> {
+  if (!currentUser?.uid) return false;
+  const isEn = language === "en";
+  return await sendNotification(
+    currentUser.uid,
+    "system_alert",
+    isEn ? "🔔 VSC System Notification Test" : "🔔 Thử nghiệm thông báo hệ thống VSC",
+    isEn
+      ? "Real-time bell notifications are connected and working properly!"
+      : "Hệ thống chuông báo thời gian thực đã được kết nối và hoạt động chính xác 100%!",
+    "tab=control_panel&subtab=profile",
+    "vsc_system",
+    "VSC System",
+    ""
+  );
 }
 
 /**

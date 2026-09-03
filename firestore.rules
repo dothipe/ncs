@@ -185,13 +185,19 @@ service cloud.firestore {
     }
 
     // --- VSC Notifications ---
+    function isValidNotification(data) {
+      return ('recipientUid' in data && data.recipientUid is string && data.recipientUid.size() <= 128) &&
+             ('title' in data && data.title is string && data.title.size() <= 200) &&
+             ('message' in data && data.message is string && data.message.size() <= 1000);
+    }
+
     match /vsc_notifications/{notificationId} {
       allow read, list, get: if isEmailVerified() && (
         resource.data.recipientUid == request.auth.uid || 
         resource.data.recipientUid == "all" ||
         isAdmin()
       );
-      allow create: if isEmailVerified() && isValidId(notificationId);
+      allow create: if isEmailVerified() && isValidNotification(incoming());
       allow update, delete: if isEmailVerified() && (
         resource.data.recipientUid == request.auth.uid || 
         isAdmin()

@@ -8,16 +8,19 @@ import {
   MessageSquare, 
   Sparkles, 
   Clock,
-  X
+  X,
+  Send
 } from "lucide-react";
-import { db, collection, query, where, orderBy, onSnapshot } from "../firebase";
+import { db, collection, query, where, onSnapshot } from "../firebase";
 import { 
   VscNotification, 
   markNotificationAsRead, 
   markAllNotificationsAsRead, 
   deleteNotification, 
-  clearAllNotifications 
+  clearAllNotifications,
+  sendTestNotification
 } from "../lib/notificationService";
+import { showToast } from "../utils/toast";
 
 interface NotificationBellProps {
   currentUser: any;
@@ -36,7 +39,10 @@ export function NotificationBell({
 }: NotificationBellProps) {
   const [notifications, setNotifications] = useState<VscNotification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [isSendingTest, setIsSendingTest] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const prevUnreadCountRef = useRef<number>(0);
+  const isFirstLoadRef = useRef<boolean>(true);
 
   // Subscribe to real-time notifications
   useEffect(() => {
@@ -45,25 +51,55 @@ export function NotificationBell({
       return;
     }
 
+    // Query on single field filter without orderBy to prevent missing composite index errors
     const q = query(
       collection(db, "vsc_notifications"),
-      where("recipientUid", "in", [currentUser.uid, "all"]),
-      orderBy("createdAt", "desc")
+      where("recipientUid", "in", [currentUser.uid, "all"])
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const list: VscNotification[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        list.push({
-          id: doc.id,
-          ...data
-        } as VscNotification);
-      });
-      setNotifications(list);
-    }, (error) => {
-      console.error("Error listening to notifications:", error);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const list: VscNotification[] = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          list.push({
+            id: doc.id,
+            ...data
+          } as VscNotification);
+        });
+
+        // In-memory robust sort by timestamp descending (newest first)
+        list.sort((a, b) => {
+          const getTime = (val: any) => {
+            if (!val) return 0;
+            if (val.toMillis) return val.toMillis();
+            if (val.toDate) return val.toDate().getTime();
+            if (val.seconds) return val.seconds * 1000;
+            const parsed = new Date(val).getTime();
+            return isNaN(parsed) ? 0 : parsed;
+          };
+          return getTime(b.createdAt) - getTime(a.createdAt);
+        });
+
+        const unread = list.filter((n) => !n.isRead).length;
+
+        // Toast on new unread notification arriving while in app
+        if (!isFirstLoadRef.current && unread > prevUnreadCountRef.current) {
+          const newest = list.find((n) => !n.isRead);
+          if (newest) {
+            showToast(`🔔 ${newest.title}`);
+          }
+        }
+        isFirstLoadRef.current = false;
+        prevUnreadCountRef.current = unread;
+
+        setNotifications(list);
+      },
+      (error) => {
+        console.error("Error listening to notifications:", error);
+      }
+    );
 
     return () => unsubscribe();
   }, [currentUser?.uid]);
@@ -80,7 +116,7 @@ export function NotificationBell({
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, [isOpen]);
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   const handleNotificationClick = async (notif: VscNotification) => {
     // 1. Mark as read
@@ -101,6 +137,19 @@ export function NotificationBell({
       } else if (targetTab === "settings" && targetSubtab && setSettingsSubTab) {
         setSettingsSubTab(targetSubtab);
       }
+    }
+  };
+
+  const handleSendTestNotification = async () => {
+    if (!currentUser || isSendingTest) return;
+    setIsSendingTest(true);
+    try {
+      await sendTestNotification(currentUser, language);
+      showToast(language === "en" ? "🔔 Test notification sent!" : "🔔 Đã gửi thông báo thử nghiệm!");
+    } catch (err) {
+      console.error("Error sending test notification:", err);
+    } finally {
+      setIsSendingTest(false);
     }
   };
 
@@ -182,24 +231,39 @@ export function NotificationBell({
 
       {/* Notifications Dropdown (Facebook style) */}
       {isOpen && (
-        <div className="absolute right-0 mt-3.5 w-80 sm:w-96 bg-white dark:bg-slate-905 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl z-[999] overflow-hidden flex flex-col text-slate-800 dark:text-slate-100 max-h-[480px]">
+        <div className="absolute right-0 mt-3.5 w-80 sm:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl z-[999] overflow-hidden flex flex-col text-slate-800 dark:text-slate-100 max-h-[480px]">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 shrink-0">
-            <h3 className="text-sm font-black uppercase tracking-wider flex items-center gap-2">
-              🔔 {language === "en" ? "Notifications" : "Thông báo"}
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-black uppercase tracking-wider flex items-center gap-1.5">
+                🔔 {language === "en" ? "Notifications" : "Thông báo"}
+              </h3>
               {unreadCount > 0 && (
                 <span className="bg-red-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full">
                   {unreadCount} {language === "en" ? "New" : "Mới"}
                 </span>
               )}
-            </h3>
-            <button 
-              type="button"
-              onClick={() => setIsOpen(false)}
-              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-full cursor-pointer bg-transparent border-none"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSendTestNotification}
+                disabled={isSendingTest}
+                className="text-[10px] font-bold text-amber-600 dark:text-amber-400 hover:text-amber-700 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/50 px-2 py-1 rounded-md flex items-center gap-1 cursor-pointer border border-amber-200/50 dark:border-amber-800/50 transition-all"
+                title={language === "en" ? "Send a test notification" : "Gửi thử 1 thông báo"}
+              >
+                <Send className="w-3 h-3" />
+                <span>{isSendingTest ? "..." : (language === "en" ? "Test Bell" : "Thử chuông")}</span>
+              </button>
+              <button 
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-full cursor-pointer bg-transparent border-none"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Quick Actions */}
@@ -231,23 +295,32 @@ export function NotificationBell({
           {/* Notifications List */}
           <div className="overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 flex-1 max-h-[340px] scrollbar-thin">
             {notifications.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-                <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-900/40 text-slate-400 dark:text-slate-600 flex items-center justify-center mb-3">
+              <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 flex items-center justify-center mb-3">
                   <Bell className="w-6 h-6" />
                 </div>
-                <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                <p className="text-xs font-bold text-slate-600 dark:text-slate-300">
                   {language === "en" ? "You're all caught up!" : "Tuyệt vời! Bạn không có thông báo nào."}
                 </p>
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
-                  {language === "en" ? "New tournament schedules and PK alerts will appear here." : "Yêu cầu thách đấu PK và lịch trình giải đấu mới sẽ xuất hiện tại đây."}
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 max-w-[260px]">
+                  {language === "en" ? "PK challenge alerts, club requests, and schedules will appear here." : "Yêu cầu thách đấu PK, đơn duyệt CLB và lịch trình giải đấu sẽ xuất hiện tại đây."}
                 </p>
+                <button
+                  type="button"
+                  onClick={handleSendTestNotification}
+                  disabled={isSendingTest}
+                  className="mt-4 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold rounded-lg cursor-pointer flex items-center gap-1.5 shadow-sm transition-all border-none"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{isSendingTest ? (language === "en" ? "Sending..." : "Đang gửi...") : (language === "en" ? "Send a test notification" : "Gửi thử 1 thông báo")}</span>
+                </button>
               </div>
             ) : (
               notifications.map((notif) => (
                 <div
                   key={notif.id}
                   onClick={() => handleNotificationClick(notif)}
-                  className={`flex gap-3 p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer text-left relative ${
+                  className={`flex gap-3 p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer text-left relative group ${
                     !notif.isRead ? "bg-amber-500/5 hover:bg-amber-500/10" : ""
                   }`}
                 >
@@ -282,7 +355,7 @@ export function NotificationBell({
                       e.stopPropagation();
                       deleteNotification(notif.id);
                     }}
-                    className="absolute bottom-3 right-3 opacity-0 hover:opacity-100 group-hover:opacity-100 focus:opacity-100 md:opacity-20 text-slate-400 hover:text-rose-500 p-1 rounded-sm cursor-pointer border-none bg-transparent transition-all"
+                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-slate-400 hover:text-rose-500 p-1 rounded-sm cursor-pointer border-none bg-transparent transition-all self-center"
                     title={language === "en" ? "Delete" : "Xóa"}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -293,7 +366,10 @@ export function NotificationBell({
           </div>
 
           {/* Footer */}
-          <div className="px-4 py-2 bg-slate-50 dark:bg-slate-900/60 border-t border-slate-100 dark:border-slate-800 text-center shrink-0">
+          <div className="px-4 py-2 bg-slate-50 dark:bg-slate-900/60 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
+            <span className="text-[10px] text-slate-400">
+              {notifications.length} {language === "en" ? "notifications" : "thông báo"}
+            </span>
             <button
               type="button"
               onClick={() => setIsOpen(false)}
@@ -307,3 +383,4 @@ export function NotificationBell({
     </div>
   );
 }
+

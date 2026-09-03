@@ -138,6 +138,25 @@
         "read": { "type": "boolean" }
       },
       "required": ["id", "senderId", "text", "timestamp"]
+    },
+    "VscNotification": {
+      "title": "VscNotification",
+      "description": "Persistent notification record for users and PK/Club events",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "recipientUid": { "type": "string" },
+        "senderUid": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderAvatar": { "type": "string" },
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "link": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date" }
+      },
+      "required": ["recipientUid", "title", "message"]
     }
   },
   "firestore": {
@@ -176,6 +195,10 @@
     "vsc_chats/{chatId}/messages/{messageId}": {
       "schema": "#/entities/DirectChatMessage",
       "description": "Messages inside a direct message session"
+    },
+    "vsc_notifications/{notificationId}": {
+      "schema": "#/entities/VscNotification",
+      "description": "Real-time user and system notification alerts"
     }
   }
 }
