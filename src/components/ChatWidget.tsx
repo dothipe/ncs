@@ -25,14 +25,17 @@ import {
   Radio,
   Share2
 } from "lucide-react";
-import { ChatMessage } from "../types";
+import { ChatMessage, Athlete } from "../types";
 import { 
   subscribeChatMessages, 
   sendChatMessage, 
   togglePinChatMessage, 
   toggleMessageReaction, 
-  deleteChatMessage 
+  deleteChatMessage,
+  subscribeToVscSystemAthletes,
+  subscribeToTournamentsList
 } from "../lib/firebaseService";
+import { AthleteProfileModal } from "./AthleteProfileModal";
 
 interface ChatWidgetProps {
   roomId: string;
@@ -110,6 +113,76 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
   const [showEmojiPickerFor, setShowEmojiPickerFor] = useState<string | null>(null);
   const [hasNewMessagesPill, setHasNewMessagesPill] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+
+  const [localSystemAthletes, setLocalSystemAthletes] = useState<Athlete[]>(systemAthletes && systemAthletes.length > 0 ? systemAthletes : []);
+  const [localTournaments, setLocalTournaments] = useState<any[]>([]);
+  const [selectedProfileAthlete, setSelectedProfileAthlete] = useState<Athlete | null>(null);
+
+  useEffect(() => {
+    let unsubAthletes: (() => void) | null = null;
+    let unsubTours: (() => void) | null = null;
+
+    if (systemAthletes && systemAthletes.length > 0) {
+      setLocalSystemAthletes(systemAthletes);
+    } else {
+      try {
+        unsubAthletes = subscribeToVscSystemAthletes((list) => {
+          if (list) setLocalSystemAthletes(list);
+        });
+      } catch (err) {
+        console.warn("Could not subscribe to system athletes inside ChatWidget:", err);
+      }
+    }
+
+    try {
+      unsubTours = subscribeToTournamentsList((list) => {
+        if (list) setLocalTournaments(list);
+      });
+    } catch (err) {
+      console.warn("Could not subscribe to tournaments inside ChatWidget:", err);
+    }
+
+    return () => {
+      if (unsubAthletes) unsubAthletes();
+      if (unsubTours) unsubTours();
+    };
+  }, [systemAthletes]);
+
+  const handleViewProfileInternally = (senderName: string, senderEmail?: string) => {
+    let found: Athlete | undefined = undefined;
+
+    // 1. Try matching by email
+    if (senderEmail) {
+      const cleanEmail = senderEmail.trim().toLowerCase();
+      found = localSystemAthletes.find(a => a.email && a.email.trim().toLowerCase() === cleanEmail);
+    }
+
+    // 2. Try matching by name
+    if (!found && senderName) {
+      const cleanName = senderName.trim().toLowerCase();
+      found = localSystemAthletes.find(a => a.name && a.name.trim().toLowerCase() === cleanName);
+    }
+
+    if (found) {
+      setSelectedProfileAthlete(found);
+    } else {
+      setSelectedProfileAthlete({
+        id: "TMP-" + Date.now(),
+        name: senderName,
+        email: senderEmail || "",
+        team: "",
+        avatarUrl: "",
+        status: "Thi đấu",
+        scores: {},
+        vscPoints: 100,
+        gender: "Nam"
+      } as Athlete);
+    }
+
+    if (onViewAthleteProfile) {
+      onViewAthleteProfile(senderName, senderEmail);
+    }
+  };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -472,26 +545,33 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
                       
                       {/* Avatar */}
                       <div 
-                        onClick={() => onViewAthleteProfile?.(msg.senderName, msg.senderEmail)}
+                        onClick={() => handleViewProfileInternally(msg.senderName, msg.senderEmail)}
                         className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-gray-200 bg-white flex items-center justify-center cursor-pointer shadow-2xs hover:ring-2 hover:ring-blue-400 transition-all"
                       >
-                        {msg.senderAvatar ? (
-                          <img 
-                            src={msg.senderAvatar} 
-                            alt={msg.senderName} 
-                            className="w-full h-full object-cover" 
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          <div className={`w-full h-full flex items-center justify-center font-bold text-xs ${
-                            isSenderAdmin ? "bg-rose-600 text-white" :
-                            msg.senderRole === "btc" ? "bg-amber-500 text-white" :
-                            msg.senderRole === "referee" ? "bg-purple-600 text-white" :
-                            "bg-blue-600 text-white"
-                          }`}>
-                            {msg.senderName.charAt(0).toUpperCase()}
-                          </div>
-                        )}
+                        {(() => {
+                          const senderProfile = localSystemAthletes.find(
+                            a => (msg.senderEmail && a.email && a.email.trim().toLowerCase() === msg.senderEmail.trim().toLowerCase()) ||
+                                 (a.name && msg.senderName && a.name.trim().toLowerCase() === msg.senderName.trim().toLowerCase())
+                          );
+                          const effectiveAvatar = senderProfile?.avatarUrl || msg.senderAvatar;
+                          return effectiveAvatar ? (
+                            <img 
+                              src={effectiveAvatar} 
+                              alt={msg.senderName} 
+                              className="w-full h-full object-cover" 
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className={`w-full h-full flex items-center justify-center font-bold text-xs ${
+                              isSenderAdmin ? "bg-rose-600 text-white" :
+                              msg.senderRole === "btc" ? "bg-amber-500 text-white" :
+                              msg.senderRole === "referee" ? "bg-purple-600 text-white" :
+                              "bg-blue-600 text-white"
+                            }`}>
+                              {msg.senderName.charAt(0).toUpperCase()}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Content Column */}
@@ -500,7 +580,7 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
                         <div className="flex items-center gap-1.5 flex-wrap mb-1">
                           <button
                             type="button"
-                            onClick={() => onViewAthleteProfile?.(msg.senderName, msg.senderEmail)}
+                            onClick={() => handleViewProfileInternally(msg.senderName, msg.senderEmail)}
                             className="font-bold text-xs text-gray-900 hover:text-blue-600 cursor-pointer transition-colors"
                           >
                             {msg.senderName}
@@ -762,6 +842,19 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
           </div>
 
         </div>
+      )}
+
+      {selectedProfileAthlete && (
+        <AthleteProfileModal
+          athlete={selectedProfileAthlete}
+          isOpen={true}
+          onClose={() => setSelectedProfileAthlete(null)}
+          history={[]}
+          onlineTournaments={localTournaments}
+          currentUser={currentUser}
+          isGlobalAdmin={Boolean(isBtcOrAdmin || (currentUser?.email && ["vscvietnamslingshot@gmail.com", "nahnatofficial@gmail.com"].includes(currentUser.email.toLowerCase())))}
+          language={language}
+        />
       )}
 
     </div>

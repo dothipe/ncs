@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useLanguage } from "../context/LanguageContext";
 import { Athlete, DistanceConfig, StoredAthleteList, Club, VSC_DEFAULT_LOGO } from "../types";
@@ -321,6 +321,14 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
   const [athleteToDelete, setAthleteToDelete] = useState<Athlete | null>(null);
   const [listToDelete, setListToDelete] = useState<any | null>(null);
   const [selectedAthlete, setSelectedAthlete] = useState<Athlete | null>(null);
+  const detailAvatarUrl = useMemo(() => {
+    if (!selectedAthlete) return AVATAR_MALE;
+    const systemProfile = vscSystemAthletes.find(
+      a => (a.id && selectedAthlete.id && a.id.trim().toLowerCase() === selectedAthlete.id.trim().toLowerCase()) ||
+           (a.name && selectedAthlete.name && a.name.trim().toLowerCase() === selectedAthlete.name.trim().toLowerCase())
+    );
+    return systemProfile?.avatarUrl || selectedAthlete.avatarUrl || AVATAR_MALE;
+  }, [selectedAthlete, vscSystemAthletes]);
   const [isEditing, setIsEditing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -1221,6 +1229,11 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
             filteredAthletes.map((ath, idx) => {
               const isActive = selectedAthlete && selectedAthlete.id === ath.id;
               const isSysAth = (window as any).isVscSystemAthlete?.(ath.id) || (window as any).isVscSystemAthlete?.(ath.name);
+              const systemProfile = vscSystemAthletes.find(
+                a => (a.id && ath.id && a.id.trim().toLowerCase() === ath.id.trim().toLowerCase()) ||
+                     (a.name && ath.name && a.name.trim().toLowerCase() === ath.name.trim().toLowerCase())
+              );
+              const effectiveAvatarUrl = systemProfile?.avatarUrl || ath.avatarUrl || AVATAR_MALE;
               const handleViewProfile = (e: React.MouseEvent) => {
                 if (isSysAth) {
                   e.stopPropagation();
@@ -1243,7 +1256,7 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
 
                     <div className="relative shrink-0">
                       <img 
-                        src={ath.avatarUrl || AVATAR_MALE} 
+                        src={effectiveAvatarUrl} 
                         alt={ath.name}
                         referrerPolicy="no-referrer"
                         className={`w-10 h-10 rounded-full object-cover border border-slate-200 aspect-square shrink-0 ${isSysAth ? "cursor-pointer hover:scale-105 transition-transform" : ""}`}
@@ -2805,16 +2818,16 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
         ) : selectedAthlete ? (
           /* Profile Detail View card - clean elegant display */
           <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col gap-6">
-            
-            {/* Core Header with Controls */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 gap-3">
-              <div className="flex items-center gap-4">
-                <img 
-                  src={selectedAthlete.avatarUrl || AVATAR_MALE} 
-                  alt={selectedAthlete.name} 
-                  referrerPolicy="no-referrer"
-                  className="w-16 h-16 rounded-full object-cover border-2 border-indigo-100 shadow-md shrink-0"
-                />
+              
+              {/* Core Header with Controls */}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 gap-3">
+                <div className="flex items-center gap-4">
+                  <img 
+                    src={detailAvatarUrl} 
+                    alt={selectedAthlete.name} 
+                    referrerPolicy="no-referrer"
+                    className="w-16 h-16 rounded-full object-cover border-2 border-indigo-100 shadow-md shrink-0"
+                  />
 
                 <div>
                   <div className="flex flex-wrap items-center gap-2">

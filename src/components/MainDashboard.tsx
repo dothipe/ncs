@@ -61,6 +61,16 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
   systemAthletes
 }) => {
   const { language, t } = useLanguage();
+  
+  const getEffectiveAvatar = (ath: Athlete | null): string => {
+    if (!ath) return AVATAR_MALE;
+    const systemProfile = systemAthletes?.find(
+      a => (a.id && ath.id && a.id.trim().toLowerCase() === ath.id.trim().toLowerCase()) ||
+           (a.name && ath.name && a.name.trim().toLowerCase() === ath.name.trim().toLowerCase())
+    );
+    return systemProfile?.avatarUrl || ath.avatarUrl || AVATAR_MALE;
+  };
+
   // Resolve active source variables based on tournamentType
   const activeAthletesList = useMemo(() => {
     if (tournamentType === "team") {
@@ -2287,7 +2297,7 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
                   >
                     <div className="relative">
                       <img
-                        src={athlete.avatarUrl || AVATAR_MALE}
+                        src={getEffectiveAvatar(athlete)}
                         alt={athlete.name}
                         className={`w-12 h-12 rounded-full object-cover border-2 border-slate-300 shadow-sm bg-slate-100 aspect-square shrink-0 ${isSysAth ? "group-hover:scale-105 transition-transform" : ""}`}
                         referrerPolicy="no-referrer"
@@ -2339,7 +2349,7 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
                     <div className="relative">
                       <div className="absolute -top-3 left-1/2 -translate-x-1/2 text-amber-500 drop-shadow-sm scale-110">👑</div>
                       <img
-                        src={athlete.avatarUrl || AVATAR_MALE}
+                        src={getEffectiveAvatar(athlete)}
                         alt={athlete.name}
                         className={`w-16 h-16 rounded-full object-cover border-4 border-amber-400 shadow-md bg-slate-100 aspect-square shrink-0 ${isSysAth ? "group-hover:scale-105 transition-transform" : ""}`}
                         referrerPolicy="no-referrer"
@@ -2392,7 +2402,7 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
                   >
                     <div className="relative">
                       <img
-                        src={athlete.avatarUrl || AVATAR_MALE}
+                        src={getEffectiveAvatar(athlete)}
                         alt={athlete.name}
                         className={`w-11 h-11 rounded-full object-cover border-2 border-amber-700/50 shadow-sm bg-slate-100 aspect-square shrink-0 ${isSysAth ? "group-hover:scale-105 transition-transform" : ""}`}
                         referrerPolicy="no-referrer"
@@ -2649,7 +2659,7 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
                       {/* Avatar */}
                       <div className="relative shrink-0">
                         <img
-                          src={athlete.avatarUrl || AVATAR_MALE}
+                          src={getEffectiveAvatar(athlete)}
                           alt={athlete.name}
                           className={`w-9 h-9 rounded-full object-cover border border-slate-200 aspect-square shrink-0 ${isSysAth ? "group-hover:scale-105 transition-transform" : ""}`}
                           referrerPolicy="no-referrer"

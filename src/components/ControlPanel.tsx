@@ -3045,7 +3045,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                         return (
                           <div
                             key={`ctrl-created-${tour.id}-${idx}`}
-                            className={`relative bg-white dark:bg-slate-900 rounded-3xl border p-5 flex flex-col gap-4 shadow-xs transition-all ${
+                            onClick={() => onSelectTournament(tour.id, tour)}
+                            className={`relative bg-white dark:bg-slate-900 rounded-3xl border p-5 flex flex-col gap-4 shadow-xs hover:shadow-md hover:scale-[1.01] cursor-pointer transition-all ${
                               isActive 
                                 ? "border-indigo-500 ring-2 ring-indigo-500/15" 
                                 : "border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
@@ -3082,7 +3083,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                             {/* Action Buttons */}
                             <div className="flex gap-2 justify-end mt-1 border-t border-slate-100 dark:border-slate-800/40 pt-3">
                               <button
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   setShowConfirmDeleteId(tour.id);
                                 }}
                                 className="p-2 text-rose-500 hover:text-white hover:bg-rose-500 border border-rose-200 hover:border-transparent dark:border-rose-950 dark:hover:bg-rose-900 rounded-xl transition-all cursor-pointer text-xs flex items-center gap-1"
@@ -3092,7 +3094,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                               </button>
 
                               <button
-                                onClick={() => handleOpenCopyModal(tour)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenCopyModal(tour);
+                                }}
                                 className="px-3 py-1.5 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition-all active:scale-95"
                                 title="Copy giải thành giải mới (Xóa hết điểm số cũ, giữ nguyên cấu hình)"
                               >
@@ -3100,7 +3105,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                               </button>
                               
                               <button
-                                onClick={() => onSelectTournament(tour.id, tour)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSelectTournament(tour.id, tour);
+                                }}
                                 className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition-all active:scale-95"
                               >
                                 Quản lý giải đấu <ArrowRight className="w-3.5 h-3.5" />
@@ -3142,7 +3150,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                         return (
                           <div
                             key={`ctrl-ref-${tour.id}-${idx}`}
-                            className={`p-5 rounded-3xl border bg-white dark:bg-slate-900 flex flex-col gap-4 shadow-xs transition-all ${
+                            onClick={() => onSelectTournament(tour.id, tour)}
+                            className={`p-5 rounded-3xl border bg-white dark:bg-slate-900 flex flex-col gap-4 shadow-xs hover:shadow-md hover:scale-[1.01] cursor-pointer transition-all ${
                               isActive 
                                 ? "border-amber-500 ring-2 ring-amber-500/15" 
                                 : "border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
@@ -3176,7 +3185,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
                             <div className="flex justify-end mt-1 border-t border-slate-100 dark:border-slate-800/40 pt-3">
                               <button
-                                onClick={() => onSelectTournament(tour.id, tour)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSelectTournament(tour.id, tour);
+                                }}
                                 className="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
                               >
                                 <Award className="w-4 h-4" /> Vào ghi điểm / giám sát

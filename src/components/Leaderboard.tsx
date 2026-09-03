@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Athlete, DistanceConfig } from "../types";
 import { Trophy, Medal, Award, Search, ArrowUpDown, Building, Info } from "lucide-react";
 import { AVATAR_MALE } from "./AthleteManagement";
 import { calculateRounds } from "../utils/qualification";
+import { subscribeToVscSystemAthletes } from "../lib/firebaseService";
 
 interface LeaderboardProps {
   athletes: Athlete[];
@@ -36,6 +37,21 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
   const [showTopXOnly, setShowTopXOnly] = useState(false);
   const [topXLimit, setTopXLimit] = useState<number>(10);
   const [selectedRoundTab, setSelectedRoundTab] = useState<number | "all">("all");
+
+  const [vscSystemAthletes, setVscSystemAthletes] = useState<Athlete[]>([]);
+
+  useEffect(() => {
+    try {
+      const unsub = subscribeToVscSystemAthletes((list) => {
+        if (list) {
+          setVscSystemAthletes(list);
+        }
+      });
+      return unsub;
+    } catch (e) {
+      console.warn("Could not subscribe to system athletes inside Leaderboard:", e);
+    }
+  }, []);
 
   const isDirectMode = shotsCount === 1;
 
@@ -1738,6 +1754,11 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                     <td className={`${cellPaddingClass} ${individualCellBorderClass}`}>
                       {(() => {
                         const isSysAth = (window as any).isVscSystemAthlete?.(athlete.id) || (window as any).isVscSystemAthlete?.(athlete.name);
+                        const systemProfile = vscSystemAthletes.find(
+                          a => (a.id && athlete.id && a.id.trim().toLowerCase() === athlete.id.trim().toLowerCase()) ||
+                               (a.name && athlete.name && a.name.trim().toLowerCase() === athlete.name.trim().toLowerCase())
+                        );
+                        const effectiveAvatarUrl = systemProfile?.avatarUrl || athlete.avatarUrl || AVATAR_MALE;
                         const handleViewProfile = () => {
                           if (isSysAth) {
                             (window as any).triggerViewAthleteProfile?.(athlete.id || athlete.name);
@@ -1750,7 +1771,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                           >
                             <div className="relative shrink-0">
                               <img 
-                                src={athlete.avatarUrl || AVATAR_MALE} 
+                                src={effectiveAvatarUrl} 
                                 alt={athlete.name} 
                                 className={`rounded-full object-cover border shadow-sm shrink-0 aspect-square ${
                                   isTop1 

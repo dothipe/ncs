@@ -1392,7 +1392,8 @@ export const OnlineTournamentsPanel: React.FC<OnlineTournamentsPanelProps> = ({
     return (
       <div 
         key={cardKey || tour.id}
-        className={`relative bg-white dark:bg-slate-900 rounded-3xl border transition-all p-4 flex flex-col justify-between h-[460px] shadow-sm hover:shadow-md overflow-hidden ${
+        onClick={() => handleSelectAndIncrementViews(tour.id, tour)}
+        className={`relative bg-white dark:bg-slate-900 rounded-3xl border transition-all p-4 flex flex-col justify-between h-[460px] shadow-sm hover:shadow-lg hover:scale-[1.01] cursor-pointer overflow-hidden ${
           isActive 
             ? "border-indigo-500 dark:border-indigo-500 ring-2 ring-indigo-500/10 dark:ring-indigo-500/20" 
             : "border-slate-200/75 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700"
@@ -1526,7 +1527,7 @@ export const OnlineTournamentsPanel: React.FC<OnlineTournamentsPanelProps> = ({
           {canManageOrDelete && (
             <button
               title={language === "en" ? "Delete tournament from Cloud" : "Xóa giải khỏi Cloud"}
-              onClick={() => setShowConfirmDeleteId(tour.id)}
+              onClick={(e) => { e.stopPropagation(); setShowConfirmDeleteId(tour.id); }}
               className="p-1.5 border border-slate-200 dark:border-slate-800 text-rose-500 hover:text-white hover:bg-rose-600 rounded-lg transition-all cursor-pointer hover:border-transparent shrink-0"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -1536,7 +1537,7 @@ export const OnlineTournamentsPanel: React.FC<OnlineTournamentsPanelProps> = ({
           {currentUser && (
             <button
               title={language === "en" ? "Copy tournament to new" : "Sao chép thành giải mới"}
-              onClick={() => handleOpenCopyModal(tour)}
+              onClick={(e) => { e.stopPropagation(); handleOpenCopyModal(tour); }}
               className="p-1.5 border border-slate-200 dark:border-slate-800 text-blue-500 hover:text-white hover:bg-blue-600 rounded-lg transition-all cursor-pointer hover:border-transparent shrink-0"
             >
               <Copy className="w-3.5 h-3.5" />
@@ -1556,7 +1557,7 @@ export const OnlineTournamentsPanel: React.FC<OnlineTournamentsPanelProps> = ({
           </button>
 
           <button
-            onClick={() => handleSelectAndIncrementViews(tour.id, tour)}
+            onClick={(e) => { e.stopPropagation(); handleSelectAndIncrementViews(tour.id, tour); }}
             className={`flex-1 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-95 shadow-xs shrink-0 ${
               isActive 
                 ? "bg-indigo-50 text-indigo-600 border border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-400 dark:border-indigo-800"
@@ -1570,7 +1571,10 @@ export const OnlineTournamentsPanel: React.FC<OnlineTournamentsPanelProps> = ({
 
         {/* Delete Confirmation Overlay inside card */}
         {showConfirmDeleteId === tour.id && (
-          <div className="absolute inset-0 bg-slate-900/95 backdrop-blur-xs z-30 flex flex-col justify-center items-center p-4 text-center font-sans">
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="absolute inset-0 bg-slate-900/95 backdrop-blur-xs z-30 flex flex-col justify-center items-center p-4 text-center font-sans"
+          >
             <ShieldAlert className="w-10 h-10 text-rose-500 mb-2 animate-bounce" />
             <h4 className="text-xs font-black text-white uppercase tracking-wide">
               {language === "en" ? "Delete Cloud Sync?" : "Xóa giải đấu online?"}
