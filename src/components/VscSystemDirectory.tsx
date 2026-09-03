@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useLanguage } from "../context/LanguageContext";
 import { showToast } from "../utils/toast";
@@ -197,21 +197,24 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
   }, []);
 
   // Deep link to selected athlete if athleteId in URL
+  const hasCheckedDeepLinkRef = useRef(false);
   useEffect(() => {
-    if (systemAthletes.length > 0) {
+    if (!loading && !hasCheckedDeepLinkRef.current) {
       const params = new URLSearchParams(window.location.search);
       const athleteId = params.get("athleteId");
-      if (athleteId) {
+      if (athleteId && systemAthletes.length > 0) {
         const found = systemAthletes.find(a => a.id === athleteId);
         if (found) {
           setSelectedAthlete(found);
         }
       }
+      hasCheckedDeepLinkRef.current = true;
     }
-  }, [systemAthletes]);
+  }, [systemAthletes, loading]);
 
   // Sync selectedAthlete state back to the URL search parameter
   useEffect(() => {
+    if (!hasCheckedDeepLinkRef.current) return;
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
       const currentAthleteId = url.searchParams.get("athleteId");

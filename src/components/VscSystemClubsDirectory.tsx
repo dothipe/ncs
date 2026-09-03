@@ -615,22 +615,25 @@ export const VscSystemClubsDirectory: React.FC<VscSystemClubsDirectoryProps> = (
   }, [selectedClub, externalSelectedClub]);
 
   // Deep link to selected club if clubId in URL
+  const hasCheckedDeepLinkRef = useRef(false);
   useEffect(() => {
-    if (clubs.length > 0) {
+    if (!loading && !hasCheckedDeepLinkRef.current) {
       const params = new URLSearchParams(window.location.search);
       const clubId = params.get("clubId");
-      if (clubId) {
+      if (clubId && clubs.length > 0) {
         const found = clubs.find(c => c.id === clubId);
         if (found) {
           setSelectedClub(found);
           setDrawerTab("overview");
         }
       }
+      hasCheckedDeepLinkRef.current = true;
     }
-  }, [clubs]);
+  }, [clubs, loading]);
 
   // Sync selectedClub state back to the URL search parameter
   useEffect(() => {
+    if (!hasCheckedDeepLinkRef.current) return;
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
       const currentClubId = url.searchParams.get("clubId");
