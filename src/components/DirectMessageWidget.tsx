@@ -281,7 +281,7 @@ export const DirectMessageWidget: React.FC<DirectMessageWidgetProps> = ({
   }, 0);
 
   // Filtered users for manual directory search
-  const filteredUsers = userDirectory.filter(u => {
+  const filteredUsers = searchQuery.trim() === "" ? [] : userDirectory.filter(u => {
     const nameStr = (u.displayName || "").toLowerCase();
     const emailStr = (u.email || "").toLowerCase();
     
@@ -527,7 +527,19 @@ export const DirectMessageWidget: React.FC<DirectMessageWidgetProps> = ({
 
                     {/* Directory list */}
                     <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-                      {filteredUsers.length === 0 ? (
+                      {searchQuery.trim() === "" ? (
+                        <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-450 dark:text-slate-500">
+                          <Search className="w-8 h-8 text-slate-300 dark:text-slate-750 mb-2 animate-pulse" />
+                          <span className="text-xs font-bold block mb-1 text-slate-600 dark:text-slate-400">
+                            {language === "en" ? "Search Slingshot Shooter" : "Tìm kiếm Xạ thủ Ná cao su"}
+                          </span>
+                          <span className="text-[10px] max-w-[240px] mx-auto text-slate-450 dark:text-slate-500 leading-relaxed">
+                            {language === "en" 
+                              ? "Enter Athlete ID (e.g. VSC-0042), Name, or Account Email to search."
+                              : "Nhập Mã số VĐV (Ví dụ: VSC-0042), Tên, hoặc Email tài khoản để bắt đầu tìm kiếm."}
+                          </span>
+                        </div>
+                      ) : filteredUsers.length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
                           <Users className="w-8 h-8 text-slate-300 mb-2" />
                           <span className="text-xs font-bold block mb-1">
