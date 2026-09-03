@@ -2518,6 +2518,14 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
             onClick={() => {
               if (!currentUser) {
                 onOpenAuthModal();
+              } else if (!loggedInAthlete) {
+                alert(language === "en"
+                  ? "You must register a VSC System Athlete profile first to host a PK challenge!"
+                  : "Bạn cần đăng ký Hồ sơ VĐV Hệ thống VSC trước khi đăng kèo đấu!"
+                );
+                if (typeof (window as any).triggerRegisterAthleteProfile === "function") {
+                  (window as any).triggerRegisterAthleteProfile();
+                }
               } else {
                 setFormOpponentSearch("");
                 setFormRefereeSearch("");

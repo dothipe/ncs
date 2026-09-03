@@ -174,6 +174,7 @@ export async function createUserProfile(uid: string, email: string, displayName:
         displayName: displayName || email.split("@")[0],
         photoURL,
         role: isFirstAdmin ? "admin" : "user",
+        vscPoints: 0,
         createdAt: serverTimestamp()
       }).catch(err => {
         handleFirestoreError(err, OperationType.WRITE, `users/${uid}`);
@@ -1204,10 +1205,50 @@ export async function updateUserProfileAdmin(uid: string, profileData: {
   banUntil?: number | null;
   wasRestrictedBefore?: boolean;
   banReason?: string;
+  vscPoints?: number;
 }) {
   try {
     const userRef = doc(db, "users", uid);
+    
+    // Fetch user before update to know their current email and displayName for matching
+    const userSnap = await getDoc(userRef);
+    const userData = userSnap.exists() ? userSnap.data() : null;
+    const email = userData?.email;
+    const displayName = userData?.displayName;
+
+    // Perform the main user document update
     await updateDoc(userRef, sanitizeFirestoreData(profileData));
+
+    // If vscPoints was supplied, synchronize with any associated athlete profile
+    if (profileData.vscPoints !== undefined) {
+      const athletesCol = collection(db, "vsc_system_athletes");
+      const snapshot = await getDocs(athletesCol);
+      
+      const cleanEmail = email?.trim().toLowerCase();
+      const cleanDisplayName = displayName?.trim().toLowerCase();
+      const cleanNewName = profileData.displayName?.trim().toLowerCase();
+      const updatePromises: Promise<void>[] = [];
+
+      snapshot.forEach((docSnap) => {
+        if (docSnap.id === "global") return;
+        const athData = docSnap.data() as Athlete;
+
+        const isMatch = 
+          (docSnap.id.trim().toLowerCase() === uid.trim().toLowerCase()) ||
+          (cleanEmail && athData.email && athData.email.trim().toLowerCase() === cleanEmail) ||
+          (cleanDisplayName && athData.name && athData.name.trim().toLowerCase() === cleanDisplayName) ||
+          (cleanNewName && athData.name && athData.name.trim().toLowerCase() === cleanNewName);
+
+        if (isMatch) {
+          const athleteDocRef = doc(db, "vsc_system_athletes", docSnap.id);
+          updatePromises.push(updateDoc(athleteDocRef, { vscPoints: profileData.vscPoints }));
+        }
+      });
+
+      if (updatePromises.length > 0) {
+        await Promise.all(updatePromises);
+      }
+    }
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `users/${uid}`);
   }

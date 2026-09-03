@@ -24,6 +24,7 @@ import {
   Shield,
   Users,
   User,
+  Award,
   Globe,
   X,
   TrendingUp,
@@ -59,6 +60,7 @@ import { auth, db, doc, onSnapshot } from "./firebase";
 import { subscribeToTournamentDoc, updateOnlineTournament, TournamentData, subscribeToTournamentsList, createOnlineTournament, subscribeToVscSystemClubs, saveVscSystemClub, deleteVscSystemClub, getFriendlyErrorMessage, subscribeToVscSystemAthletes } from "./lib/firebaseService";
 import { AthleteProfileModal } from "./components/AthleteProfileModal";
 import { AuthModal } from "./components/AuthModal";
+import { VscProfileRegistrationModal } from "./components/VscProfileRegistrationModal";
 import { OnlineTournamentsPanel } from "./components/OnlineTournamentsPanel";
 import { ControlPanel } from "./components/ControlPanel";
 import { MemberManagementPanel } from "./components/MemberManagementPanel";
@@ -302,6 +304,14 @@ export default function App() {
   const [vscSystemAthletes, setVscSystemAthletes] = useState<Athlete[]>([]);
   const [globalAthleteProfile, setGlobalAthleteProfile] = useState<Athlete | null>(null);
   const [globalSelectedClub, setGlobalSelectedClub] = useState<any | null>(null);
+  const [isRegModalOpen, setIsRegModalOpen] = useState(false);
+
+  const hasVscProfile = useMemo(() => {
+    if (!currentUser || !currentUser.email) return true; // Default to true if not logged in so guests aren't prompted
+    return vscSystemAthletes.some(
+      (a) => a.email && a.email.trim().toLowerCase() === currentUser.email.trim().toLowerCase()
+    );
+  }, [currentUser, vscSystemAthletes]);
 
   const [isShareCopied, setIsShareCopied] = useState(false);
 
@@ -1394,6 +1404,9 @@ export default function App() {
         setGlobalAthleteProfile(match);
       }
     };
+    (window as any).triggerRegisterAthleteProfile = () => {
+      setIsRegModalOpen(true);
+    };
     (window as any).isVscSystemAthlete = (athleteIdOrName: string) => {
       if (!athleteIdOrName) return false;
       const lower = athleteIdOrName.trim().toLowerCase();
@@ -1411,10 +1424,27 @@ export default function App() {
     };
     return () => {
       delete (window as any).triggerViewAthleteProfile;
+      delete (window as any).triggerRegisterAthleteProfile;
       delete (window as any).isVscSystemAthlete;
       delete (window as any).getVscSystemAthleteAvatar;
     };
   }, [vscSystemAthletes]);
+
+  // Automatic onboarding registration trigger (Once per session)
+  useEffect(() => {
+    if (currentUser && currentUser.email && vscSystemAthletes.length > 0) {
+      const hasProfile = vscSystemAthletes.some(
+        (a) => a.email && a.email.trim().toLowerCase() === currentUser.email.trim().toLowerCase()
+      );
+      if (!hasProfile) {
+        const isShownInSession = sessionStorage.getItem("vsc_onboarding_shown");
+        if (!isShownInSession) {
+          setIsRegModalOpen(true);
+          sessionStorage.setItem("vsc_onboarding_shown", "true");
+        }
+      }
+    }
+  }, [currentUser, vscSystemAthletes]);
 
   // Subscribe and publish real-time online document shifts using custom hook
   useTournamentDatabase({
@@ -3560,6 +3590,33 @@ export default function App() {
       {/* Main Core Container */}
       <main className="max-w-7xl mx-auto px-4 mt-6 flex flex-col gap-6" id="app-main">
 
+        {/* VSC Athlete Profile Reminder Banner */}
+        {currentUser && !hasVscProfile && ["home", "dashboard", "pk_lobby", "vsc_system_directory"].includes(activeTab) && (
+          <div className="bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-amber-500/15 border border-amber-500/20 rounded-2xl p-4.5 flex flex-col md:flex-row items-center justify-between gap-4 text-left animate-fadeIn shadow-xs" id="vsc-profile-reminder-banner">
+            <div className="flex items-center gap-3.5">
+              <div className="p-2.5 bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl shrink-0">
+                <Award className="w-6 h-6 animate-pulse" />
+              </div>
+              <div>
+                <h4 className="text-sm font-black text-slate-800 dark:text-white flex items-center gap-1.5 uppercase tracking-wide">
+                  {language === "en" ? "VSC Athlete Profile Required" : "Yêu cầu đăng ký Hồ Sơ VĐV Hệ Thống VSC! 🎯"}
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                  {language === "en"
+                    ? "Activate your initial 100 VSC points, build stats history, log ELO ranks and unlock custom PK challenges."
+                    : "Đăng ký ngay để nhận miễn phí 100 Điểm VSC đặc quyền khởi nghiệp, tích lũy quân hàm ELO quốc gia và mở khóa sảnh thách đấu PK."}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsRegModalOpen(true)}
+              className="w-full md:w-auto bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-600 hover:to-yellow-500 text-slate-900 font-extrabold text-xs px-6 py-3 rounded-xl transition-all cursor-pointer shadow-md hover:scale-105 active:scale-95 whitespace-nowrap uppercase tracking-wider text-center"
+            >
+              {language === "en" ? "Register Now (30s)" : "Đăng ký ngay (30s)"}
+            </button>
+          </div>
+        )}
+
         {/* Athlete Search query on scoring tabs */}
         {(activeTab === "scoring" || activeTab === "input_scores") && (
           <div className="flex justify-end mb-2 animate-fadeIn" id="athlete-search-context-container">
@@ -4145,6 +4202,14 @@ export default function App() {
       />
 
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+
+      <VscProfileRegistrationModal
+        isOpen={isRegModalOpen}
+        onClose={() => setIsRegModalOpen(false)}
+        currentUser={currentUser}
+        vscSystemAthletes={vscSystemAthletes}
+        language={language}
+      />
 
       <AthleteProfileModal
         athlete={globalAthleteProfile}

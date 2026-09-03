@@ -163,24 +163,24 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
       found = localSystemAthletes.find(a => a.name && a.name.trim().toLowerCase() === cleanName);
     }
 
-    if (found) {
-      setSelectedProfileAthlete(found);
-    } else {
-      setSelectedProfileAthlete({
-        id: "TMP-" + Date.now(),
-        name: senderName,
-        email: senderEmail || "",
-        team: "",
-        avatarUrl: "",
-        status: "Thi đấu",
-        scores: {},
-        vscPoints: 100,
-        gender: "Nam"
-      } as Athlete);
-    }
-
     if (onViewAthleteProfile) {
       onViewAthleteProfile(senderName, senderEmail);
+    } else {
+      if (found) {
+        setSelectedProfileAthlete(found);
+      } else {
+        setSelectedProfileAthlete({
+          id: "TMP-" + Date.now(),
+          name: senderName,
+          email: senderEmail || "",
+          team: "",
+          avatarUrl: "",
+          status: "Thi đấu",
+          scores: {},
+          vscPoints: 0,
+          gender: "Nam"
+        } as Athlete);
+      }
     }
   };
 

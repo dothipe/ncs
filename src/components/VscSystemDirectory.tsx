@@ -125,7 +125,7 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
   const [formProvince, setFormProvince] = useState("");
   const [formAvatarUrl, setFormAvatarUrl] = useState(AVATAR_MALE);
   const [formEmail, setFormEmail] = useState("");
-  const [formVscPoints, setFormVscPoints] = useState<number>(100);
+  const [formVscPoints, setFormVscPoints] = useState<number>(0);
   const [formValidationError, setFormValidationError] = useState("");
   const [isCompressingAvatar, setIsCompressingAvatar] = useState(false);
 

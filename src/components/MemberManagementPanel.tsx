@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { subscribeToAllUsers, updateUserProfileAdmin, deleteUserProfileAdmin } from "../lib/firebaseService";
+import { createPortal } from "react-dom";
+import { subscribeToAllUsers, updateUserProfileAdmin, deleteUserProfileAdmin, subscribeToVscSystemAthletes } from "../lib/firebaseService";
 import { Users, Search, Edit2, Shield, Mail, Award, X, Check, Eye, Trash2, AlertTriangle, Lock, Unlock, ShieldAlert } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
+import { Athlete } from "../types";
+import { AthleteProfileModal } from "./AthleteProfileModal";
 
 interface UserProfile {
   uid: string;
@@ -15,6 +18,7 @@ interface UserProfile {
   banUntil?: number;
   wasRestrictedBefore?: boolean;
   banReason?: string;
+  vscPoints?: number;
 }
 
 interface MemberManagementPanelProps {
@@ -27,9 +31,11 @@ export const MemberManagementPanel: React.FC<MemberManagementPanelProps> = ({
   language
 }) => {
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [systemAthletes, setSystemAthletes] = useState<Athlete[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [deletingUser, setDeletingUser] = useState<UserProfile | null>(null);
+  const [selectedProfileAthlete, setSelectedProfileAthlete] = useState<Athlete | null>(null);
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
@@ -41,13 +47,64 @@ export const MemberManagementPanel: React.FC<MemberManagementPanelProps> = ({
   const [editRole, setEditRole] = useState("");
   const [editIsBanned, setEditIsBanned] = useState(false);
   const [editBanUntil, setEditBanUntil] = useState<number>(0);
+  const [editVscPoints, setEditVscPoints] = useState<number>(0);
 
   useEffect(() => {
-    const unsubscribe = subscribeToAllUsers((userList) => {
+    const unsubscribeUsers = subscribeToAllUsers((userList) => {
       setUsers(userList);
     });
-    return () => unsubscribe();
+    const unsubscribeAthletes = subscribeToVscSystemAthletes((athleteList) => {
+      setSystemAthletes(athleteList);
+    });
+    return () => {
+      unsubscribeUsers();
+      unsubscribeAthletes();
+    };
   }, []);
+
+  const getEffectiveVscPoints = (user: UserProfile) => {
+    const userEmail = user.email?.trim().toLowerCase();
+    const userDisplayName = user.displayName?.trim().toLowerCase();
+    
+    const matchingAthlete = systemAthletes.find(ath => 
+      (ath.id && ath.id.trim().toLowerCase() === user.uid.trim().toLowerCase()) ||
+      (userEmail && ath.email && ath.email.trim().toLowerCase() === userEmail) ||
+      (userDisplayName && ath.name && ath.name.trim().toLowerCase() === userDisplayName)
+    );
+    
+    if (matchingAthlete) {
+      return matchingAthlete.vscPoints !== undefined ? matchingAthlete.vscPoints : 0;
+    }
+    
+    return user.vscPoints !== undefined ? user.vscPoints : 0;
+  };
+
+  const handleOpenProfile = (user: UserProfile) => {
+    const userEmail = user.email?.trim().toLowerCase();
+    const userDisplayName = user.displayName?.trim().toLowerCase();
+    
+    let foundAthlete = systemAthletes.find(ath => 
+      (ath.id && ath.id.trim().toLowerCase() === user.uid.trim().toLowerCase()) ||
+      (userEmail && ath.email && ath.email.trim().toLowerCase() === userEmail) ||
+      (userDisplayName && ath.name && ath.name.trim().toLowerCase() === userDisplayName)
+    );
+    
+    if (!foundAthlete) {
+      foundAthlete = {
+        id: user.uid,
+        name: user.displayName,
+        email: user.email || "",
+        avatarUrl: user.photoURL || "",
+        team: user.club || "",
+        vscPoints: user.vscPoints !== undefined ? user.vscPoints : 0,
+        status: "Thi đấu",
+        scores: {},
+        gender: "Nam"
+      } as Athlete;
+    }
+    
+    setSelectedProfileAthlete(foundAthlete);
+  };
 
   const handleStartEdit = (user: UserProfile) => {
     setEditingUser(user);
@@ -57,6 +114,8 @@ export const MemberManagementPanel: React.FC<MemberManagementPanelProps> = ({
     setEditRole(user.role || "user");
     setEditIsBanned(user.isBanned || false);
     setEditBanUntil(user.banUntil || 0);
+    // Dynamically retrieve the real-time VSC points from the system athlete or user profile
+    setEditVscPoints(getEffectiveVscPoints(user));
     setSuccessMsg("");
     setErrorMsg("");
   };
@@ -75,7 +134,8 @@ export const MemberManagementPanel: React.FC<MemberManagementPanelProps> = ({
         club: editClub.trim(),
         role: editRole,
         isBanned: editIsBanned,
-        banUntil: editBanUntil
+        banUntil: editBanUntil,
+        vscPoints: editVscPoints
       });
       setSuccessMsg(language === "en" ? "Updated member successfully!" : "Đã cập nhật thông tin thành viên thành công!");
       setTimeout(() => {
@@ -184,6 +244,7 @@ export const MemberManagementPanel: React.FC<MemberManagementPanelProps> = ({
               <th className="px-4 py-3.5">USER ID</th>
               <th className="px-4 py-3.5">{language === "en" ? "Club / Affiliation" : "Câu lạc bộ"}</th>
               <th className="px-4 py-3.5">{language === "en" ? "Role / Access" : "Quyền hạn"}</th>
+              <th className="px-4 py-3.5">{language === "en" ? "VSC Points" : "Điểm VSC"}</th>
               <th className="px-4 py-3.5">{language === "en" ? "Status" : "Trạng thái"}</th>
               <th className="px-4 py-3.5 text-center">{language === "en" ? "Actions" : "Hành động"}</th>
             </tr>
@@ -191,7 +252,7 @@ export const MemberManagementPanel: React.FC<MemberManagementPanelProps> = ({
           <tbody className="divide-y divide-gray-100 dark:divide-slate-850 font-sans">
             {filteredUsers.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-400 font-bold bg-white dark:bg-slate-900">
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-400 font-bold bg-white dark:bg-slate-900">
                   {language === "en" ? "No members found match your search criteria." : "Không tìm thấy thành viên nào phù hợp."}
                 </td>
               </tr>
@@ -208,15 +269,22 @@ export const MemberManagementPanel: React.FC<MemberManagementPanelProps> = ({
                           src={user.photoURL} 
                           alt={user.displayName}
                           referrerPolicy="no-referrer"
-                          className="w-10 h-10 rounded-full object-cover border border-gray-200 dark:border-slate-700 shrink-0 shadow-xs" 
+                          onClick={() => handleOpenProfile(user)}
+                          className="w-10 h-10 rounded-full object-cover border border-gray-200 dark:border-slate-700 shrink-0 shadow-xs cursor-pointer hover:scale-105 active:scale-95 transition-all" 
                         />
                       ) : (
-                        <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black shrink-0 uppercase text-sm border border-indigo-200 dark:border-indigo-900">
+                        <div 
+                          onClick={() => handleOpenProfile(user)}
+                          className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black shrink-0 uppercase text-sm border border-indigo-200 dark:border-indigo-900 cursor-pointer hover:scale-105 active:scale-95 transition-all"
+                        >
                           {user.displayName?.charAt(0) || "U"}
                         </div>
                       )}
                       <div>
-                        <div className="font-extrabold text-slate-900 dark:text-white text-sm">
+                        <div 
+                          onClick={() => handleOpenProfile(user)}
+                          className="font-extrabold text-slate-900 dark:text-white text-sm cursor-pointer hover:underline hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                        >
                           {user.displayName}
                         </div>
                         <div className="text-[10px] text-gray-500 flex items-center gap-1 mt-0.5 font-semibold">
@@ -254,6 +322,12 @@ export const MemberManagementPanel: React.FC<MemberManagementPanelProps> = ({
                         User
                       </span>
                     )}
+                  </td>
+                  {/* VSC Points column to display synchronized VSC Points */}
+                  <td className="px-4 py-3.5 font-bold">
+                    <span className="inline-flex items-center px-2.5 py-1 bg-amber-50 dark:bg-amber-955/20 text-amber-700 dark:text-amber-400 rounded-lg font-black border border-amber-100 dark:border-amber-900/30">
+                      ⚡ {getEffectiveVscPoints(user)}
+                    </span>
                   </td>
                   <td className="px-4 py-3.5">
                     {user.isBanned ? (
@@ -310,8 +384,8 @@ export const MemberManagementPanel: React.FC<MemberManagementPanelProps> = ({
         </table>
       </div>
 
-      {/* Edit Modal Dialog */}
-      {editingUser && (
+      {/* Edit Modal Dialog using createPortal for true Viewport Center */}
+      {editingUser && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center z-[10005] p-4 animate-fadeIn">
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-md w-full overflow-hidden flex flex-col relative text-left">
             {/* Modal Header */}
@@ -334,7 +408,7 @@ export const MemberManagementPanel: React.FC<MemberManagementPanelProps> = ({
             </div>
 
             {/* Modal Body */}
-            <form onSubmit={handleSaveEdit} className="p-6 space-y-4 font-sans">
+            <form onSubmit={handleSaveEdit} className="p-6 space-y-4 font-sans max-h-[80vh] overflow-y-auto">
               {/* Name */}
               <div>
                 <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">
@@ -391,6 +465,21 @@ export const MemberManagementPanel: React.FC<MemberManagementPanelProps> = ({
                   <option value="referee">Trọng tài (Referee)</option>
                   <option value="admin">Quản trị viên (Admin)</option>
                 </select>
+              </div>
+
+              {/* VSC Points Input Option */}
+              <div>
+                <label className="block text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-1">
+                  {language === "en" ? "VSC Points" : "Điểm đặc quyền VSC"}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="999999"
+                  value={editVscPoints}
+                  onChange={(e) => setEditVscPoints(Math.max(0, parseInt(e.target.value) || 0))}
+                  className="w-full px-3 py-2 bg-amber-50/30 dark:bg-slate-850 border border-amber-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-505 font-bold text-xs text-slate-900 dark:text-white"
+                />
               </div>
 
               {/* Account Status / Ban Settings */}
@@ -494,7 +583,8 @@ export const MemberManagementPanel: React.FC<MemberManagementPanelProps> = ({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Delete Confirmation Modal Dialog */}
@@ -574,6 +664,18 @@ export const MemberManagementPanel: React.FC<MemberManagementPanelProps> = ({
           </div>
         </div>
       )}
+
+      {/* Real-time Athlete Profile Details Modal */}
+      <AthleteProfileModal
+        isOpen={selectedProfileAthlete !== null}
+        onClose={() => setSelectedProfileAthlete(null)}
+        athlete={selectedProfileAthlete}
+        history={[]}
+        onlineTournaments={[]}
+        currentUser={currentUser}
+        isGlobalAdmin={true}
+        language={language}
+      />
     </div>
   );
 };
