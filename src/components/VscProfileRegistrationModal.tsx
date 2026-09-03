@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { X, Award, CheckCircle2, User, Phone, MapPin, Building, ShieldCheck, HelpCircle, ArrowRight, Upload, Sparkles, Loader2 } from "lucide-react";
+import { X, Award, CheckCircle2, User, Phone, MapPin, Building, ShieldCheck, HelpCircle, ArrowRight, Upload, Sparkles, Loader2, Trophy } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import { Athlete, SystemClub } from "../types";
 import { VIETNAM_PROVINCES } from "../utils/provinces";
@@ -63,8 +63,9 @@ export const VscProfileRegistrationModal: React.FC<VscProfileRegistrationModalPr
   vscSystemAthletes,
   language
 }) => {
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [clubs, setClubs] = useState<SystemClub[]>([]);
+  const [registeredId, setRegisteredId] = useState("");
 
   // Form states
   const [formName, setFormName] = useState("");
@@ -267,7 +268,8 @@ export const VscProfileRegistrationModal: React.FC<VscProfileRegistrationModalPr
       }
 
       setLoading(false);
-      onClose();
+      setRegisteredId(formId);
+      setStep(3); // Show success/welcome screen celebrate
     } catch (err: any) {
       console.error(err);
       setValidationError(
@@ -297,7 +299,7 @@ export const VscProfileRegistrationModal: React.FC<VscProfileRegistrationModalPr
                 {language === "en" ? "VSC National Athletes Registry" : "Hồ Sơ VĐV Quốc Gia VSC"}
               </h2>
               <p className="text-[10px] text-amber-600 dark:text-amber-400 font-extrabold uppercase tracking-wider mt-0.5">
-                {step === 1 ? (language === "en" ? "Step 1: Benefits" : "Bước 1: Quyền lợi xạ thủ") : (language === "en" ? "Step 2: Profile Form" : "Bước 2: Điền thông tin hồ sơ")}
+                {step === 1 ? (language === "en" ? "Step 1: Benefits" : "Bước 1: Quyền lợi xạ thủ") : step === 2 ? (language === "en" ? "Step 2: Profile Form" : "Bước 2: Điền thông tin hồ sơ") : (language === "en" ? "Registry Successful" : "Đăng ký thành công 🎉")}
               </p>
             </div>
           </div>
@@ -366,7 +368,7 @@ export const VscProfileRegistrationModal: React.FC<VscProfileRegistrationModalPr
                 * Toàn bộ quá trình tạo hồ sơ diễn ra hoàn toàn bảo mật và an toàn dưới hệ thống đám mây VSC Cloud.
               </div>
             </div>
-          ) : (
+          ) : step === 2 ? (
             <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* VSC ID (Readonly) */}
               <div className="md:col-span-2 bg-slate-50 dark:bg-slate-950/50 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-850 flex items-center justify-between">
@@ -533,6 +535,65 @@ export const VscProfileRegistrationModal: React.FC<VscProfileRegistrationModalPr
                 </div>
               </div>
             </form>
+          ) : (
+            <div className="text-center py-6 px-4 space-y-6 animate-fadeIn" id="vsc-profile-success-step">
+              <div className="mx-auto w-20 h-20 bg-gradient-to-tr from-amber-500 to-yellow-400 rounded-full flex items-center justify-center shadow-lg animate-bounce">
+                <Trophy className="w-10 h-10 text-slate-950 stroke-[2.5]" />
+              </div>
+              
+              <div className="space-y-2">
+                <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                  {language === "en" ? "Welcome, Shooter!" : "Chúc Mừng Tân Xạ Thủ! 🎉"}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
+                  {language === "en"
+                    ? "Your VSC National Athlete Profile has been successfully created and secured on the VSC Cloud network."
+                    : "Hồ sơ VĐV NCS Hệ thống VSC của bạn đã được khởi tạo thành công và bảo mật đồng bộ hoá đám mây."}
+                </p>
+              </div>
+
+              {/* Athlete Digital ID Badge Card */}
+              <div className="bg-gradient-to-b from-slate-50 to-slate-100/50 dark:from-slate-950/40 dark:to-slate-950/20 border border-slate-150 dark:border-slate-850 p-5 rounded-2xl text-left shadow-xs max-w-sm mx-auto space-y-4">
+                <div className="flex items-center gap-3.5 pb-3 border-b border-slate-100 dark:border-slate-850">
+                  <img
+                    src={formAvatarUrl || (formGender === "Nữ" ? AVATAR_FEMALE : AVATAR_MALE)}
+                    alt="VSC Avatar"
+                    className="w-12 h-12 rounded-full object-cover border border-indigo-500 shadow-sm"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div>
+                    <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-widest">{language === "en" ? "VSC Athlete ID" : "MÃ SỐ VĐV HỆ THỐNG"}</h4>
+                    <div className="text-base font-black text-indigo-600 dark:text-indigo-400">{registeredId || formId}</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-black tracking-wider">{language === "en" ? "Full Name" : "HỌ VÀ TÊN"}</span>
+                    <span className="font-extrabold text-slate-800 dark:text-slate-100">{formName}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-black tracking-wider">{language === "en" ? "Unit / Club" : "ĐƠN VỊ CLB"}</span>
+                    <span className="font-extrabold text-slate-800 dark:text-slate-100 truncate block">
+                      {clubs.find(c => c.id === formTeam)?.name || formTeam || (language === "en" ? "Independent" : "Tự do")}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-black tracking-wider">{language === "en" ? "Hometown" : "QUÊ QUÁN"}</span>
+                    <span className="font-extrabold text-slate-800 dark:text-slate-100 truncate block">{formHometown || formProvince}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-black tracking-wider">{language === "en" ? "VSC Points" : "ĐIỂM VSC ELO"}</span>
+                    <span className="font-extrabold text-amber-600 dark:text-amber-400 block">0 ELO (Tân Thủ)</span>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold uppercase tracking-wider flex items-center justify-center gap-1">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                {language === "en" ? "You are now eligible to host custom PK challenges!" : "Hồ sơ đã hoạt động, bạn có thể tham gia đấu PK ngay!"}
+              </p>
+            </div>
           )}
         </div>
 
@@ -556,7 +617,7 @@ export const VscProfileRegistrationModal: React.FC<VscProfileRegistrationModalPr
                 <ArrowRight className="w-4 h-4 stroke-[3]" />
               </button>
             </>
-          ) : (
+          ) : step === 2 ? (
             <>
               <button 
                 type="button"
@@ -584,6 +645,15 @@ export const VscProfileRegistrationModal: React.FC<VscProfileRegistrationModalPr
                 )}
               </button>
             </>
+          ) : (
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-extrabold text-xs rounded-xl shadow-md hover:scale-[1.01] active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider text-center"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>{language === "en" ? "Start Experiencing Now" : "Bắt đầu trải nghiệm ngay!"}</span>
+            </button>
           )}
         </div>
       </div>

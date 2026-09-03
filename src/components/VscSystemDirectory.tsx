@@ -808,7 +808,13 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
           {currentUser ? (
             !myLinkedProfile ? (
               <button
-                onClick={openCreateForm}
+                onClick={() => {
+                  if (typeof (window as any).triggerRegisterAthleteProfile === "function") {
+                    (window as any).triggerRegisterAthleteProfile();
+                  } else {
+                    openCreateForm();
+                  }
+                }}
                 className="bg-yellow-400 hover:bg-yellow-450 text-slate-900 font-extrabold text-xs px-5 py-3 rounded-xl shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer border border-yellow-500 uppercase tracking-wider"
               >
                 <Plus className="w-4 h-4 stroke-[3]" />
