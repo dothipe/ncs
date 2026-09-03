@@ -544,10 +544,10 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                 <table className="w-full text-left text-xs font-sans">
                   <thead className="bg-slate-50 dark:bg-slate-950 border-b border-gray-150 dark:border-slate-800 text-[10px] font-black text-slate-550 uppercase tracking-wider">
                     <tr>
+                      <th className="p-3">{isEng ? "SBD" : "SỐ THỨ TỰ BỐC THĂM (SBD)"}</th>
                       <th className="p-3">{isEng ? "ID" : "MÃ SỐ VĐV"}</th>
                       <th className="p-3">{isEng ? "Athlete Name" : "HỌ VÀ TÊN"}</th>
                       <th className="p-3">{isEng ? "Club/Team" : "CÂU LẠC BỘ"}</th>
-                      <th className="p-3">{isEng ? "Lucky Number (SBD)" : "SỐ THỨ TỰ BỐC THĂM (SBD)"}</th>
                       <th className="p-3 text-right">{isEng ? "Actions" : "HÀNH ĐỘNG"}</th>
                     </tr>
                   </thead>
@@ -559,71 +559,77 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                         </td>
                       </tr>
                     ) : (
-                      masterAthletes.map((athlete) => {
-                        const sbd = drawnNumbers[athlete.id] || null;
-                        const isEditing = editingSbdAthleteId === athlete.id;
+                      [...masterAthletes]
+                        .sort((a, b) => {
+                          const sbdA = drawnNumbers[a.id] || 999999;
+                          const sbdB = drawnNumbers[b.id] || 999999;
+                          return sbdA - sbdB;
+                        })
+                        .map((athlete) => {
+                          const sbd = drawnNumbers[athlete.id] || null;
+                          const isEditing = editingSbdAthleteId === athlete.id;
 
-                        return (
-                          <tr key={athlete.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                            <td className="p-3 font-mono text-[11px] font-bold text-slate-500">{athlete.id}</td>
-                            <td className="p-3 font-bold text-slate-800 dark:text-slate-200">{athlete.name}</td>
-                            <td className="p-3 text-[11px]">{athlete.team || "Tự do"}</td>
-                            <td className="p-3">
-                              {isEditing ? (
-                                <input
-                                  type="number"
-                                  value={manualSbdValue}
-                                  onChange={(e) => setManualSbdValue(e.target.value === "" ? "" : Number(e.target.value))}
-                                  placeholder={isEng ? "Enter SBD" : "Nhập SBD..."}
-                                  className="w-24 px-2 py-1 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded text-xs font-bold focus:outline-none focus:ring-1 focus:ring-rose-500 font-mono text-rose-600"
-                                />
-                              ) : sbd ? (
-                                <div className="flex items-center gap-1.5">
-                                  <span className="inline-flex items-center justify-center font-black font-mono px-2 py-0.5 rounded text-xs bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-150 dark:border-rose-900/30">
-                                    VSC-{String(sbd).padStart(4, "0")}
+                          return (
+                            <tr key={athlete.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                              <td className="p-3">
+                                {isEditing ? (
+                                  <input
+                                    type="number"
+                                    value={manualSbdValue}
+                                    onChange={(e) => setManualSbdValue(e.target.value === "" ? "" : Number(e.target.value))}
+                                    placeholder={isEng ? "Enter SBD" : "Nhập SBD..."}
+                                    className="w-24 px-2 py-1 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded text-xs font-bold focus:outline-none focus:ring-1 focus:ring-rose-500 font-mono text-rose-600"
+                                  />
+                                ) : sbd ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="inline-flex items-center justify-center font-black font-mono px-2 py-0.5 rounded text-xs bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-150 dark:border-rose-900/30">
+                                      {String(sbd).padStart(3, "0")}
+                                    </span>
+                                    <span className="text-[9px] text-emerald-500 font-semibold flex items-center gap-0.5">
+                                      <CheckCircle className="w-2.5 h-2.5" />
+                                      {isEng ? "Locked" : "Bản bốc"}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] bg-amber-50 dark:bg-amber-955/20 text-amber-600 dark:text-amber-400 border border-amber-150 dark:border-amber-900/30 px-2 py-0.5 rounded font-bold uppercase tracking-wider animate-pulse">
+                                    {isEng ? "Pending draw" : "Chờ bốc thăm"}
                                   </span>
-                                  <span className="text-[9px] text-emerald-500 font-semibold flex items-center gap-0.5">
-                                    <CheckCircle className="w-2.5 h-2.5" />
-                                    {isEng ? "Locked" : "Bản bốc"}
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className="text-[10px] bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-150 dark:border-amber-900/30 px-2 py-0.5 rounded font-bold uppercase tracking-wider animate-pulse">
-                                  {isEng ? "Pending draw" : "Chờ bốc thăm"}
-                                </span>
-                              )}
-                            </td>
-                            <td className="p-3 text-right">
-                              {isEditing ? (
-                                <div className="flex justify-end gap-1.5">
+                                )}
+                              </td>
+                              <td className="p-3 font-mono text-[11px] font-bold text-slate-500">{athlete.id}</td>
+                              <td className="p-3 font-bold text-slate-800 dark:text-slate-200">{athlete.name}</td>
+                              <td className="p-3 text-[11px]">{athlete.team || "Tự do"}</td>
+                              <td className="p-3 text-right">
+                                {isEditing ? (
+                                  <div className="flex justify-end gap-1.5">
+                                    <button
+                                      onClick={() => handleSaveManualSbd(athlete.id)}
+                                      className="bg-emerald-600 text-white font-bold px-2 py-1 rounded text-[10px] hover:bg-emerald-500 transition-colors cursor-pointer"
+                                    >
+                                      {isEng ? "Save" : "Lưu"}
+                                    </button>
+                                    <button
+                                      onClick={() => setEditingSbdAthleteId(null)}
+                                      className="bg-gray-200 text-gray-700 dark:bg-slate-800 dark:text-white font-bold px-2 py-1 rounded text-[10px] hover:bg-gray-300 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                                    >
+                                      {isEng ? "Cancel" : "Hủy"}
+                                    </button>
+                                  </div>
+                                ) : (
                                   <button
-                                    onClick={() => handleSaveManualSbd(athlete.id)}
-                                    className="bg-emerald-600 text-white font-bold px-2 py-1 rounded text-[10px] hover:bg-emerald-500 transition-colors cursor-pointer"
+                                    onClick={() => {
+                                      setEditingSbdAthleteId(athlete.id);
+                                      setManualSbdValue(sbd || "");
+                                    }}
+                                    className="text-[10px] font-extrabold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:underline cursor-pointer"
                                   >
-                                    {isEng ? "Save" : "Lưu"}
+                                    {isEng ? "Manual Adjust" : "Nhập Thủ Công / Sửa"}
                                   </button>
-                                  <button
-                                    onClick={() => setEditingSbdAthleteId(null)}
-                                    className="bg-gray-200 text-gray-700 dark:bg-slate-800 dark:text-white font-bold px-2 py-1 rounded text-[10px] hover:bg-gray-300 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-                                  >
-                                    {isEng ? "Cancel" : "Hủy"}
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => {
-                                    setEditingSbdAthleteId(athlete.id);
-                                    setManualSbdValue(sbd || "");
-                                  }}
-                                  className="text-[10px] font-extrabold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:underline cursor-pointer"
-                                >
-                                  {isEng ? "Manual Adjust" : "Nhập Thủ Công / Sửa"}
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
                     )}
                   </tbody>
                 </table>
@@ -903,8 +909,8 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                                 <td className="p-3 text-center font-mono font-black text-slate-400">{idx + 1}</td>
                                 <td className="p-3">
                                   {sbd ? (
-                                    <span className="font-mono font-bold text-xs text-rose-600 dark:text-rose-400">
-                                      VSC-{String(sbd).padStart(4, "0")}
+                                    <span className="font-mono font-bold text-xs text-rose-600 dark:text-rose-400 border border-rose-150 dark:border-rose-900/30 px-2 py-0.5 rounded bg-rose-50 dark:bg-rose-950/40">
+                                      {String(sbd).padStart(3, "0")}
                                     </span>
                                   ) : (
                                     <span className="text-[10px] text-gray-450 italic">Chờ bốc</span>

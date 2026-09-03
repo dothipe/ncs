@@ -50,6 +50,7 @@ import { TeamLeaderboard } from "./components/TeamLeaderboard";
 import { AthleteManagement } from "./components/AthleteManagement";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { TournamentExecutionHub } from "./components/TournamentExecutionHub";
+import { TournamentRegistrationView } from "./components/TournamentRegistrationView";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { MainDashboard } from "./components/MainDashboard";
 import { ExportModal } from "./components/ExportModal";
@@ -347,7 +348,7 @@ export default function App() {
 
         // 2. Active Tab
         const tabParam = params.get("tab");
-        const allowedTabs = ["home", "desktop", "dashboard", "scoring", "input_scores", "leaderboard", "teams", "athletes", "settings", "history", "control_panel", "qltv", "vsc_system_directory", "vsc_clubs_directory", "pk_lobby", "tournament_execution"];
+        const allowedTabs = ["home", "desktop", "dashboard", "scoring", "input_scores", "leaderboard", "teams", "athletes", "settings", "history", "control_panel", "qltv", "vsc_system_directory", "vsc_clubs_directory", "pk_lobby", "tournament_execution", "tournament_registration"];
         if (tabParam && allowedTabs.includes(tabParam)) {
           setActiveTab(tabParam as any);
         } else {
@@ -502,11 +503,11 @@ export default function App() {
     });
   }, [masterAthletes.length]);
 
-  const [activeTab, setActiveTab] = useState<"home" | "desktop" | "dashboard" | "scoring" | "input_scores" | "leaderboard" | "teams" | "athletes" | "settings" | "history" | "control_panel" | "qltv" | "vsc_system_directory" | "vsc_clubs_directory" | "pk_lobby" | "tournament_execution">(() => {
+  const [activeTab, setActiveTab] = useState<"home" | "desktop" | "dashboard" | "scoring" | "input_scores" | "leaderboard" | "teams" | "athletes" | "settings" | "history" | "control_panel" | "qltv" | "vsc_system_directory" | "vsc_clubs_directory" | "pk_lobby" | "tournament_execution" | "tournament_registration">(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get("tab");
-      const allowedTabs = ["home", "desktop", "dashboard", "scoring", "input_scores", "leaderboard", "teams", "athletes", "settings", "history", "control_panel", "qltv", "vsc_system_directory", "vsc_clubs_directory", "pk_lobby", "tournament_execution"];
+      const allowedTabs = ["home", "desktop", "dashboard", "scoring", "input_scores", "leaderboard", "teams", "athletes", "settings", "history", "control_panel", "qltv", "vsc_system_directory", "vsc_clubs_directory", "pk_lobby", "tournament_execution", "tournament_registration"];
       if (tabParam && allowedTabs.includes(tabParam)) {
         return tabParam as any;
       }
@@ -3812,6 +3813,18 @@ export default function App() {
               activeHistoryId={activeHistoryId}
               language={language as "vi" | "en"}
               userRole={userRole as "admin" | "referee" | "spectator"}
+            />
+          )}
+
+          {/* TAB 2C: ĐĂNG KÝ GIẢI ĐẤU (REGISTRATION & SBD DRAW) */}
+          {activeTab === "tournament_registration" && (
+            <TournamentRegistrationView
+              currentTournamentDoc={currentTournamentDoc}
+              activeHistoryId={activeHistoryId}
+              language={language as "vi" | "en"}
+              currentUser={currentUser}
+              onOpenAuthModal={() => setIsAuthModalOpen(true)}
+              onAddAuditLog={handleAddAuditLog}
             />
           )}
 

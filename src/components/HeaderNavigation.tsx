@@ -648,6 +648,18 @@ export function HeaderNavigation({
                 </div>
               )}
 
+              {activeHistoryId && currentTournamentDoc?.isNational && (
+                <button
+                  onClick={() => changeTab("tournament_registration")}
+                  className={`px-4.5 py-4 text-xs sm:text-sm font-extrabold uppercase tracking-wider transition-all hover:bg-black/15 flex items-center gap-1.5 border-none bg-transparent ${
+                    activeTab === "tournament_registration" ? "bg-black/25 text-yellow-400 border-b-4 border-yellow-400 font-black" : "text-white"
+                  }`}
+                >
+                  <ClipboardCheck className="w-4.5 h-4.5 text-emerald-400 animate-pulse" />
+                  {language === "en" ? "Register Tournament" : "Đăng Ký Giải"}
+                </button>
+              )}
+
               {activeHistoryId && currentTournamentDoc?.isNational && isExecutor && (
                 <button
                   onClick={() => changeTab("tournament_execution")}
