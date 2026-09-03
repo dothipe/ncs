@@ -78,7 +78,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       onClose();
     } catch (err: any) {
       console.error(err);
-      setError(language === "en" ? "Google login failed or was cancelled." : "Đăng nhập bằng Google không thành công hoặc bị huỷ.");
+      if (err.code === "auth/popup-closed-by-user") {
+        setError(language === "en" ? "Google sign-in popup was closed before completion." : "Cửa sổ đăng nhập Google đã đóng trước khi hoàn tất.");
+      } else if (err.code === "auth/cancelled-popup-request") {
+        setError(language === "en" ? "Sign-in request was cancelled by a new request." : "Yêu cầu đăng nhập đã bị huỷ bởi yêu cầu mới.");
+      } else {
+        setError(language === "en" ? "Google login failed or was cancelled." : "Đăng nhập bằng Google không thành công hoặc bị huỷ.");
+      }
     } finally {
       setLoading(false);
     }

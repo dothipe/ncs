@@ -245,7 +245,7 @@ export const VscProfileRegistrationModal: React.FC<VscProfileRegistrationModalPr
         email: currentUser.email.trim().toLowerCase(),
         status: "Thi đấu",
         scores: {},
-        vscPoints: 100 // Default initial points
+        vscPoints: 0 // Default initial points
       };
 
       const updatedList = [...vscSystemAthletes, newAthlete];
@@ -340,8 +340,8 @@ export const VscProfileRegistrationModal: React.FC<VscProfileRegistrationModalPr
                 <div className="flex items-start gap-3">
                   <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
                   <div>
-                    <h5 className="text-xs font-black text-slate-800 dark:text-slate-200">Được tặng sẵn 100 Điểm VSC khởi nghiệp</h5>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">Kích hoạt sẵn tài khoản với định mức ban đầu để nâng cao cấp bậc, nhận các huy hiệu đặc quyền VSC.</p>
+                    <h5 className="text-xs font-black text-slate-800 dark:text-slate-200">Kích hoạt thông số Quân hàm VSC</h5>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">Kích hoạt tài khoản chính thức để bắt đầu nâng cao cấp bậc, tích lũy điểm số và nhận các huy hiệu đặc quyền VSC.</p>
                   </div>
                 </div>
 

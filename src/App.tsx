@@ -3603,8 +3603,8 @@ export default function App() {
                 </h4>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
                   {language === "en"
-                    ? "Activate your initial 100 VSC points, build stats history, log ELO ranks and unlock custom PK challenges."
-                    : "Đăng ký ngay để nhận miễn phí 100 Điểm VSC đặc quyền khởi nghiệp, tích lũy quân hàm ELO quốc gia và mở khóa sảnh thách đấu PK."}
+                    ? "Activate your shooter profile, build stats history, log ELO ranks, and unlock custom PK challenges."
+                    : "Đăng ký ngay để kích hoạt thông số quân hàm ELO quốc gia, tích lũy thành tích và tham gia sảnh thách đấu PK."}
                 </p>
               </div>
             </div>
