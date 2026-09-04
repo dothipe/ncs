@@ -64,6 +64,13 @@ export interface MatchHistoryItem {
   endDate?: string;
   isAutoBackup?: boolean;
   clubs?: Club[];
+  forcedRefMode?: "individual" | "team" | "free" | "locked";
+  isDrawingOpen?: boolean;
+  drawnNumbers?: Record<string, number>;
+  teamDrawnNumbers?: Record<string, number>;
+  teamLaneLayoutType?: "sequential" | "parallel";
+  roundShootingOrders?: Record<string, string[]>;
+  roundShootingOrderCriteria?: Record<string, string>;
 }
 
 export interface StoredAthleteList {

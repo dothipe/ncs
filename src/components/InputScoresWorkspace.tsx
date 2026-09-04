@@ -160,6 +160,8 @@ export function InputScoresWorkspace({
     }
   }, [currentTournamentDoc?.forcedRefMode, competitionMode, setCompetitionMode]);
 
+  const isGlobalLocked = currentTournamentDoc?.forcedRefMode === "locked";
+
   const myEmailForInput = (currentUser?.email || "anonymous").toLowerCase().trim();
   const myCalledInputAthletes = currentInputAthletes.filter((a) => {
     const isOnlineTour = activeHistoryId?.startsWith("tour-");
@@ -581,6 +583,23 @@ export function InputScoresWorkspace({
   return (
     <div className="flex flex-col gap-6">
 
+      {/* Global Lock Banner */}
+      {isGlobalLocked && (
+        <div className="bg-rose-50 dark:bg-rose-950/20 border-2 border-rose-500 rounded-2xl p-4 flex items-center gap-3 text-rose-800 dark:text-rose-200 animate-pulse">
+          <Lock className="w-6 h-6 text-rose-600 shrink-0 animate-bounce" />
+          <div>
+            <span className="font-extrabold text-sm block uppercase tracking-wider">
+              {language === "en" ? "TOURNAMENT FULLY LOCKED" : "GIẢI ĐẤU ĐÃ KHÓA TOÀN BỘ (CHƯA ĐẤU)"}
+            </span>
+            <p className="text-xs mt-0.5 font-semibold">
+              {language === "en" 
+                ? "The executive committee has enabled the global lock. Score entries and calling are strictly suspended." 
+                : "Ban điều hành đã kích hoạt Khóa Toàn Bộ (Chưa Đấu). Mọi thao tác bốc số, gọi vận động viên và nhập điểm tạm thời bị đình chỉ."}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Environment Switcher for Combined Tournament */}
       {tournamentType === "combined" && (
         <div className="flex flex-col gap-1.5 mb-2">
@@ -698,6 +717,7 @@ export function InputScoresWorkspace({
                 setSaveStatus(null);
               }}
               userRole={userRole}
+              isGlobalLocked={isGlobalLocked}
             />
           );
         })}
@@ -709,8 +729,17 @@ export function InputScoresWorkspace({
       {/* The action buttons panel - PLUS & SAVE SIDE BY SIDE */}
       <div className="flex justify-center items-center gap-4 py-6">
         <button
-          onClick={() => setIsAddingAthleteToInputBoard(true)}
-          className="w-14 h-14 bg-white dark:bg-slate-900 hover:bg-indigo-50 border-2 border-indigo-500 text-indigo-500 rounded-xl flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 transition-all duration-150 cursor-pointer animate-pulse"
+          onClick={() => {
+            if (isGlobalLocked) {
+              alert(language === "en" ? "Tournament is fully locked by the executive committee." : "Giải đấu đang bị KHÓA TOÀN BỘ bởi Ban điều hành.");
+              return;
+            }
+            setIsAddingAthleteToInputBoard(true);
+          }}
+          disabled={isGlobalLocked}
+          className={`w-14 h-14 bg-white dark:bg-slate-900 border-2 border-indigo-500 text-indigo-500 rounded-xl flex items-center justify-center shadow-md hover:shadow-lg transition-all duration-150 cursor-pointer ${
+            isGlobalLocked ? "opacity-35 cursor-not-allowed border-gray-300 text-gray-400 hover:bg-white" : "hover:scale-105 animate-pulse"
+          }`}
           title="Thêm vận động viên vào bảng Nhập Điểm"
           id="add-athlete-to-input-board-btn"
         >
@@ -719,8 +748,14 @@ export function InputScoresWorkspace({
 
         {myCalledInputAthletes.length > 0 && (
           <button
-            onClick={handleSaveInputScoresToMain}
-            className="h-14 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl flex items-center justify-center gap-2 shadow-md hover:shadow-lg hover:scale-105 transition-all duration-150 cursor-pointer border border-emerald-700 text-sm uppercase tracking-wider font-semibold"
+            onClick={() => {
+              if (isGlobalLocked) return;
+              handleSaveInputScoresToMain();
+            }}
+            disabled={isGlobalLocked}
+            className={`h-14 px-6 bg-emerald-600 text-white font-extrabold rounded-xl flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all duration-150 border border-emerald-700 text-sm uppercase tracking-wider font-semibold ${
+              isGlobalLocked ? "opacity-35 cursor-not-allowed bg-gray-400 border-gray-400" : "hover:scale-105 cursor-pointer"
+            }`}
             title="Lưu điểm và tự động chuyển sang bảng Ghi Điểm"
             id="save-input-scores-btn"
           >

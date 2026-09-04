@@ -27,6 +27,7 @@ interface AthleteCardProps {
   lockedByRefereeEmail?: string;
   onSaveSingleAthlete?: (athlete: Athlete) => void;
   userRole?: string;
+  isGlobalLocked?: boolean;
 }
 
 export const AthleteCard: React.FC<AthleteCardProps> = ({
@@ -50,6 +51,7 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
   lockedByRefereeEmail = "",
   onSaveSingleAthlete,
   userRole = "spectator",
+  isGlobalLocked = false,
 }) => {
   const { language, t } = useLanguage();
   const [isEditing, setIsEditing] = useState(false);
@@ -551,6 +553,10 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
                               <td 
                                 key={shotIdx}
                                 onClick={() => {
+                                  if (isGlobalLocked) {
+                                    alert(language === "en" ? "Error: The tournament has been locked. Editing is disabled!" : "Lỗi: Giải đấu đã bị KHÓA TOÀN BỘ bởi Ban điều hành!");
+                                    return;
+                                  }
                                   if (isLockedByOtherReferee) {
                                     alert(language === "en" ? `Error: This athlete is being scored by another referee (${lockedByRefereeEmail}). You cannot edit!` : `Lỗi: Vận động viên này đang được ghi điểm bởi trọng tài khác (${lockedByRefereeEmail}). Bạn không được chỉnh sửa!`);
                                     return;
@@ -564,7 +570,7 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
                                   }
                                 }}
                                 className={`text-center p-1 transition-colors relative border-r border-gray-100 ${
-                                  isDistancePreExisting || isLockedByOtherReferee || (!isInputTab && !isScoringEditAuthorized)
+                                  isDistancePreExisting || isLockedByOtherReferee || isGlobalLocked || (!isInputTab && !isScoringEditAuthorized)
                                     ? "cursor-not-allowed bg-slate-100/40 dark:bg-slate-900/10" 
                                     : "cursor-pointer hover:bg-blue-50/75"
                                 } ${
@@ -616,7 +622,7 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
                       const roundHitCount = roundShots.filter(v => v === true).length;
                       const totalSoloScore = rounds.reduce((sum, r) => sum + r.filter(v => v === true).length, 0);
                       const isSoloLockedForDistance = inputSoloLockedMap[distance.id] !== false;
-                      const isLocked = isSoloLockedForDistance || (!isInputTab && !isScoringEditAuthorized) || isLockedByOtherReferee;
+                      const isLocked = isSoloLockedForDistance || (!isInputTab && !isScoringEditAuthorized) || isLockedByOtherReferee || isGlobalLocked;
 
                       return (
                         <tr 

@@ -95,10 +95,30 @@ export function ScoringWorkspace({
     }
   }, [currentTournamentDoc?.forcedRefMode, competitionMode, setCompetitionMode]);
 
-  const isScoringAuthorized = userRole === "admin" && isScoringEditAuthorized;
+  const isGlobalLocked = currentTournamentDoc?.forcedRefMode === "locked";
+  const isScoringAuthorized = userRole === "admin" && isScoringEditAuthorized && !isGlobalLocked;
 
   return (
     <div className="flex flex-col gap-6">
+
+      {/* Global Locked Notice */}
+      {isGlobalLocked && (
+        <div className="bg-rose-50 border border-rose-200 dark:bg-rose-950/20 dark:border-rose-900/40 p-4 rounded-2xl flex items-center gap-3 animate-pulse">
+          <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+            <Lock className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="font-extrabold text-sm text-rose-700 dark:text-rose-400 uppercase tracking-wide">
+              {language === "en" ? "Tournament Locked / Not Started" : "GIẢI ĐẤU ĐANG KHÓA / CHƯA BẮT ĐẦU THI ĐẤU"}
+            </h4>
+            <p className="text-[11px] text-rose-600 dark:text-rose-350 leading-normal">
+              {language === "en" 
+                ? "The executive board has locked all scoring entry. Referees are not permitted to input scores or call players at this time."
+                : "Ban điều hành đã khóa toàn bộ hệ thống chấm điểm sân đấu. Trọng tài thực địa không thể nhập điểm hay gọi vận động viên lúc này."}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Environment Switcher for Combined Tournament */}
       {tournamentType === "combined" && (
@@ -168,21 +188,26 @@ export function ScoringWorkspace({
           </div>
           <div>
             <span className="font-bold block text-sm text-slate-800 dark:text-slate-200">
-              {userRole === "admin" 
-                ? (isScoringEditAuthorized ? "Chế độ: ĐANG GHI ĐIỂM (Chỉnh Sửa Live)" : "Chế độ: ĐANG XEM (Đóng băng bảng điểm)")
-                : "Chế độ: XEM ĐIỂM (Đóng băng bảng điểm)"}
+              {isGlobalLocked
+                ? "TRẠNG THÁI: KHÓA SÂN ĐẤU TOÀN DIỆN"
+                : userRole === "admin" 
+                  ? (isScoringEditAuthorized ? "Chế độ: ĐANG GHI ĐIỂM (Chỉnh Sửa Live)" : "Chế độ: ĐANG XEM (Đóng băng bảng điểm)")
+                  : "Chế độ: XEM ĐIỂM (Đóng băng bảng điểm)"}
             </span>
             <p className="text-[11px] text-gray-500 dark:text-slate-400 leading-tight">
-              {userRole === "admin"
-                ? (isScoringEditAuthorized 
-                  ? "Bảng điểm đã được mở khóa. Bạn có thể ghi điểm trực tiếp." 
-                  : "Nhấp vào bất kỳ phát bắn nào sẽ hiển thị cảnh báo mở khóa để tránh click nhầm.")
-                : "Chỉ Ban tổ chức / Admin mới có quyền sửa điểm trực tiếp tại đây. Trọng tài chỉ có quyền xem."}
+              {isGlobalLocked
+                ? "Bất kỳ tác vụ cập nhật điểm hay ghi điểm của các bàn đều bị chặn hoàn toàn bởi Ban điều hành."
+                : userRole === "admin"
+                  ? (isScoringEditAuthorized 
+                    ? "Bảng điểm đã được mở khóa. Bạn có thể ghi điểm trực tiếp." 
+                    : "Nhấp vào bất kỳ phát bắn nào sẽ hiển thị cảnh báo mở khóa để tránh click nhầm.")
+                  : "Chỉ Ban tổ chức / Admin mới có quyền sửa điểm trực tiếp tại đây. Trọng tài chỉ có quyền xem."}
             </p>
           </div>
+
         </div>
 
-        {userRole === "admin" && (
+        {userRole === "admin" && !isGlobalLocked && (
           <div className="flex gap-2 self-end sm:self-auto shrink-0">
             {isScoringEditAuthorized ? (
               <button

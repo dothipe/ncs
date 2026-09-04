@@ -3813,6 +3813,8 @@ export default function App() {
               activeHistoryId={activeHistoryId}
               language={language as "vi" | "en"}
               userRole={userRole as "admin" | "referee" | "spectator"}
+              leaderboardAthletes={leaderboardAthletes}
+              leaderboardTeamAthletes={leaderboardTeamAthletes}
             />
           )}
 
