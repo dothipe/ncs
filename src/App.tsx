@@ -145,6 +145,8 @@ export default function App() {
 
   const [endDate, setEndDate] = useState<string>("");
 
+  const [location, setLocation] = useState<string>("");
+
   const [bannerUrl, setBannerUrl] = useState<string>("");
 
   const [avatarUrl, setAvatarUrl] = useState<string>("");
@@ -713,6 +715,7 @@ export default function App() {
     setHeaderTempName("");
     setStartDate("");
     setEndDate("");
+    setLocation("");
     setDistances(JSON.parse(JSON.stringify(DEFAULT_DISTANCES)));
     setShotsCount(DEFAULT_SHOTS_COUNT);
     setTeamDistances(JSON.parse(JSON.stringify(DEFAULT_DISTANCES)));
@@ -1460,6 +1463,7 @@ export default function App() {
     matchName,
     startDate,
     endDate,
+    location,
     distances,
     shotsCount,
     athletes,
@@ -1488,6 +1492,7 @@ export default function App() {
     setHeaderTempName,
     setStartDate,
     setEndDate,
+    setLocation,
     setBannerUrl,
     setAvatarUrl,
     setTournamentType,
@@ -1557,6 +1562,7 @@ export default function App() {
         teamAthletes: JSON.parse(JSON.stringify(teamAthletes)),
         startDate: startDate,
         endDate: endDate,
+        location: location,
       };
 
       // Set active history ID safely (ONLY if not an online tour)
@@ -2805,6 +2811,7 @@ export default function App() {
       teamAthletes: JSON.parse(JSON.stringify(teamAthletes)),
       startDate: startDate,
       endDate: endDate,
+      location: location,
       clubs: JSON.parse(JSON.stringify(clubs)),
     };
 
@@ -2904,6 +2911,7 @@ export default function App() {
     setHeaderTempName("");
     setStartDate("");
     setEndDate("");
+    setLocation("");
     setDistances(JSON.parse(JSON.stringify(DEFAULT_DISTANCES)));
     setShotsCount(DEFAULT_SHOTS_COUNT);
     setTeamDistances(JSON.parse(JSON.stringify(DEFAULT_DISTANCES)));
@@ -2935,6 +2943,7 @@ export default function App() {
     setMatchName(target.matchName);
     setStartDate(target.startDate || "");
     setEndDate(target.endDate || "");
+    setLocation(target.location || "");
     setDistances(target.distances);
     setShotsCount(target.shotCount);
     setAthletes(target.athletes);
@@ -3827,6 +3836,7 @@ export default function App() {
               currentUser={currentUser}
               onOpenAuthModal={() => setIsAuthModalOpen(true)}
               onAddAuditLog={handleAddAuditLog}
+              setActiveTab={setActiveTab}
             />
           )}
 
@@ -3865,6 +3875,8 @@ export default function App() {
               setStartDate={setStartDate}
               endDate={endDate}
               setEndDate={setEndDate}
+              location={location}
+              setLocation={setLocation}
               setClubs={setClubs}
               teamDistances={teamDistances}
               setTeamDistances={setTeamDistances}
@@ -4041,6 +4053,7 @@ export default function App() {
         tournamentType={tournamentType}
         clubs={clubs}
         laneCapacity={laneCapacity}
+        currentTournamentDoc={currentTournamentDoc}
       />
 
       

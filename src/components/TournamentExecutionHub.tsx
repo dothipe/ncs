@@ -20,7 +20,10 @@ import {
   HelpCircle,
   ListOrdered,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Search,
+  Megaphone,
+  Zap
 } from "lucide-react";
 import { TournamentData, updateOnlineTournament } from "../lib/firebaseService";
 import { Athlete, DistanceConfig } from "../types";
@@ -68,6 +71,44 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
   const [selectedMonitorRoundIdx, setSelectedMonitorRoundIdx] = useState<number>(0);
   const [selectedMonitorSquad, setSelectedMonitorSquad] = useState<number>(1);
 
+  // Helper to synchronize local monitor state changes to Firestore
+  const updateMonitorConfig = async (roundIdx: number, squad: number, env: "individual" | "team") => {
+    setSelectedMonitorRoundIdx(roundIdx);
+    setSelectedMonitorSquad(squad);
+    setMonitorEnv(env);
+
+    if (activeHistoryId && activeHistoryId.startsWith("tour-")) {
+      try {
+        await updateOnlineTournament(activeHistoryId, {
+          activeMonitorRoundIdx: roundIdx,
+          activeMonitorSquad: squad,
+          activeMonitorEnv: env
+        });
+      } catch (err) {
+        console.error("Failed to sync monitor state to Firestore:", err);
+      }
+    }
+  };
+
+  // Synchronize monitor state from Firestore when changed by other devices
+  useEffect(() => {
+    if (currentTournamentDoc) {
+      if (currentTournamentDoc.activeMonitorRoundIdx !== undefined && currentTournamentDoc.activeMonitorRoundIdx !== selectedMonitorRoundIdx) {
+        setSelectedMonitorRoundIdx(currentTournamentDoc.activeMonitorRoundIdx);
+      }
+      if (currentTournamentDoc.activeMonitorSquad !== undefined && currentTournamentDoc.activeMonitorSquad !== selectedMonitorSquad) {
+        setSelectedMonitorSquad(currentTournamentDoc.activeMonitorSquad);
+      }
+      if (currentTournamentDoc.activeMonitorEnv !== undefined && currentTournamentDoc.activeMonitorEnv !== monitorEnv) {
+        setMonitorEnv(currentTournamentDoc.activeMonitorEnv);
+      }
+    }
+  }, [
+    currentTournamentDoc?.activeMonitorRoundIdx,
+    currentTournamentDoc?.activeMonitorSquad,
+    currentTournamentDoc?.activeMonitorEnv
+  ]);
+
   // Auto-synchronize sortCriteria when round or environment changes
   useEffect(() => {
     const currentDistances = sorterEnv === "team"
@@ -87,6 +128,10 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
   // Local state for manual SBD input for Clubs
   const [editingSbdClubName, setEditingSbdClubName] = useState<string | null>(null);
   const [manualClubSbdValue, setManualClubSbdValue] = useState<number | "">("");
+
+  // Search & Filter state for the bottom Shooting Schedule list in Lane Telemetry
+  const [scheduleSearchQuery, setScheduleSearchQuery] = useState<string>("");
+  const [scheduleSquadFilter, setScheduleSquadFilter] = useState<string>("all");
 
   // Auto-subscribe to changes if tournament doc updates (via parent triggers)
   const isNational = currentTournamentDoc?.isNational || false;
@@ -181,19 +226,22 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
 
       const shuffled = [...availableNumbers].sort(() => Math.random() - 0.5);
       let drawnCount = 0;
+      const nextTeamDrawMethods = { ...(currentTournamentDoc?.teamDrawMethods || {}) };
 
       qualifyingClubs.forEach((clubName) => {
         if (!nextTeamDrawnNumbers[clubName]) {
           const pickedNum = shuffled.pop();
           if (pickedNum !== undefined) {
             nextTeamDrawnNumbers[clubName] = pickedNum;
+            nextTeamDrawMethods[clubName] = "btc";
             drawnCount++;
           }
         }
       });
 
       await updateOnlineTournament(activeHistoryId, {
-        teamDrawnNumbers: nextTeamDrawnNumbers
+        teamDrawnNumbers: nextTeamDrawnNumbers,
+        teamDrawMethods: nextTeamDrawMethods
       });
 
       showToast(
@@ -218,6 +266,7 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
 
     try {
       const nextTeamDrawnNumbers = { ...teamDrawnNumbers };
+      const nextTeamDrawMethods = { ...(currentTournamentDoc?.teamDrawMethods || {}) };
       const existingClub = Object.keys(nextTeamDrawnNumbers).find(
         (name) => name !== clubName && nextTeamDrawnNumbers[name] === num
       );
@@ -232,11 +281,15 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
 
         const currentVal = nextTeamDrawnNumbers[clubName] || null;
         nextTeamDrawnNumbers[existingClub] = currentVal as any;
+        const currentMethod = nextTeamDrawMethods[clubName] || "btc";
+        nextTeamDrawMethods[existingClub] = currentMethod;
       }
 
       nextTeamDrawnNumbers[clubName] = num;
+      nextTeamDrawMethods[clubName] = "btc";
       await updateOnlineTournament(activeHistoryId, {
-        teamDrawnNumbers: nextTeamDrawnNumbers
+        teamDrawnNumbers: nextTeamDrawnNumbers,
+        teamDrawMethods: nextTeamDrawMethods
       });
 
       showToast(isEng ? "Club SBD Updated!" : "Đã cập nhật Số thứ tự SBD của CLB!");
@@ -334,6 +387,7 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
       const shuffled = [...availableNumbers].sort(() => Math.random() - 0.5);
 
       const nextDrawnNumbers = { ...drawnNumbers };
+      const nextDrawMethods = { ...(currentTournamentDoc?.drawMethods || {}) };
       let drawnCount = 0;
 
       masterAthletes.forEach((athlete) => {
@@ -341,13 +395,15 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
           const pickedNum = shuffled.pop();
           if (pickedNum !== undefined) {
             nextDrawnNumbers[athlete.id] = pickedNum;
+            nextDrawMethods[athlete.id] = "btc";
             drawnCount++;
           }
         }
       });
 
       await updateOnlineTournament(activeHistoryId, {
-        drawnNumbers: nextDrawnNumbers
+        drawnNumbers: nextDrawnNumbers,
+        drawMethods: nextDrawMethods
       });
 
       showToast(
@@ -372,6 +428,7 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
 
     try {
       const nextDrawnNumbers = { ...drawnNumbers };
+      const nextDrawMethods = { ...(currentTournamentDoc?.drawMethods || {}) };
       // Check if number is already taken by another athlete
       const existingOwnerId = Object.keys(nextDrawnNumbers).find(
         (id) => id !== athleteId && nextDrawnNumbers[id] === num
@@ -389,11 +446,15 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
         // Swap numbers if confirmed
         const currentOwnerVal = nextDrawnNumbers[athleteId] || null;
         nextDrawnNumbers[existingOwnerId] = currentOwnerVal as any;
+        const currentMethod = nextDrawMethods[athleteId] || "btc";
+        nextDrawMethods[existingOwnerId] = currentMethod;
       }
 
       nextDrawnNumbers[athleteId] = num;
+      nextDrawMethods[athleteId] = "btc";
       await updateOnlineTournament(activeHistoryId, {
-        drawnNumbers: nextDrawnNumbers
+        drawnNumbers: nextDrawnNumbers,
+        drawMethods: nextDrawMethods
       });
 
       showToast(isEng ? "SBD Updated!" : "Đã cập nhật Số thứ tự SBD!");
@@ -423,8 +484,8 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
       }
 
       const effectiveShotsCount = sorterEnv === "team"
-        ? currentTournamentDoc?.teamShotCount || 5
-        : currentTournamentDoc?.shotCount || 5;
+        ? selectedDistance.teamShotCount || currentTournamentDoc?.teamShotsCount || 5
+        : selectedDistance.shotCount || currentTournamentDoc?.shotsCount || 5;
 
       const effectiveDirectMaxPoints = sorterEnv === "team"
         ? currentTournamentDoc?.teamDirectMaxShots
@@ -1018,15 +1079,24 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                                       className="w-24 px-2 py-1 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded text-xs font-bold focus:outline-none focus:ring-1 focus:ring-rose-500 font-mono text-rose-600"
                                     />
                                   ) : sbd ? (
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="inline-flex items-center justify-center font-black font-mono px-2 py-0.5 rounded text-xs bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-150 dark:border-rose-900/30">
-                                        {String(sbd).padStart(3, "0")}
-                                      </span>
-                                      <span className="text-[9px] text-emerald-500 font-semibold flex items-center gap-0.5">
-                                        <CheckCircle className="w-2.5 h-2.5" />
-                                        {isEng ? "Locked" : "Bản bốc"}
-                                      </span>
-                                    </div>
+                                    (() => {
+                                      const isSelf = currentTournamentDoc?.teamDrawMethods?.[clubName] === "self";
+                                      const drawLabel = isSelf ? (isEng ? "Athlete" : "VĐV bốc") : (isEng ? "Organizer" : "BTC bốc");
+                                      const drawColor = isSelf 
+                                        ? "text-blue-600 bg-blue-50 dark:bg-blue-950/20 border border-blue-150 dark:border-blue-900/20" 
+                                        : "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-150 dark:border-emerald-900/20";
+                                      return (
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="inline-flex items-center justify-center font-black font-mono px-2 py-0.5 rounded text-xs bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-150 dark:border-rose-900/30">
+                                            {String(sbd).padStart(3, "0")}
+                                          </span>
+                                          <span className={`text-[9px] font-semibold flex items-center gap-0.5 px-1.5 py-0.5 rounded-full ${drawColor}`}>
+                                            <CheckCircle className="w-2.5 h-2.5" />
+                                            {drawLabel}
+                                          </span>
+                                        </div>
+                                      );
+                                    })()
                                   ) : (
                                     <span className="text-[10px] bg-amber-50 dark:bg-amber-955/20 text-amber-600 dark:text-amber-400 border border-amber-150 dark:border-amber-900/30 px-2 py-0.5 rounded font-bold uppercase tracking-wider animate-pulse">
                                       {isEng ? "Pending draw" : "Chờ bốc thăm"}
@@ -1124,15 +1194,24 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                                       className="w-24 px-2 py-1 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded text-xs font-bold focus:outline-none focus:ring-1 focus:ring-rose-500 font-mono text-rose-600"
                                     />
                                   ) : sbd ? (
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="inline-flex items-center justify-center font-black font-mono px-2 py-0.5 rounded text-xs bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-150 dark:border-rose-900/30">
-                                        {String(sbd).padStart(3, "0")}
-                                      </span>
-                                      <span className="text-[9px] text-emerald-500 font-semibold flex items-center gap-0.5">
-                                        <CheckCircle className="w-2.5 h-2.5" />
-                                        {isEng ? "Locked" : "Bản bốc"}
-                                      </span>
-                                    </div>
+                                    (() => {
+                                      const isSelf = currentTournamentDoc?.drawMethods?.[athlete.id] === "self";
+                                      const drawLabel = isSelf ? (isEng ? "Athlete" : "VĐV bốc") : (isEng ? "Organizer" : "BTC bốc");
+                                      const drawColor = isSelf 
+                                        ? "text-blue-600 bg-blue-50 dark:bg-blue-950/20 border border-blue-150 dark:border-blue-900/20" 
+                                        : "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-150 dark:border-emerald-900/20";
+                                      return (
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="inline-flex items-center justify-center font-black font-mono px-2 py-0.5 rounded text-xs bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-150 dark:border-rose-900/30">
+                                            {String(sbd).padStart(3, "0")}
+                                          </span>
+                                          <span className={`text-[9px] font-semibold flex items-center gap-0.5 px-1.5 py-0.5 rounded-full ${drawColor}`}>
+                                            <CheckCircle className="w-2.5 h-2.5" />
+                                            {drawLabel}
+                                          </span>
+                                        </div>
+                                      );
+                                    })()
                                   ) : (
                                     <span className="text-[10px] bg-amber-50 dark:bg-amber-955/20 text-amber-600 dark:text-amber-400 border border-amber-150 dark:border-amber-900/30 px-2 py-0.5 rounded font-bold uppercase tracking-wider animate-pulse">
                                       {isEng ? "Pending draw" : "Chờ bốc thăm"}
@@ -1198,8 +1277,8 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
             const activeRound = currentDistances[selectedMonitorRoundIdx] || currentDistances[0];
 
             const effectiveShotsCount = monitorEnv === "team"
-              ? currentTournamentDoc?.teamShotCount || 5
-              : currentTournamentDoc?.shotCount || 5;
+              ? activeRound.teamShotCount || currentTournamentDoc?.teamShotsCount || 5
+              : activeRound.shotCount || currentTournamentDoc?.shotsCount || 5;
 
             const effectiveDirectMaxPoints = monitorEnv === "team"
               ? currentTournamentDoc?.teamDirectMaxShots
@@ -1231,53 +1310,114 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
               }
             }
 
-            // Check if custom shooting order is stored in Firebase for this round
-            const customOrder = currentTournamentDoc?.roundShootingOrders?.[activeRound.id];
-            if (customOrder && customOrder.length > 0) {
-              const customSet = new Set(customOrder);
-              const mapped = customOrder
-                .map(id => orderedAthletesForRound.find(a => a.id === id))
-                .filter(Boolean) as Athlete[];
-              const missing = orderedAthletesForRound.filter(a => !customSet.has(a.id));
-              orderedAthletesForRound = [...mapped, ...missing];
+            // Determine sorting strategy criteria for this round, defaulting to "sbd" to match the Sorter settings perfectly
+            const activeCriteria = currentTournamentDoc?.roundShootingOrderCriteria?.[activeRound.id] || "sbd";
+
+            // Sort athletes/clubs dynamically based on activeCriteria
+            if (monitorEnv === "team") {
+              const clubsSet = new Set<string>(
+                orderedAthletesForRound
+                  .filter((a) => a.team && a.team.trim() !== "" && a.team.trim() !== "Tự do")
+                  .map((a) => a.team!.trim())
+              );
+              const sortedClubs = Array.from(clubsSet);
+
+              const getClubPrevScore = (clubName: string) => {
+                const mainShooters = orderedAthletesForRound.filter(
+                  (a) => a.team?.trim() === clubName
+                );
+                if (selectedMonitorRoundIdx === 0) {
+                  let total = 0;
+                  for (const shooter of mainShooters) {
+                    total += calculateTotalScore(shooter, currentDistances);
+                  }
+                  return total;
+                } else {
+                  const prevRoundRes = roundResults[selectedMonitorRoundIdx - 1];
+                  if (!prevRoundRes || !prevRoundRes.scores) return 0;
+                  let total = 0;
+                  for (const shooter of mainShooters) {
+                    const sc = prevRoundRes.scores[shooter.id];
+                    if (sc) {
+                      total += sc.displayScoreWithSolo !== undefined ? sc.displayScoreWithSolo : sc.displayScore;
+                    }
+                  }
+                  return total;
+                }
+              };
+
+              sortedClubs.sort((clubA, clubB) => {
+                const sbdA = (currentTournamentDoc?.teamDrawnNumbers || {})[clubA] || 999999;
+                const sbdB = (currentTournamentDoc?.teamDrawnNumbers || {})[clubB] || 999999;
+
+                if (selectedMonitorRoundIdx === 0 || activeCriteria === "sbd") {
+                  return sbdA - sbdB;
+                }
+
+                const scoreA = getClubPrevScore(clubA);
+                const scoreB = getClubPrevScore(clubB);
+
+                if (activeCriteria === "points_asc") {
+                  if (scoreA !== scoreB) {
+                    return scoreA - scoreB;
+                  }
+                  return sbdA - sbdB;
+                } else {
+                  // points_desc
+                  if (scoreA !== scoreB) {
+                    return scoreB - scoreA;
+                  }
+                  return sbdA - sbdB;
+                }
+              });
+
+              let sortedTeamAthletes: Athlete[] = [];
+              for (const club of sortedClubs) {
+                const clubShooters = orderedAthletesForRound.filter(
+                  (a) => a.team?.trim() === club
+                );
+                clubShooters.sort((a, b) => a.name.localeCompare(b.name));
+                sortedTeamAthletes.push(...clubShooters);
+              }
+              orderedAthletesForRound = sortedTeamAthletes;
             } else {
-              // Fallback default sorting
-              if (selectedMonitorRoundIdx === 0) {
-                // Round 1 default is SBD sorting
-                orderedAthletesForRound.sort((a, b) => {
-                  const sbdA = monitorEnv === "team"
-                    ? ((currentTournamentDoc?.teamDrawnNumbers || {})[a.team || ""] || 999999)
-                    : (drawnNumbers[a.id] || 999999);
-                  const sbdB = monitorEnv === "team"
-                    ? ((currentTournamentDoc?.teamDrawnNumbers || {})[b.team || ""] || 999999)
-                    : (drawnNumbers[b.id] || 999999);
-                  if (sbdA !== sbdB) return sbdA - sbdB;
-                  return a.name.localeCompare(b.name);
-                });
-              } else {
-                // Subsequent rounds: sort by previous round score descending
-                const prevRoundRes = roundResults[selectedMonitorRoundIdx - 1];
-                orderedAthletesForRound.sort((a, b) => {
-                  let scoreA = 0;
-                  let scoreB = 0;
+              orderedAthletesForRound.sort((a, b) => {
+                const sbdA = drawnNumbers[a.id] || 999999;
+                const sbdB = drawnNumbers[b.id] || 999999;
+
+                if (activeCriteria === "sbd") {
+                  return sbdA - sbdB;
+                }
+
+                let scoreA = 0;
+                let scoreB = 0;
+
+                if (selectedMonitorRoundIdx === 0) {
+                  scoreA = calculateTotalScore(a, currentDistances);
+                  scoreB = calculateTotalScore(b, currentDistances);
+                } else {
+                  const prevRoundRes = roundResults[selectedMonitorRoundIdx - 1];
                   if (prevRoundRes && prevRoundRes.scores) {
                     const scA = prevRoundRes.scores[a.id];
                     const scB = prevRoundRes.scores[b.id];
                     scoreA = scA ? (scA.displayScoreWithSolo !== undefined ? scA.displayScoreWithSolo : scA.displayScore) : 0;
                     scoreB = scB ? (scB.displayScoreWithSolo !== undefined ? scB.displayScoreWithSolo : scB.displayScore) : 0;
                   }
+                }
+
+                if (activeCriteria === "points_asc") {
                   if (scoreA !== scoreB) {
-                    return scoreB - scoreA; // Descending
+                    return scoreA - scoreB;
                   }
-                  const sbdA = monitorEnv === "team"
-                    ? ((currentTournamentDoc?.teamDrawnNumbers || {})[a.team || ""] || 999999)
-                    : (drawnNumbers[a.id] || 999999);
-                  const sbdB = monitorEnv === "team"
-                    ? ((currentTournamentDoc?.teamDrawnNumbers || {})[b.team || ""] || 999999)
-                    : (drawnNumbers[b.id] || 999999);
                   return sbdA - sbdB;
-                });
-              }
+                } else {
+                  // points_desc
+                  if (scoreA !== scoreB) {
+                    return scoreB - scoreA;
+                  }
+                  return sbdA - sbdB;
+                }
+              });
             }
 
             const squadClubs: string[] = [];
@@ -1289,9 +1429,126 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
               });
             }
 
-            const totalSquads = monitorEnv === "team" && teamLaneLayoutType === "sequential"
-              ? (Math.ceil(squadClubs.length / laneCapacity) || 1)
+            // Define packedSquads for parallel team mode
+            let packedSquads: Array<Array<Athlete | null>> = [];
+            if (monitorEnv === "team" && teamLaneLayoutType === "parallel") {
+              // 1. Group orderedAthletesForRound by team, preserving the sorted team order
+              const teamsInOrder: Array<{ teamName: string; athletes: Athlete[] }> = [];
+              orderedAthletesForRound.forEach(athlete => {
+                const teamName = athlete.team?.trim() || "Tự do";
+                let existing = teamsInOrder.find(t => t.teamName === teamName);
+                if (!existing) {
+                  existing = { teamName, athletes: [] };
+                  teamsInOrder.push(existing);
+                }
+                existing.athletes.push(athlete);
+              });
+
+              // 2. Pack teams into squads of size laneCapacity using greedy bin packing with lookahead
+              const remainingTeams = [...teamsInOrder];
+
+              while (remainingTeams.length > 0) {
+                const currentSquad: Array<Athlete | null> = Array(laneCapacity).fill(null);
+                let currentEmptyIdx = 0;
+
+                while (currentEmptyIdx < laneCapacity && remainingTeams.length > 0) {
+                  const spaceLeft = laneCapacity - currentEmptyIdx;
+                  // Search for the first team that fits in the remaining space of this squad
+                  let foundTeamIdx = -1;
+                  for (let i = 0; i < remainingTeams.length; i++) {
+                    if (remainingTeams[i].athletes.length <= spaceLeft) {
+                      foundTeamIdx = i;
+                      break;
+                    }
+                  }
+
+                  if (foundTeamIdx !== -1) {
+                    // Found a team that fits! Place its athletes
+                    const teamToPlace = remainingTeams[foundTeamIdx];
+                    teamToPlace.athletes.forEach((ath, offset) => {
+                      currentSquad[currentEmptyIdx + offset] = ath;
+                    });
+                    currentEmptyIdx += teamToPlace.athletes.length;
+                    // Remove from remaining list
+                    remainingTeams.splice(foundTeamIdx, 1);
+                  } else {
+                    // No remaining team fits in this squad.
+                    // If currentEmptyIdx === 0, force-place up to laneCapacity
+                    if (currentEmptyIdx === 0) {
+                      const teamToPlace = remainingTeams[0];
+                      const fitCount = Math.min(teamToPlace.athletes.length, laneCapacity);
+                      for (let offset = 0; offset < fitCount; offset++) {
+                        currentSquad[offset] = teamToPlace.athletes[offset];
+                      }
+                      currentEmptyIdx = fitCount;
+                      
+                      if (teamToPlace.athletes.length > laneCapacity) {
+                        teamToPlace.athletes = teamToPlace.athletes.slice(laneCapacity);
+                      } else {
+                        remainingTeams.shift();
+                      }
+                    } else {
+                      // Leave remaining lanes vacant and start next squad
+                      break;
+                    }
+                  }
+                }
+                packedSquads.push(currentSquad);
+              }
+            }
+
+            const totalSquads = monitorEnv === "team"
+              ? (teamLaneLayoutType === "sequential"
+                  ? (Math.ceil(squadClubs.length / laneCapacity) || 1)
+                  : (packedSquads.length || 1)
+                )
               : (Math.ceil(orderedAthletesForRound.length / laneCapacity) || 1);
+
+            const getSquadLanes = (s: number) => {
+              const lanes: Array<{
+                laneNum: number;
+                name: string | null;
+                sbd: number | null;
+                isClub: boolean;
+                team?: string | null;
+              }> = [];
+              for (let idx = 0; idx < laneCapacity; idx++) {
+                const laneNum = idx + 1;
+                if (monitorEnv === "team" && teamLaneLayoutType === "sequential") {
+                  const clubName = squadClubs[(s - 1) * laneCapacity + idx] || null;
+                  const clubSbd = clubName ? ((currentTournamentDoc?.teamDrawnNumbers || {})[clubName] || null) : null;
+                  lanes.push({
+                    laneNum,
+                    name: clubName,
+                    sbd: clubSbd,
+                    isClub: true
+                  });
+                } else if (monitorEnv === "team" && teamLaneLayoutType === "parallel") {
+                  const squadAthletes = packedSquads[s - 1] || [];
+                  const activeAthleteOnLane = squadAthletes[idx] || null;
+                  const sbd = activeAthleteOnLane ? (drawnNumbers[activeAthleteOnLane.id] || null) : null;
+                  lanes.push({
+                    laneNum,
+                    name: activeAthleteOnLane ? activeAthleteOnLane.name : null,
+                    sbd,
+                    isClub: false,
+                    team: activeAthleteOnLane ? activeAthleteOnLane.team : null
+                  });
+                } else {
+                  const athleteIndex = (s - 1) * laneCapacity + idx;
+                  const activeAthleteOnLane = orderedAthletesForRound[athleteIndex] || null;
+                  const sbd = activeAthleteOnLane ? (drawnNumbers[activeAthleteOnLane.id] || null) : null;
+                  lanes.push({
+                    laneNum,
+                    name: activeAthleteOnLane ? activeAthleteOnLane.name : null,
+                    sbd,
+                    isClub: false,
+                    team: activeAthleteOnLane ? activeAthleteOnLane.team : null
+                  });
+                }
+              }
+              return lanes;
+            };
 
             // Generate mini leaderboard data
             let miniLeaderboardData: any[] = [];
@@ -1643,9 +1900,7 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                       <div className="flex bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-gray-200/50 dark:border-slate-800 shrink-0">
                         <button
                           onClick={() => {
-                            setMonitorEnv("individual");
-                            setSelectedMonitorRoundIdx(0);
-                            setSelectedMonitorSquad(1);
+                            updateMonitorConfig(0, 1, "individual");
                           }}
                           className={`flex-1 py-1 px-2.5 rounded-lg text-[9.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${
                             monitorEnv === "individual"
@@ -1657,9 +1912,7 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                         </button>
                         <button
                           onClick={() => {
-                            setMonitorEnv("team");
-                            setSelectedMonitorRoundIdx(0);
-                            setSelectedMonitorSquad(1);
+                            updateMonitorConfig(0, 1, "team");
                           }}
                           className={`flex-1 py-1 px-2.5 rounded-lg text-[9.5px] font-black uppercase tracking-wider transition-all cursor-pointer ${
                             monitorEnv === "team"
@@ -1683,8 +1936,7 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                           key={dist.id}
                           type="button"
                           onClick={() => {
-                            setSelectedMonitorRoundIdx(rIdx);
-                            setSelectedMonitorSquad(1); // reset to squad 1
+                            updateMonitorConfig(rIdx, 1, monitorEnv);
                           }}
                           className={`px-4.5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 cursor-pointer border ${
                             selectedMonitorRoundIdx === rIdx
@@ -1695,6 +1947,95 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                           {isEng ? `Round ${rIdx + 1}: ${dist.distance}` : `Vòng ${rIdx + 1}: ${dist.distance}`}
                         </button>
                       ))}
+                    </div>
+
+                    {/* MC & BTC Information Panel */}
+                    <div className="mt-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-950/40 border border-gray-150 dark:border-slate-850 space-y-3">
+                      <div className="flex items-center gap-2 border-b border-gray-200/60 dark:border-slate-800 pb-2">
+                        <Megaphone className="w-4 h-4 text-rose-500 animate-pulse" />
+                        <span className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                          {isEng ? "MC & ORGANIZER ANNOUNCEMENT INFO" : "THÔNG TIN CÔNG BỐ CHO BTC & MC (MICROPHONE)"}
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                        {/* 1. Distance */}
+                        <div className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-gray-100 dark:border-slate-850 flex flex-col gap-1">
+                          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{isEng ? "Distance" : "Cự ly bắn"}</span>
+                          <span className="text-xs font-extrabold text-slate-800 dark:text-white flex items-center gap-1">
+                            <Target className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                            {activeRound.distance}
+                          </span>
+                        </div>
+
+                        {/* 2. Total Shots */}
+                        <div className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-gray-100 dark:border-slate-850 flex flex-col gap-1">
+                          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{isEng ? "Shot Count" : "Số phát bắn"}</span>
+                          <span className="text-xs font-extrabold text-slate-800 dark:text-white flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                            {effectiveShotsCount} {isEng ? "shots" : "viên đạn / lượt"}
+                          </span>
+                        </div>
+
+                        {/* 3. Multiplier */}
+                        <div className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-gray-100 dark:border-slate-850 flex flex-col gap-1">
+                          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{isEng ? "Max Ring Multiplier" : "Hệ số điểm vòng"}</span>
+                          <span className="text-xs font-extrabold text-slate-800 dark:text-white flex items-center gap-1">
+                            <Trophy className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            {isEng ? `x${activeRound.multiplier} points` : `Vòng nhân x${activeRound.multiplier}`}
+                          </span>
+                        </div>
+
+                        {/* 4. Score mechanism */}
+                        <div className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-gray-100 dark:border-slate-850 flex flex-col gap-1 col-span-2 sm:col-span-1">
+                          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{isEng ? "Scoring Mechanism" : "Cơ chế tính điểm"}</span>
+                          <span className="text-xs font-extrabold text-slate-800 dark:text-white flex items-center gap-1 truncate" title={activeRound.isCumulative ? (isEng ? "Cumulative" : "Cộng dồn các vòng") : (isEng ? "Independent" : "Độc lập vòng này")}>
+                            <TrendingUp className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                            {activeRound.isCumulative ? (isEng ? "Cumulative" : "Cộng dồn các vòng") : (isEng ? "Independent" : "Độc lập vòng này")}
+                          </span>
+                        </div>
+
+                        {/* 5. Elimination */}
+                        <div className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-gray-100 dark:border-slate-850 flex flex-col gap-1 col-span-2 sm:col-span-1 lg:col-span-1">
+                          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{isEng ? "Elimination Rule" : "Thể thức loại đấu"}</span>
+                          <span className="text-xs font-extrabold text-slate-800 dark:text-white flex items-center gap-1 truncate" title={activeRound.isElimination ? (activeRound.eliminationType === "percent" ? (isEng ? `Keep Top ${activeRound.eliminationValue}%` : `Giữ lại Top ${activeRound.eliminationValue}%`) : (isEng ? `Keep Top ${activeRound.eliminationValue}` : `Giữ lại Top ${activeRound.eliminationValue} VĐV`)) : (isEng ? "No Elimination" : "Không loại (Đấu tự do)")}>
+                            <Shield className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                            {activeRound.isElimination 
+                              ? (activeRound.eliminationType === "percent" 
+                                  ? (isEng ? `Top ${activeRound.eliminationValue}%` : `Lấy Top ${activeRound.eliminationValue}%`)
+                                  : (isEng ? `Top ${activeRound.eliminationValue} shooters` : `Lấy Top ${activeRound.eliminationValue} VĐV`))
+                              : (isEng ? "No Elimination" : "Giữ nguyên quân số")}
+                          </span>
+                        </div>
+
+                        {/* 6. Solo Shootout */}
+                        <div className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-gray-100 dark:border-slate-850 flex flex-col gap-1 col-span-2 sm:col-span-1 lg:col-span-1">
+                          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{isEng ? "Solo Shoot-off" : "Phần đấu phụ Solo"}</span>
+                          <span className="text-xs font-extrabold text-slate-800 dark:text-white flex items-center gap-1 truncate" title={activeRound.isSolo ? (isEng ? `Enabled (${activeRound.soloShotCount || effectiveShotsCount} shots)` : `Disabled`) : (isEng ? "Not Configured" : "Không áp dụng")}>
+                            <Zap className={`w-3.5 h-3.5 shrink-0 ${activeRound.isSolo ? "text-purple-500 animate-pulse" : "text-gray-400"}`} />
+                            {activeRound.isSolo 
+                              ? (isEng ? `Enabled (${activeRound.soloShotCount || effectiveShotsCount}s)` : `Có (${activeRound.soloShotCount || effectiveShotsCount} phát)`)
+                              : (isEng ? "Disabled" : "Không có")}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Announcement helper text for MC */}
+                      <div className="p-3 bg-rose-50/30 dark:bg-rose-950/10 border border-rose-100/30 dark:border-rose-900/10 rounded-lg text-slate-600 dark:text-slate-300 text-[11px] leading-relaxed flex items-start gap-2.5">
+                        <Users className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-extrabold text-rose-700 dark:text-rose-400 block mb-0.5">{isEng ? "MC Announcement Script Suggestion:" : "MC loa phát thanh gợi ý:"}</span>
+                          {isEng ? (
+                            <span>
+                              "Welcome everyone, we are now entering <strong>Round {selectedMonitorRoundIdx + 1} ({activeRound.distance})</strong>. All athletes will perform <strong>{effectiveShotsCount} shots</strong>. Scoring is calculated as <strong>{activeRound.isCumulative ? "Cumulative of all rounds" : "Independent round score"}</strong>. {activeRound.isElimination ? `At the end of this round, only the top ${activeRound.eliminationType === "percent" ? `${activeRound.eliminationValue}%` : `${activeRound.eliminationValue} athletes`} will qualify for the next round.` : "No athletes will be eliminated in this round."} Squad layout strategy is <strong>{activeCriteria === "sbd" ? "by SBD" : activeCriteria === "points_asc" ? "by points ascending (lower shot first)" : "by points descending (higher shot first)"}</strong>.{activeRound.isSolo ? ` In case of a tie at the elimination boundary, a Solo Shoot-off of ${activeRound.soloShotCount || effectiveShotsCount} shot(s) will be carried out to decide the winner.` : ""}"
+                            </span>
+                          ) : (
+                            <span>
+                              "Kính thưa toàn thể quý khán giả và các vận động viên, chúng ta chuẩn bị bước vào thi đấu <strong>Vòng {selectedMonitorRoundIdx + 1} cự ly {activeRound.distance}</strong>. Trong vòng này, mỗi vận động viên thực hiện bắn <strong>{effectiveShotsCount} phát đạn</strong>. Thể thức tính điểm của vòng đấu là <strong>{activeRound.isCumulative ? "Cộng dồn điểm số liên lũy" : "Tính điểm độc lập vòng này"}</strong>. {activeRound.isElimination ? `Kết thúc vòng đấu này, BTC sẽ chỉ giữ lại ${activeRound.eliminationType === "percent" ? `Top ${activeRound.eliminationValue}%` : `Top ${activeRound.eliminationValue} vận động viên`} có điểm số xuất sắc nhất để tiến vào vòng sau.` : "Vòng đấu này không áp dụng loại trừ, tất cả vận động viên đều tiếp tục đồng hành vào các vòng trong."} Thứ tự sắp xếp bệ bắn lượt thi đấu được áp dụng theo quy chế: <strong>{activeCriteria === "sbd" ? "Thứ tự Số báo danh (SBD) bốc thăm" : activeCriteria === "points_asc" ? "Thứ tự Điểm số tăng dần (Thấp bắn trước, Cao bắn sau)" : "Thứ tự Điểm số giảm dần (Cao bắn trước, Thấp bắn sau)"}</strong>.{activeRound.isSolo ? ` Đặc biệt, nếu có điểm số bằng nhau ở ranh giới loại trừ, loạt bắn phụ Solo phân định với ${activeRound.soloShotCount || effectiveShotsCount} phát đạn sẽ được thực hiện để tìm ra vận động viên xuất sắc nhất đi tiếp.` : ""}"
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1713,7 +2054,10 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
 
                   <div className="flex items-center gap-2 w-full sm:w-auto">
                     <button
-                      onClick={() => setSelectedMonitorSquad(prev => Math.max(1, prev - 1))}
+                      onClick={() => {
+                        const nextSquad = Math.max(1, selectedMonitorSquad - 1);
+                        updateMonitorConfig(selectedMonitorRoundIdx, nextSquad, monitorEnv);
+                      }}
                       disabled={selectedMonitorSquad <= 1}
                       className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-extrabold uppercase tracking-wider border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                         selectedMonitorSquad <= 1
@@ -1726,7 +2070,10 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                     </button>
 
                     <button
-                      onClick={() => setSelectedMonitorSquad(prev => Math.min(totalSquads, prev + 1))}
+                      onClick={() => {
+                        const nextSquad = Math.min(totalSquads, selectedMonitorSquad + 1);
+                        updateMonitorConfig(selectedMonitorRoundIdx, nextSquad, monitorEnv);
+                      }}
                       disabled={selectedMonitorSquad >= totalSquads}
                       className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-extrabold uppercase tracking-wider border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                         selectedMonitorSquad >= totalSquads
@@ -1821,7 +2168,7 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                                                        : "bg-slate-100 text-slate-400 border-slate-200 dark:bg-slate-800/50 dark:border-slate-750"
                                                    }`}
                                                  >
-                                                   {shot === true ? "X" : shot === false ? "O" : "-"}
+                                                   {shot === true ? "V" : shot === false ? "X" : "-"}
                                                  </span>
                                                );
                                              })}
@@ -1842,8 +2189,9 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                         }
 
                         // Otherwise: Individual or Parallel Team Mode
-                        const athleteIndex = (selectedMonitorSquad - 1) * laneCapacity + idx;
-                        const activeAthleteOnLane = orderedAthletesForRound[athleteIndex] || null;
+                        const activeAthleteOnLane = (monitorEnv === "team" && teamLaneLayoutType === "parallel")
+                          ? ((packedSquads[selectedMonitorSquad - 1] || [])[idx] || null)
+                          : (orderedAthletesForRound[(selectedMonitorSquad - 1) * laneCapacity + idx] || null);
 
                         return (
                           <div 
@@ -1929,6 +2277,106 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                           </div>
                         );
                       })}
+                    </div>
+
+                    {/* Planning Board for next squads */}
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-150 dark:border-slate-800 p-5 space-y-4">
+                      <div className="border-b border-gray-100 dark:border-slate-850 pb-2 flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                        <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200">
+                          {isEng ? "PREVIEW OF UPCOMING SQUADS" : "KẾ HOẠCH LƯỢT TIẾP THEO"}
+                        </h3>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        {/* Column 1: SƠ ĐỒ CHỜ BẮN */}
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-gray-150 dark:border-slate-800">
+                            <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
+                              {isEng ? "WAITING LIST (NEXT SQUAD)" : "SƠ ĐỒ CHỜ BẮN (LƯỢT SAU)"}
+                            </span>
+                            {selectedMonitorSquad + 1 <= totalSquads ? (
+                              <span className="text-[9px] font-bold text-slate-500 bg-slate-200/50 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                                {isEng ? `Squad ${selectedMonitorSquad + 1}` : `Lượt ${selectedMonitorSquad + 1}`}
+                              </span>
+                            ) : (
+                              <span className="text-[9px] font-bold text-gray-400">
+                                {isEng ? "None" : "Không có"}
+                              </span>
+                            )}
+                          </div>
+
+                          {selectedMonitorSquad + 1 <= totalSquads ? (
+                            <div className="divide-y divide-gray-100 dark:divide-slate-850">
+                              {getSquadLanes(selectedMonitorSquad + 1).map((lane) => (
+                                <div key={lane.laneNum} className="py-2 flex items-center justify-between text-xs font-medium">
+                                  <div className="flex items-center gap-3">
+                                    <span className="w-12 text-[10px] font-black font-mono text-gray-450 uppercase tracking-widest leading-none">
+                                      LANE {lane.laneNum}
+                                    </span>
+                                    <span className="text-slate-800 dark:text-slate-200 font-bold truncate max-w-[150px]">
+                                      {lane.name || <span className="text-gray-400 dark:text-slate-600 italic font-normal">{isEng ? "Vacant" : "Trống"}</span>}
+                                    </span>
+                                  </div>
+                                  {lane.name && (
+                                    <span className="font-mono text-[9.5px] font-bold text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/20 px-1.5 py-0.5 rounded bg-indigo-50/50 dark:bg-indigo-950/20">
+                                      {lane.sbd ? String(lane.sbd).padStart(3, "0") : "---"}
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="py-8 text-center text-gray-400 italic text-xs font-semibold">
+                              {isEng ? "No upcoming waiting squads" : "Không có lượt bắn chờ tiếp theo"}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Column 2: SƠ ĐỒ BẮN THỬ */}
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-gray-150 dark:border-slate-800">
+                            <span className="text-[10px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-wider">
+                              {isEng ? "WARMUP LIST (SUBSEQUENT SQUAD)" : "SƠ ĐỒ BẮN THỬ (LƯỢT SAU NỮA)"}
+                            </span>
+                            {selectedMonitorSquad + 2 <= totalSquads ? (
+                              <span className="text-[9px] font-bold text-slate-500 bg-slate-200/50 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                                {isEng ? `Squad ${selectedMonitorSquad + 2}` : `Lượt ${selectedMonitorSquad + 2}`}
+                              </span>
+                            ) : (
+                              <span className="text-[9px] font-bold text-gray-400">
+                                {isEng ? "None" : "Không có"}
+                              </span>
+                            )}
+                          </div>
+
+                          {selectedMonitorSquad + 2 <= totalSquads ? (
+                            <div className="divide-y divide-gray-100 dark:divide-slate-850">
+                              {getSquadLanes(selectedMonitorSquad + 2).map((lane) => (
+                                <div key={lane.laneNum} className="py-2 flex items-center justify-between text-xs font-medium">
+                                  <div className="flex items-center gap-3">
+                                    <span className="w-12 text-[10px] font-black font-mono text-gray-450 uppercase tracking-widest leading-none">
+                                      LANE {lane.laneNum}
+                                    </span>
+                                    <span className="text-slate-800 dark:text-slate-200 font-bold truncate max-w-[150px]">
+                                      {lane.name || <span className="text-gray-400 dark:text-slate-600 italic font-normal">{isEng ? "Vacant" : "Trống"}</span>}
+                                    </span>
+                                  </div>
+                                  {lane.name && (
+                                    <span className="font-mono text-[9.5px] font-bold text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/20 px-1.5 py-0.5 rounded bg-rose-50/50 dark:bg-rose-950/20">
+                                      {lane.sbd ? String(lane.sbd).padStart(3, "0") : "---"}
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="py-8 text-center text-gray-400 italic text-xs font-semibold">
+                              {isEng ? "No upcoming warmup squads" : "Không có lượt bắn thử tiếp theo"}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -2070,6 +2518,222 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                            </tbody>
                          </table>
                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* SƠ ĐỒ DANH SÁCH BẮN CÁC VĐV */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-150 dark:border-slate-800 p-5 space-y-4 shadow-sm">
+                  <div className="border-b border-gray-100 dark:border-slate-850 pb-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <Users className="w-5 h-5 text-rose-500" />
+                      <div>
+                        <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                          {isEng ? "COMPETE ATHLETE SHOOTING SCHEDULE" : "SƠ ĐỒ DANH SÁCH BẮN CÁC VĐV (VÒNG HIỆN TẠI)"}
+                        </h3>
+                        <p className="text-[10px] text-gray-550 mt-0.5 font-medium">
+                          {isEng 
+                            ? "Complete list of assigned squads, lanes and SBD for all qualified athletes in the current round." 
+                            : "Danh sách chi tiết số thứ tự, SBD, lượt bắn và làn bắn đã phân chia của các vận động viên tham gia vòng thi hiện tại."}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Filters Bar */}
+                  <div className="flex flex-col md:flex-row gap-3 justify-between items-center bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-gray-150 dark:border-slate-800/80">
+                    <div className="relative w-full md:max-w-xs">
+                      <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder={isEng ? "Search name, SBD, club..." : "Tìm kiếm tên VĐV, SBD, câu lạc bộ..."}
+                        value={scheduleSearchQuery}
+                        onChange={(e) => setScheduleSearchQuery(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-rose-500 text-slate-800 dark:text-white"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+                      <span className="text-[10px] font-black text-gray-550 uppercase tracking-wider shrink-0">
+                        {isEng ? "SQUAD FILTER:" : "LỌC THEO LƯỢT BẮN:"}
+                      </span>
+                      <select
+                        value={scheduleSquadFilter}
+                        onChange={(e) => setScheduleSquadFilter(e.target.value)}
+                        className="text-xs font-bold rounded-xl border border-gray-250 dark:border-slate-850 bg-white dark:bg-slate-900 px-3 py-1.5 text-slate-850 dark:text-white focus:outline-none focus:ring-1 focus:ring-rose-500"
+                      >
+                        <option value="all">{isEng ? "All Squads" : "Tất cả các lượt"}</option>
+                        {Array.from({ length: totalSquads }).map((_, sIdx) => (
+                          <option key={sIdx + 1} value={String(sIdx + 1)}>
+                            {isEng ? `Squad ${sIdx + 1}` : `Lượt bắn ${sIdx + 1}`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Table */}
+                  <div className="border border-gray-150 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs font-sans">
+                        <thead className="bg-slate-50 dark:bg-slate-950 border-b border-gray-150 dark:border-slate-800 text-[9px] font-black text-slate-550 uppercase tracking-wider">
+                          <tr>
+                            <th className="p-3 w-12 text-center">STT</th>
+                            <th className="p-3 w-20 text-center">SBD</th>
+                            <th className="p-3">{isEng ? "Athlete Name" : "Họ và Tên"}</th>
+                            <th className="p-3">{isEng ? "Club / Team" : "Đơn vị / CLB"}</th>
+                            <th className="p-3 text-center w-24">{isEng ? "Squad" : "Lượt bắn"}</th>
+                            <th className="p-3 text-center w-24">{isEng ? "Lane" : "Làn bắn"}</th>
+                            <th className="p-3 text-right w-48">{isEng ? "Current Status" : "Trạng thái"}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-150 dark:divide-slate-850 font-medium text-slate-700 dark:text-slate-300">
+                          {(() => {
+                            const squadClubs: string[] = [];
+                            if (monitorEnv === "team") {
+                              orderedAthletesForRound.forEach(a => {
+                                if (a.team && !squadClubs.includes(a.team.trim())) {
+                                  squadClubs.push(a.team.trim());
+                                }
+                              });
+                            }
+
+                            const mappedList = orderedAthletesForRound.map((athlete, idx) => {
+                              const sbd = monitorEnv === "team"
+                                ? ((currentTournamentDoc?.teamDrawnNumbers || {})[athlete.team || ""] || null)
+                                : (drawnNumbers[athlete.id] || null);
+
+                              let squad: number | string = "---";
+                              let lane: number | string = "---";
+                              
+                              if (monitorEnv === "team" && teamLaneLayoutType === "sequential") {
+                                const clubIdx = squadClubs.indexOf(athlete.team?.trim() || "");
+                                if (clubIdx >= 0) {
+                                  squad = Math.floor(clubIdx / laneCapacity) + 1;
+                                  lane = (clubIdx % laneCapacity) + 1;
+                                }
+                              } else if (monitorEnv === "team" && teamLaneLayoutType === "parallel") {
+                                let foundSquad = -1;
+                                let foundLaneIdx = -1;
+                                for (let sIdx = 0; sIdx < packedSquads.length; sIdx++) {
+                                  const lIdx = packedSquads[sIdx].findIndex(ath => ath?.id === athlete.id);
+                                  if (lIdx !== -1) {
+                                    foundSquad = sIdx;
+                                    foundLaneIdx = lIdx;
+                                    break;
+                                  }
+                                }
+                                if (foundSquad !== -1) {
+                                  squad = foundSquad + 1;
+                                  lane = foundLaneIdx + 1;
+                                }
+                              } else {
+                                squad = Math.floor(idx / laneCapacity) + 1;
+                                lane = (idx % laneCapacity) + 1;
+                              }
+
+                              let statusLabel = isEng ? "Scheduled" : "Đã xếp lịch";
+                              let statusClass = "bg-slate-50 border-gray-150 text-slate-500 dark:bg-slate-900/40 dark:border-slate-800 dark:text-slate-500";
+
+                              if (typeof squad === "number") {
+                                if (squad === selectedMonitorSquad) {
+                                  statusLabel = isEng ? "SHOOTING NOW" : "ĐANG BẮN";
+                                  statusClass = "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/20 dark:border-emerald-900/50 dark:text-emerald-400 font-black animate-pulse";
+                                } else if (squad === selectedMonitorSquad + 1) {
+                                  statusLabel = isEng ? "WAITING (NEXT)" : "CHỜ BẮN (LƯỢT SAU)";
+                                  statusClass = "bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/20 dark:border-indigo-900/50 dark:text-indigo-400 font-bold";
+                                } else if (squad === selectedMonitorSquad + 2) {
+                                  statusLabel = isEng ? "WARMUP (SUBSEQUENT)" : "BẮN THỬ (LƯỢT SAU NỮA)";
+                                  statusClass = "bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/20 dark:border-rose-900/50 dark:text-rose-400 font-bold";
+                                } else if (squad < selectedMonitorSquad) {
+                                  statusLabel = isEng ? "FINISHED" : "ĐÃ BẮN XONG";
+                                  statusClass = "bg-gray-100 border-gray-200 text-gray-550 dark:bg-slate-800/20 dark:border-slate-800 dark:text-slate-500 line-through opacity-65";
+                                } else {
+                                  statusLabel = isEng ? "WAITING" : "CHƯA ĐẾN LƯỢT";
+                                  statusClass = "bg-slate-50 border-gray-150 text-slate-500 dark:bg-slate-900/40 dark:border-slate-800 dark:text-slate-500";
+                                }
+                              }
+
+                              return {
+                                athlete,
+                                sbd,
+                                squad,
+                                lane,
+                                statusLabel,
+                                statusClass
+                              };
+                            }).filter(item => {
+                              // Search Filter
+                              const query = scheduleSearchQuery.trim().toLowerCase();
+                              if (query) {
+                                const nameMatch = item.athlete.name.toLowerCase().includes(query);
+                                const sbdMatch = item.sbd ? String(item.sbd).includes(query) : false;
+                                const clubMatch = item.athlete.team ? item.athlete.team.toLowerCase().includes(query) : false;
+                                if (!nameMatch && !sbdMatch && !clubMatch) return false;
+                              }
+
+                              // Squad Filter
+                              if (scheduleSquadFilter !== "all") {
+                                if (String(item.squad) !== scheduleSquadFilter) return false;
+                              }
+
+                              return true;
+                            });
+
+                            if (mappedList.length === 0) {
+                              return (
+                                <tr>
+                                  <td colSpan={7} className="p-8 text-center text-gray-450 italic font-semibold">
+                                    {isEng ? "No matching records found." : "Không có dữ liệu vận động viên phù hợp."}
+                                  </td>
+                                </tr>
+                              );
+                            }
+
+                            return mappedList.map((item, index) => (
+                              <tr 
+                                key={item.athlete.id} 
+                                className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors ${
+                                  item.squad === selectedMonitorSquad 
+                                    ? "bg-rose-500/[0.02] dark:bg-rose-500/[0.01]" 
+                                    : ""
+                                }`}
+                              >
+                                <td className="p-3 text-center font-mono font-bold text-slate-400">
+                                  {index + 1}
+                                </td>
+                                <td className="p-3 text-center">
+                                  {item.sbd ? (
+                                    <span className="font-mono font-bold text-[10.5px] text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/20 px-2 py-0.5 rounded bg-rose-50/50 dark:bg-rose-950/20">
+                                      {String(item.sbd).padStart(3, "0")}
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-450 italic text-[10px]">---</span>
+                                  )}
+                                </td>
+                                <td className="p-3 font-bold text-slate-800 dark:text-slate-200">
+                                  {item.athlete.name}
+                                  <span className="block text-[9px] text-gray-400 font-normal mt-0.5">ID: {item.athlete.id.replace("ath-", "")}</span>
+                                </td>
+                                <td className="p-3 font-semibold text-slate-600 dark:text-slate-400">
+                                  {item.athlete.team || (isEng ? "Independent" : "Tự do")}
+                                </td>
+                                <td className="p-3 text-center font-mono font-extrabold text-indigo-600 dark:text-indigo-400 text-sm">
+                                  {item.squad}
+                                </td>
+                                <td className="p-3 text-center font-mono font-extrabold text-slate-700 dark:text-slate-300">
+                                  {item.lane !== "---" ? `Làn ${item.lane}` : "---"}
+                                </td>
+                                <td className="p-3 text-right">
+                                  <span className={`text-[9.5px] font-extrabold uppercase px-2 py-0.5 rounded border ${item.statusClass}`}>
+                                    {item.statusLabel}
+                                  </span>
+                                </td>
+                              </tr>
+                            ));
+                          })()}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </div>
@@ -2356,7 +3020,7 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                           const selectedDistance = currentDistances[selectedSorterRoundIdx];
                           if (!selectedDistance) return null;
 
-                          const effectiveShotsCount = currentTournamentDoc?.teamShotCount || 5;
+                          const effectiveShotsCount = selectedDistance.teamShotCount || currentTournamentDoc?.teamShotsCount || 5;
                           const effectiveDirectMaxPoints = currentTournamentDoc?.teamDirectMaxShots;
 
                           const roundResults = calculateRounds(
@@ -2471,7 +3135,7 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                           const selectedDistance = currentDistances[selectedSorterRoundIdx];
                           if (!selectedDistance) return null;
 
-                          const effectiveShotsCount = currentTournamentDoc?.shotCount || 5;
+                          const effectiveShotsCount = selectedDistance.shotCount || currentTournamentDoc?.shotsCount || 5;
                           const effectiveDirectMaxPoints = currentTournamentDoc?.directMaxShots;
 
                           // Run qualification calculateRounds
@@ -2569,6 +3233,186 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                     </tbody>
                   </table>
                 </div>
+
+                {sorterEnv === "team" && teamLaneLayoutType === "parallel" && (() => {
+                  const currentDistances = currentTournamentDoc?.teamDistances || [];
+                  if (currentDistances.length === 0) return null;
+                  const selectedDistance = currentDistances[selectedSorterRoundIdx];
+                  if (!selectedDistance) return null;
+
+                  const effectiveShotsCount = selectedDistance.teamShotCount || currentTournamentDoc?.teamShotsCount || 5;
+                  const effectiveDirectMaxPoints = currentTournamentDoc?.teamDirectMaxShots;
+
+                  const roundResults = calculateRounds(
+                    masterAthletes,
+                    currentDistances,
+                    effectiveShotsCount,
+                    effectiveDirectMaxPoints
+                  );
+
+                  // Find and sort clubs exactly like above
+                  const clubsSet = new Set<string>(
+                    masterAthletes
+                      .filter((a) => a.team && a.team.trim() !== "" && a.team.trim() !== "Tự do" && a.isPrimaryTeam)
+                      .map((a) => a.team!.trim())
+                  );
+                  const sortedClubs = Array.from(clubsSet);
+
+                  const getClubPrevScore = (clubName: string) => {
+                    const mainShooters = masterAthletes.filter(
+                      (a) => a.team?.trim() === clubName && a.isPrimaryTeam
+                    );
+                    const prevRoundRes = roundResults[selectedSorterRoundIdx - 1];
+                    if (!prevRoundRes || !prevRoundRes.scores) return 0;
+                    let total = 0;
+                    for (const shooter of mainShooters) {
+                      const sc = prevRoundRes.scores[shooter.id];
+                      if (sc) {
+                        total += sc.displayScoreWithSolo !== undefined ? sc.displayScoreWithSolo : sc.displayScore;
+                      }
+                    }
+                    return total;
+                  };
+
+                  sortedClubs.sort((clubA, clubB) => {
+                    const sbdA = (currentTournamentDoc?.teamDrawnNumbers || {})[clubA] || 999999;
+                    const sbdB = (currentTournamentDoc?.teamDrawnNumbers || {})[clubB] || 999999;
+                    if (selectedSorterRoundIdx === 0 || sortCriteria === "sbd") {
+                      return sbdA - sbdB;
+                    }
+                    const scoreA = getClubPrevScore(clubA);
+                    const scoreB = getClubPrevScore(clubB);
+                    if (sortCriteria === "points_asc") {
+                      if (scoreA !== scoreB) return scoreA - scoreB;
+                      return sbdA - sbdB;
+                    } else {
+                      if (scoreA !== scoreB) return scoreB - scoreA;
+                      return sbdA - sbdB;
+                    }
+                  });
+
+                  // Build a flat ordered athletes list for parallel packing
+                  let sortedTeamAthletes: Athlete[] = [];
+                  for (const club of sortedClubs) {
+                    const clubShooters = masterAthletes.filter(
+                      (a) => a.team?.trim() === club && a.isPrimaryTeam
+                    );
+                    clubShooters.sort((a, b) => a.name.localeCompare(b.name));
+                    sortedTeamAthletes.push(...clubShooters);
+                  }
+
+                  // Group by team, keeping order
+                  const teamsInOrder: Array<{ teamName: string; athletes: Athlete[] }> = [];
+                  sortedTeamAthletes.forEach(athlete => {
+                    const teamName = athlete.team?.trim() || "Tự do";
+                    let existing = teamsInOrder.find(t => t.teamName === teamName);
+                    if (!existing) {
+                      existing = { teamName, athletes: [] };
+                      teamsInOrder.push(existing);
+                    }
+                    existing.athletes.push(athlete);
+                  });
+
+                  // Pack into squads
+                  const localPackedSquads: Array<Array<Athlete | null>> = [];
+                  const remainingTeams = [...teamsInOrder];
+
+                  while (remainingTeams.length > 0) {
+                    const currentSquad: Array<Athlete | null> = Array(laneCapacity).fill(null);
+                    let currentEmptyIdx = 0;
+
+                    while (currentEmptyIdx < laneCapacity && remainingTeams.length > 0) {
+                      const spaceLeft = laneCapacity - currentEmptyIdx;
+                      let foundTeamIdx = -1;
+                      for (let i = 0; i < remainingTeams.length; i++) {
+                        if (remainingTeams[i].athletes.length <= spaceLeft) {
+                          foundTeamIdx = i;
+                          break;
+                        }
+                      }
+
+                      if (foundTeamIdx !== -1) {
+                        const teamToPlace = remainingTeams[foundTeamIdx];
+                        teamToPlace.athletes.forEach((ath, offset) => {
+                          currentSquad[currentEmptyIdx + offset] = ath;
+                        });
+                        currentEmptyIdx += teamToPlace.athletes.length;
+                        remainingTeams.splice(foundTeamIdx, 1);
+                      } else {
+                        if (currentEmptyIdx === 0) {
+                          const teamToPlace = remainingTeams[0];
+                          const fitCount = Math.min(teamToPlace.athletes.length, laneCapacity);
+                          for (let offset = 0; offset < fitCount; offset++) {
+                            currentSquad[offset] = teamToPlace.athletes[offset];
+                          }
+                          currentEmptyIdx = fitCount;
+                          if (teamToPlace.athletes.length > laneCapacity) {
+                            teamToPlace.athletes = teamToPlace.athletes.slice(laneCapacity);
+                          } else {
+                            remainingTeams.shift();
+                          }
+                        } else {
+                          break;
+                        }
+                      }
+                    }
+                    localPackedSquads.push(currentSquad);
+                  }
+
+                  return (
+                    <div className="bg-slate-50 dark:bg-slate-900/40 p-4.5 rounded-2xl border border-gray-150 dark:border-slate-800 space-y-3.5 mt-4">
+                      <div className="flex items-center gap-2">
+                        <LayoutGrid className="w-4 h-4 text-rose-500 shrink-0" />
+                        <span className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide">
+                          {isEng ? "PREDICTED SQUAD & LANE SCHEME" : "SƠ ĐỒ CHIA LƯỢT BỆ BẮN SONG SONG (DỰ KIẾN)"}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                        {localPackedSquads.map((squad, sIdx) => {
+                          const usedLanes = squad.filter(ath => ath !== null).length;
+                          const emptyLanes = laneCapacity - usedLanes;
+
+                          return (
+                            <div key={sIdx} className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-3.5 space-y-3">
+                              <div className="flex justify-between items-center border-b border-gray-100 dark:border-slate-800 pb-2">
+                                <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                                  {isEng ? `Squad ${sIdx + 1}` : `Lượt bắn ${sIdx + 1}`}
+                                </span>
+                                <span className="text-[10px] font-bold text-gray-500 bg-gray-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-full">
+                                  {isEng ? `${usedLanes}/${laneCapacity} Lanes Used` : `${usedLanes}/${laneCapacity} Làn`}
+                                </span>
+                              </div>
+
+                              <div className="space-y-1.5">
+                                {squad.map((athlete, lIdx) => (
+                                  <div key={lIdx} className="flex justify-between items-center text-[11px] py-1 font-medium border-b border-dashed border-gray-50 dark:border-slate-850 last:border-0">
+                                    <span className="font-mono text-[9.5px] text-gray-450 font-bold uppercase shrink-0 w-12">LANE {lIdx + 1}</span>
+                                    {athlete ? (
+                                      <div className="flex items-center justify-between gap-2 w-full truncate pl-2">
+                                        <span className="text-slate-800 dark:text-slate-200 font-extrabold truncate" title={athlete.name}>{athlete.name}</span>
+                                        <span className="text-[9.5px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded uppercase max-w-[100px] truncate" title={athlete.team}>{athlete.team}</span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-gray-400 dark:text-slate-600 italic pl-2 w-full text-left font-normal">{isEng ? "Empty" : "Trống (Bỏ qua)"}</span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+
+                              {emptyLanes > 0 && (
+                                <div className="text-[10px] text-amber-600 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-950/20 border border-amber-150 dark:border-amber-900/20 rounded-lg p-2 flex items-center gap-1.5 leading-normal">
+                                  <span>⚠️</span>
+                                  <span>{isEng ? `${emptyLanes} lane(s) left empty for team alignment.` : `Dư ${emptyLanes} làn bệ bắn được để trống để giữ đồng đội cùng lượt.`}</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}

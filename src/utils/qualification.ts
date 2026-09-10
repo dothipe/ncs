@@ -130,14 +130,14 @@ export function calculateRounds(
             const d = distances[i];
             const wasShot = ath.scores[d.id] && ath.scores[d.id].length > 0 && ath.scores[d.id].some(v => v !== null && v !== undefined);
             if (wasShot) {
-              totalPossShots += shotsCount;
+              totalPossShots += (d.shotCount || d.teamShotCount || shotsCount);
             }
           }
           if (totalPossShots === 0) {
-            totalPossShots = shotsCount;
+            totalPossShots = (dist.shotCount || dist.teamShotCount || shotsCount);
           }
         } else {
-          totalPossShots = shotsCount;
+          totalPossShots = (dist.shotCount || dist.teamShotCount || shotsCount);
         }
         accuracy = totalPossShots > 0 ? (displayHits / totalPossShots) * 100 : 0;
       }

@@ -352,6 +352,7 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
   const [formGearBandSpec, setFormGearBandSpec] = useState("");
   const [formGearAmmoSize, setFormGearAmmoSize] = useState("");
   const [formGearStance, setFormGearStance] = useState("");
+  const [formCategory, setFormCategory] = useState("Nghiệp dư");
   
   const [validationError, setValidationError] = useState("");
   const [duplicateSysMatch, setDuplicateSysMatch] = useState<Athlete | null>(null);
@@ -453,6 +454,7 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
     setFormGearBandSpec("");
     setFormGearAmmoSize("");
     setFormGearStance("");
+    setFormCategory("Nghiệp dư");
   };
 
   const handleStartEdit = (athlete: Athlete) => {
@@ -480,6 +482,7 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
     setFormGearBandSpec(athlete.gearBandSpec || "");
     setFormGearAmmoSize(athlete.gearAmmoSize || "");
     setFormGearStance(athlete.gearStance || "");
+    setFormCategory(athlete.category || "Nghiệp dư");
   };
 
   const handleCountryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -630,6 +633,7 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
         gearBandSpec: formGearBandSpec.trim(),
         gearAmmoSize: formGearAmmoSize.trim(),
         gearStance: formGearStance.trim(),
+        category: formCategory,
       };
 
       if (isVscTab) {
@@ -664,6 +668,7 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
               gearBandSpec: formGearBandSpec.trim(),
               gearAmmoSize: formGearAmmoSize.trim(),
               gearStance: formGearStance.trim(),
+              category: formCategory,
             };
           }
           return a;
@@ -693,6 +698,7 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
               gearBandSpec: formGearBandSpec.trim(),
               gearAmmoSize: formGearAmmoSize.trim(),
               gearStance: formGearStance.trim(),
+              category: formCategory,
             };
           }
           return a;
@@ -2708,6 +2714,23 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
                   >
                     <option value="Thi đấu">Thi đấu</option>
                     <option value="Bỏ thi">Bỏ thi</option>
+                  </select>
+                </div>
+
+                {/* Category Selection */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-gray-500 uppercase mb-1 flex items-center gap-1 text-indigo-600">
+                    Phân hạng thi đấu:
+                  </label>
+                  <select
+                    value={formCategory}
+                    onChange={(e) => setFormCategory(e.target.value)}
+                    className="w-full px-3 py-1.5 text-sm bg-slate-50 border border-indigo-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-bold text-indigo-800"
+                  >
+                    <option value="Nghiệp dư">Nghiệp dư</option>
+                    <option value="Chuyên nghiệp">Chuyên nghiệp</option>
+                    <option value="Lão tướng">Lão tướng</option>
+                    <option value="Trẻ em">Trẻ em</option>
                   </select>
                 </div>
 

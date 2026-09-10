@@ -32,6 +32,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTeam, setSelectedTeam] = useState("all");
+  const [selectedCategory, setSelectedCategory] = useState("all");
   const [sortField, setSortField] = useState<SortField>("rank");
   const [sortAsc, setSortAsc] = useState(false);
   const [showTopXOnly, setShowTopXOnly] = useState(false);
@@ -1130,7 +1131,8 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
         ath.team.toLowerCase().includes(searchTerm.toLowerCase());
       const matchTeam = selectedTeam === "all" || ath.team.trim() === selectedTeam.trim();
       const matchTopLimit = !showTopXOnly || ath.baseRank <= topXLimit;
-      return matchSearch && matchTeam && matchTopLimit;
+      const matchCategory = selectedCategory === "all" || (ath.category || "Nghiệp dư") === selectedCategory;
+      return matchSearch && matchTeam && matchTopLimit && matchCategory;
     });
 
     // Apply custom sort order if sorting is clicked
@@ -1213,7 +1215,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
 
       return sortAsc ? -comparison : comparison;
     });
-  }, [rankedAthletes, searchTerm, selectedTeam, showTopXOnly, topXLimit, sortField, sortAsc, competitionMode, activeTeamScores]);
+  }, [rankedAthletes, searchTerm, selectedTeam, selectedCategory, showTopXOnly, topXLimit, sortField, sortAsc, competitionMode, activeTeamScores]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -1430,6 +1432,22 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                   {team}
                 </option>
               ))}
+            </select>
+          </div>
+
+          {/* Category Filter */}
+          <div className="flex items-center gap-1 bg-indigo-50/70 border border-indigo-200 rounded-lg px-2 py-1 flex-1 sm:flex-initial">
+            <Award className="w-4 h-4 text-indigo-500" />
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="bg-transparent text-sm focus:outline-none text-indigo-900 font-semibold min-w-[120px] cursor-pointer"
+            >
+              <option value="all">{language === "en" ? "All Categories" : "Tất cả Phân hạng"}</option>
+              <option value="Nghiệp dư">{language === "en" ? "Amateur" : "Nghiệp dư"}</option>
+              <option value="Chuyên nghiệp">{language === "en" ? "Professional" : "Chuyên nghiệp"}</option>
+              <option value="Lão tướng">{language === "en" ? "Senior/Master" : "Lão tướng"}</option>
+              <option value="Trẻ em">{language === "en" ? "Children" : "Trẻ em"}</option>
             </select>
           </div>
         </div>
@@ -1796,7 +1814,12 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                                   {athlete.name}
                                 </span>
                               </div>
-                              <div className="text-[10px] text-gray-400 font-mono mt-0.5">Mã số: {athlete.id}</div>
+                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                <span className="text-[10px] text-gray-400 font-mono">Mã số: {athlete.id}</span>
+                                <span className="text-[9px] bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider font-sans">
+                                  {athlete.category || "Nghiệp dư"}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         );

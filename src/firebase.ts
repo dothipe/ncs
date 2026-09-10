@@ -27,13 +27,17 @@ import {
   where,
   orderBy,
   serverTimestamp,
-  writeBatch
+  writeBatch,
+  setLogLevel
 } from "firebase/firestore";
 
 import firebaseConfig from "../firebase-applet-config.json";
 
 // Initialize App
 const app = initializeApp(firebaseConfig);
+
+// Set log level to silent to prevent SDK logging future timestamp warning on clock skew
+setLogLevel("silent");
 
 // Initialize Authentication
 export const auth = getAuth(app);

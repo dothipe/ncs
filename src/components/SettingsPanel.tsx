@@ -32,6 +32,8 @@ interface SettingsPanelProps {
   setStartDate: (date: string) => void;
   endDate: string;
   setEndDate: (date: string) => void;
+  location: string;
+  setLocation: (loc: string) => void;
   bannerUrl: string;
   setBannerUrl: (url: string) => void;
   avatarUrl: string;
@@ -136,6 +138,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   setStartDate,
   endDate,
   setEndDate,
+  location,
+  setLocation,
   bannerUrl,
   setBannerUrl,
   avatarUrl,
@@ -1019,6 +1023,20 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   className="w-full px-3 py-1.5 text-xs bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-505 font-bold"
                 />
               </div>
+            </div>
+
+            {/* Match Location Input */}
+            <div className="mt-3">
+              <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">
+                {language === "en" ? "Match Location" : "Địa điểm thi đấu"}
+              </label>
+              <input
+                type="text"
+                placeholder={language === "en" ? "e.g., Sam Son, Online..." : "Ví dụ: Sầm Sơn, Online..."}
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                className="w-full px-3 py-1.5 text-xs bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-505 font-bold animate-fade-in"
+              />
             </div>
 
             {/* Description Textarea */}
@@ -3294,6 +3312,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         headReferee: modalHeadReferee.trim().toLowerCase(),
                         isDrawingOpen: false,
                         drawnNumbers: {},
+                        teamDrawnNumbers: {},
+                        drawMethods: {},
+                        teamDrawMethods: {},
                         forcedRefMode: "free",
                         athletes: [],
                         teamAthletes: [],

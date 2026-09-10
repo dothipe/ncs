@@ -53,6 +53,7 @@ export interface TournamentData {
   masterCount?: number;
   startDate?: string;
   endDate?: string;
+  location?: string;
   tournamentType?: "individual" | "team" | "combined";
   bannerUrl?: string;
   avatarUrl?: string;
@@ -64,12 +65,17 @@ export interface TournamentData {
   isDrawingOpen?: boolean;
   drawnNumbers?: Record<string, number>;
   teamDrawnNumbers?: Record<string, number>;
+  drawMethods?: Record<string, "self" | "btc">;
+  teamDrawMethods?: Record<string, "self" | "btc">;
   teamLaneLayoutType?: "parallel" | "sequential";
   forcedRefMode?: "individual" | "team" | "free" | "locked";
   headReferee?: string;
   sortedAthleteOrder?: string[];
   roundShootingOrders?: Record<string, string[]>;
   roundShootingOrderCriteria?: Record<string, string>;
+  activeMonitorRoundIdx?: number;
+  activeMonitorSquad?: number;
+  activeMonitorEnv?: "individual" | "team";
 }
 
 export enum OperationType {
@@ -290,6 +296,10 @@ export async function createOnlineTournament(
     isNational?: boolean;
     isDrawingOpen?: boolean;
     drawnNumbers?: Record<string, number>;
+    teamDrawnNumbers?: Record<string, number>;
+    drawMethods?: Record<string, "self" | "btc">;
+    teamDrawMethods?: Record<string, "self" | "btc">;
+    teamLaneLayoutType?: "parallel" | "sequential";
     forcedRefMode?: "individual" | "team" | "free" | "locked";
     headReferee?: string;
     sortedAthleteOrder?: string[];

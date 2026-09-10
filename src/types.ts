@@ -43,6 +43,7 @@ export interface Athlete {
   gearBandSpec?: string;  // Khổ thun sử dụng (10-20-150 dày 0.55mm, ...)
   gearAmmoSize?: string;  // Bi sử dụng (7mm, 8mm, ...)
   gearStance?: string;    // Tư thế bắn (Tới má, Semi, Full, ...)
+  category?: string;      // "Nghiệp dư" | "Chuyên nghiệp" | "Lão tướng" | "Trẻ em"
   vscPoints?: number;     // Số điểm đặc quyền VSC của VĐV
 }
 
@@ -62,15 +63,22 @@ export interface MatchHistoryItem {
   teamDirectMaxShots?: number;
   startDate?: string;
   endDate?: string;
+  location?: string;
   isAutoBackup?: boolean;
   clubs?: Club[];
   forcedRefMode?: "individual" | "team" | "free" | "locked";
   isDrawingOpen?: boolean;
   drawnNumbers?: Record<string, number>;
   teamDrawnNumbers?: Record<string, number>;
+  drawMethods?: Record<string, "self" | "btc">;
+  teamDrawMethods?: Record<string, "self" | "btc">;
   teamLaneLayoutType?: "sequential" | "parallel";
   roundShootingOrders?: Record<string, string[]>;
   roundShootingOrderCriteria?: Record<string, string>;
+  isNational?: boolean;
+  activeMonitorRoundIdx?: number;
+  activeMonitorSquad?: number;
+  activeMonitorEnv?: "individual" | "team";
 }
 
 export interface StoredAthleteList {

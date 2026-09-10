@@ -15,6 +15,7 @@ interface UseTournamentDatabaseProps {
   matchName: string;
   startDate: string;
   endDate: string;
+  location: string;
   distances: any[];
   shotsCount: number;
   athletes: any[];
@@ -44,6 +45,7 @@ interface UseTournamentDatabaseProps {
   setHeaderTempName: React.Dispatch<React.SetStateAction<string>>;
   setStartDate: React.Dispatch<React.SetStateAction<string>>;
   setEndDate: React.Dispatch<React.SetStateAction<string>>;
+  setLocation: React.Dispatch<React.SetStateAction<string>>;
   setBannerUrl: React.Dispatch<React.SetStateAction<string>>;
   setAvatarUrl: React.Dispatch<React.SetStateAction<string>>;
   setTournamentType: React.Dispatch<React.SetStateAction<"individual" | "team" | "combined">>;
@@ -78,6 +80,7 @@ export const useTournamentDatabase = ({
   matchName,
   startDate,
   endDate,
+  location,
   distances,
   shotsCount,
   athletes,
@@ -106,6 +109,7 @@ export const useTournamentDatabase = ({
   setHeaderTempName,
   setStartDate,
   setEndDate,
+  setLocation,
   setBannerUrl,
   setAvatarUrl,
   setTournamentType,
@@ -177,6 +181,9 @@ export const useTournamentDatabase = ({
           }
           if (docVal.endDate !== undefined) {
             setEndDate((prev) => prev === (docVal.endDate || "") ? prev : (docVal.endDate || ""));
+          }
+          if (docVal.location !== undefined) {
+            setLocation((prev) => prev === (docVal.location || "") ? prev : (docVal.location || ""));
           }
           if (docVal.bannerUrl !== undefined) {
             setBannerUrl((prev) => prev === (docVal.bannerUrl || VSC_DEFAULT_LOGO) ? prev : (docVal.bannerUrl || VSC_DEFAULT_LOGO));
@@ -279,6 +286,7 @@ export const useTournamentDatabase = ({
         deepEqual(matchName, currentTournamentDoc.matchName) &&
         deepEqual(startDate, currentTournamentDoc.startDate || "") &&
         deepEqual(endDate, currentTournamentDoc.endDate || "") &&
+        deepEqual(location, currentTournamentDoc.location || "") &&
         deepEqual(distances, currentTournamentDoc.distances) &&
         deepEqual(shotsCount, currentTournamentDoc.shotsCount) &&
         deepEqual(teamDistances, currentTournamentDoc.teamDistances) &&
@@ -306,6 +314,7 @@ export const useTournamentDatabase = ({
           !deepEqual(matchName, currentTournamentDoc?.matchName) ||
           !deepEqual(startDate, currentTournamentDoc?.startDate) ||
           !deepEqual(endDate, currentTournamentDoc?.endDate) ||
+          !deepEqual(location, currentTournamentDoc?.location) ||
           !deepEqual(distances, currentTournamentDoc?.distances) ||
           !deepEqual(shotsCount, currentTournamentDoc?.shotsCount) ||
           !deepEqual(athletes, currentTournamentDoc?.athletes) ||
@@ -338,6 +347,7 @@ export const useTournamentDatabase = ({
               matchName,
               startDate,
               endDate,
+              location,
               distances,
               shotsCount,
               athletes,
@@ -373,6 +383,7 @@ export const useTournamentDatabase = ({
     matchName,
     startDate,
     endDate,
+    location,
     distances,
     shotsCount,
     athletes,

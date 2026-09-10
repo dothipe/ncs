@@ -36,6 +36,8 @@ interface SettingsViewProps {
   setStartDate: (date: string) => void;
   endDate: string;
   setEndDate: (date: string) => void;
+  location: string;
+  setLocation: (loc: string) => void;
   setClubs: (clubs: any[]) => void;
   
   // Team modes
@@ -109,6 +111,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   setStartDate,
   endDate,
   setEndDate,
+  location,
+  setLocation,
   setClubs,
   
   // Team modes
@@ -212,6 +216,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           setStartDate={setStartDate}
           endDate={endDate}
           setEndDate={setEndDate}
+          location={location}
+          setLocation={setLocation}
           setClubs={setClubs}
           
           // Team modes

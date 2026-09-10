@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { 
   ClipboardCheck, 
   User, 
@@ -15,10 +16,15 @@ import {
   Check,
   Search,
   ChevronRight,
-  Printer
+  Printer,
+  X,
+  UserCheck,
+  UserPlus,
+  ArrowRight,
+  ShieldAlert
 } from "lucide-react";
-import { updateOnlineTournament, getVscSystemAthletes } from "../lib/firebaseService";
-import { Athlete } from "../types";
+import { updateOnlineTournament, getVscSystemAthletes, subscribeToVscSystemClubs } from "../lib/firebaseService";
+import { Athlete, Club } from "../types";
 
 const AVATAR_MALE = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80";
 
@@ -29,6 +35,7 @@ interface TournamentRegistrationViewProps {
   currentUser: any;
   onOpenAuthModal?: () => void;
   onAddAuditLog?: (msg: string) => void;
+  setActiveTab?: (tab: any) => void;
 }
 
 export const TournamentRegistrationView: React.FC<TournamentRegistrationViewProps> = ({
@@ -37,36 +44,42 @@ export const TournamentRegistrationView: React.FC<TournamentRegistrationViewProp
   language,
   currentUser,
   onOpenAuthModal,
-  onAddAuditLog
+  onAddAuditLog,
+  setActiveTab
 }) => {
   const isEng = language === "en";
   const [isRegistering, setIsRegistering] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [systemAthletes, setSystemAthletes] = useState<any[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchedResults, setSearchedResults] = useState<any[]>([]);
-  const [selectedSystemAthlete, setSelectedSystemAthlete] = useState<any | null>(null);
-  const [showManualForm, setShowManualForm] = useState(false);
+  
+  const [systemAthletes, setSystemAthletes] = useState<Athlete[]>([]);
+  const [systemClubs, setSystemClubs] = useState<Club[]>([]);
 
-  // Manual form states
-  const [manualName, setManualName] = useState("");
-  const [manualTeam, setManualTeam] = useState("");
-  const [manualGender, setManualGender] = useState("Nam");
-  const [manualEmail, setManualEmail] = useState("");
-  const [manualGearSling, setManualGearSling] = useState("");
-  const [manualGearFork, setManualGearFork] = useState("");
-  const [manualGearBand, setManualGearBand] = useState("");
-  const [manualGearStance, setManualGearStance] = useState("");
+  // Double confirmation modal states
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmStep, setConfirmStep] = useState<1 | 2>(1);
+  const [athleteToRegister, setAthleteToRegister] = useState<any | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState("Nghiệp dư");
 
   const masterAthletes: Athlete[] = currentTournamentDoc?.masterAthletes || [];
   const drawnNumbers = currentTournamentDoc?.drawnNumbers || {};
   const isDrawingOpen = currentTournamentDoc?.isDrawingOpen || false;
   const laneCapacity = currentTournamentDoc?.laneCapacity || 10;
   const matchName = currentTournamentDoc?.matchName || "";
-  const matchDate = currentTournamentDoc?.matchDate || "";
+  
+  const rawMatchDate = currentTournamentDoc?.startDate || currentTournamentDoc?.matchDate || "";
+  const formatMatchDate = (dateStr: string) => {
+    if (!dateStr) return "";
+    const parts = dateStr.split("-");
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return dateStr;
+  };
+  const matchDate = formatMatchDate(rawMatchDate);
+
   const matchLocation = currentTournamentDoc?.location || "";
 
-  // Fetch VSC System Athletes for verification and linking
+  // Fetch VSC System Athletes & Clubs
   useEffect(() => {
     const fetchSys = async () => {
       try {
@@ -77,35 +90,49 @@ export const TournamentRegistrationView: React.FC<TournamentRegistrationViewProp
       }
     };
     fetchSys();
+
+    const unsubClubs = subscribeToVscSystemClubs((list) => {
+      setSystemClubs(list || []);
+    });
+
+    return () => {
+      unsubClubs();
+    };
   }, []);
 
-  // Search filter
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setSearchedResults([]);
-      return;
-    }
-    const cleanQuery = searchQuery.toLowerCase().trim();
-    const filtered = systemAthletes.filter(ath => 
-      (ath.name && ath.name.toLowerCase().includes(cleanQuery)) ||
-      (ath.id && ath.id.toLowerCase().includes(cleanQuery)) ||
-      (ath.email && ath.email.toLowerCase().includes(cleanQuery)) ||
-      (ath.province && ath.province.toLowerCase().includes(cleanQuery))
-    );
-    setSearchedResults(filtered.slice(0, 5));
-  }, [searchQuery, systemAthletes]);
+  // Find the logged-in user's VSC System Athlete profile
+  const userProfile = useMemo(() => {
+    if (!currentUser || !systemAthletes.length) return null;
+    const email = currentUser.email?.toLowerCase().trim();
+    return systemAthletes.find(ath => ath.email?.toLowerCase().trim() === email) || null;
+  }, [currentUser, systemAthletes]);
 
-  // Determine if current logged in user is registered
-  const registeredAthlete = masterAthletes.find(ath => {
-    if (!currentUser) return false;
-    // Match by email
-    const loggedInEmail = currentUser.email?.toLowerCase().trim();
-    if (loggedInEmail && ath.email?.toLowerCase().trim() === loggedInEmail) {
-      return true;
-    }
-    // Match by ID if athlete ID is associated with logged in user profile
-    return false;
-  });
+  // Determine if the logged-in user is registered in this tournament
+  const registeredAthlete = useMemo(() => {
+    if (!userProfile) return null;
+    return masterAthletes.find(ath => ath.id === userProfile.id) || null;
+  }, [userProfile, masterAthletes]);
+
+  // Determine if the logged-in user is a Club President (Trưởng CLB)
+  const myClubs = useMemo(() => {
+    if (!currentUser || !systemClubs.length) return [];
+    const email = currentUser.email?.toLowerCase().trim();
+    return systemClubs.filter(club => club.leaderEmail?.toLowerCase().trim() === email);
+  }, [currentUser, systemClubs]);
+
+  const activeClub = myClubs.length > 0 ? myClubs[0] : null;
+  const isClubLeader = !!activeClub;
+
+  // Map club members to their VSC System Athlete profile
+  const clubMemberProfiles = useMemo(() => {
+    if (!activeClub || !systemAthletes.length) return [];
+    return activeClub.members
+      .map(m => {
+        const fullProfile = systemAthletes.find(ath => ath.id === m.athleteId);
+        return fullProfile ? { ...fullProfile, clubRole: m.role } : null;
+      })
+      .filter((p): p is NonNullable<typeof p> => p !== null);
+  }, [activeClub, systemAthletes]);
 
   // Calculate dynamic squad and lane
   const getAthletePlacements = (athleteId: string) => {
@@ -116,6 +143,12 @@ export const TournamentRegistrationView: React.FC<TournamentRegistrationViewProp
     const squadNum = Math.floor((sbd - 1) / laneCapacity) + 1;
     const laneNum = ((sbd - 1) % laneCapacity) + 1;
     return { squadNum, laneNum, pos: sbd };
+  };
+
+  const initiateRegistrationFlow = (athlete: any) => {
+    setAthleteToRegister(athlete);
+    setConfirmStep(1);
+    setShowConfirmModal(true);
   };
 
   const handleRegisterWithSystem = async (sysAthlete: any) => {
@@ -147,11 +180,12 @@ export const TournamentRegistrationView: React.FC<TournamentRegistrationViewProp
         team: sysAthlete.team || sysAthlete.province || "Tự Do",
         gender: sysAthlete.gender || "Nam",
         avatarUrl: sysAthlete.avatarUrl || AVATAR_MALE,
-        email: currentUser?.email?.toLowerCase().trim() || sysAthlete.email || "",
+        email: sysAthlete.email?.toLowerCase().trim() || "",
         scores: emptyScores,
         province: sysAthlete.province || "",
         country: sysAthlete.country || "Việt Nam",
-        countryCode: sysAthlete.countryCode || "VN"
+        countryCode: sysAthlete.countryCode || "VN",
+        category: selectedCategory
       };
 
       const updated = [...masterAthletes, newAthlete];
@@ -161,66 +195,6 @@ export const TournamentRegistrationView: React.FC<TournamentRegistrationViewProp
         ? `Athlete ${newAthlete.name} (${newAthlete.id}) registered online` 
         : `VĐV ${newAthlete.name} (${newAthlete.id}) tự đăng ký trực tuyến`);
 
-      setSelectedSystemAthlete(null);
-      setSearchQuery("");
-      alert(isEng ? "Registration Successful!" : "Đăng Ký Thành Công!");
-    } catch (err) {
-      console.error(err);
-      alert("Đăng ký thất bại. Vui lòng thử lại!");
-    } finally {
-      setIsRegistering(false);
-    }
-  };
-
-  const handleRegisterManual = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeHistoryId) return;
-    if (!manualName.trim()) {
-      alert(isEng ? "Please enter your name" : "Vui lòng nhập họ và tên");
-      return;
-    }
-
-    setIsRegistering(true);
-    try {
-      // Find a safe custom ID
-      const randomIdSuffix = Math.floor(1000 + Math.random() * 9000);
-      const customId = `REG-${randomIdSuffix}`;
-
-      const distances = currentTournamentDoc?.distances || [];
-      const distanceKeys = distances.map((d: any) => d.id || d);
-      
-      const emptyScores: Record<string, boolean[]> = {};
-      const shotsCount = currentTournamentDoc?.shotsCount || 10;
-      distanceKeys.forEach((k: string) => {
-        emptyScores[k] = Array(shotsCount).fill(false);
-      });
-
-      const newAthlete: Athlete = {
-        id: customId,
-        name: manualName.trim(),
-        team: manualTeam.trim() || "Tự Do",
-        gender: manualGender,
-        avatarUrl: AVATAR_MALE,
-        email: currentUser?.email?.toLowerCase().trim() || manualEmail.trim() || "",
-        scores: emptyScores,
-        gearSlingName: manualGearSling.trim(),
-        gearForkWidth: manualGearFork.trim(),
-        gearBandSpec: manualGearBand.trim(),
-        gearStance: manualGearStance.trim(),
-        country: "Việt Nam",
-        countryCode: "VN"
-      };
-
-      const updated = [...masterAthletes, newAthlete];
-      await updateOnlineTournament(activeHistoryId, { masterAthletes: updated });
-
-      onAddAuditLog?.(isEng 
-        ? `Guest athlete ${newAthlete.name} (${newAthlete.id}) registered online` 
-        : `VĐV tự do ${newAthlete.name} (${newAthlete.id}) tự đăng ký trực tuyến`);
-
-      setShowManualForm(false);
-      setManualName("");
-      setManualTeam("");
       alert(isEng ? "Registration Successful!" : "Đăng Ký Thành Công!");
     } catch (err) {
       console.error(err);
@@ -258,8 +232,12 @@ export const TournamentRegistrationView: React.FC<TournamentRegistrationViewProp
       const nextDrawnNumbers = { ...drawnNumbers };
       nextDrawnNumbers[registeredAthlete.id] = pickedSBD;
 
+      const nextDrawMethods = { ...(currentTournamentDoc?.drawMethods || {}) };
+      nextDrawMethods[registeredAthlete.id] = "self";
+
       await updateOnlineTournament(activeHistoryId, {
-        drawnNumbers: nextDrawnNumbers
+        drawnNumbers: nextDrawnNumbers,
+        drawMethods: nextDrawMethods
       });
 
       onAddAuditLog?.(isEng 
@@ -359,451 +337,538 @@ export const TournamentRegistrationView: React.FC<TournamentRegistrationViewProp
             {isEng ? "Sign In / Sign Up Now" : "Đăng Nhập Ngay"}
           </button>
         </div>
-      ) : !registeredAthlete ? (
-        /* Registration Section */
-        <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 p-6 sm:p-8 rounded-3xl shadow-sm space-y-6 animate-fadeIn">
-          <div className="border-b border-slate-100 dark:border-slate-850 pb-4">
-            <h2 className="text-base font-black text-slate-800 dark:text-white uppercase tracking-wide flex items-center gap-2">
-              <ClipboardCheck className="w-5 h-5 text-indigo-600" />
-              {isEng ? "Step 1: Register for the tournament" : "BƯỚC 1: ĐĂNG KÝ THAM GIA GIẢI ĐẤU"}
+      ) : !userProfile ? (
+        /* Enforce VSC System Profile creation before registering */
+        <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 p-8 rounded-3xl text-center shadow-md max-w-lg mx-auto space-y-5 animate-fadeIn">
+          <div className="w-14 h-14 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center mx-auto border border-amber-500/25">
+            <AlertCircle className="w-7 h-7 animate-pulse" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-base font-black text-slate-800 dark:text-white uppercase tracking-wide">
+              {isEng ? "VSC SYSTEM PROFILE REQUIRED" : "YÊU CẦU ĐĂNG KÝ HỒ SƠ VĐV HỆ THỐNG"}
             </h2>
-            <p className="text-[11px] text-slate-400 mt-1">
+            <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed max-w-md mx-auto">
               {isEng 
-                ? "You can link an existing VSC System Athlete card or fill in the form directly."
-                : "Bạn có thể liên kết trực tiếp Thẻ VĐV hệ thống VSC hiện tại của mình hoặc đăng ký hồ sơ tự do mới bên dưới."}
+                ? "You do not have a registered VSC System Athlete card linked to your account. To participate in this official national tournament, please create your official system profile first."
+                : "Tài khoản của bạn chưa liên kết với Thẻ vận động viên hệ thống VSC. Để đăng ký tham gia giải đấu quốc gia, bạn cần đăng ký/tạo hồ sơ VĐV Hệ Thống VSC của mình trước."}
             </p>
           </div>
-
-          {!showManualForm ? (
-            <div className="space-y-4">
-              {/* Search VSC System */}
-              <div className="bg-indigo-50/50 dark:bg-indigo-950/20 p-5 rounded-2xl border border-indigo-100/50 dark:border-indigo-900/20 space-y-3.5">
-                <label className="block text-xs font-black text-indigo-900 dark:text-indigo-400 uppercase tracking-wider">
-                  {isEng ? "Option A: Search & Link VSC System Athlete Card" : "Phương Án A: Tìm Kiếm & Liên Kết Thẻ VĐV Hệ Thống VSC"}
-                </label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder={isEng ? "Enter athlete ID (VSC-XXXX), Name, or Hometown..." : "Nhập Mã VĐV (VSC-XXXX), Tên, hoặc Tỉnh thành của bạn..."}
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-1 focus:ring-indigo-500 outline-none font-bold"
-                  />
-                </div>
-
-                {/* Searched Results dropdown */}
-                {searchedResults.length > 0 && (
-                  <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl divide-y divide-slate-100 dark:divide-slate-850 overflow-hidden shadow-md">
-                    {searchedResults.map(ath => (
-                      <div 
-                        key={ath.id}
-                        onClick={() => setSelectedSystemAthlete(ath)}
-                        className={`p-3 text-xs flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors ${
-                          selectedSystemAthlete?.id === ath.id ? "bg-indigo-500/10" : ""
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <img 
-                            src={ath.avatarUrl || AVATAR_MALE} 
-                            alt={ath.name} 
-                            className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800 shrink-0 object-cover" 
-                            referrerPolicy="no-referrer"
-                          />
-                          <div>
-                            <span className="font-extrabold text-slate-800 dark:text-white block">{ath.name}</span>
-                            <span className="text-[10px] text-slate-400 font-bold block">{ath.id} • {ath.province || ath.team || "Tự Do"}</span>
-                          </div>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-slate-400" />
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Selected Athlete Confirmation Card */}
-                {selectedSystemAthlete && (
-                  <div className="bg-white dark:bg-slate-950 border-2 border-indigo-500/50 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-scaleUp">
-                    <div className="flex items-center gap-3.5">
-                      <img 
-                        src={selectedSystemAthlete.avatarUrl || AVATAR_MALE} 
-                        alt={selectedSystemAthlete.name} 
-                        className="w-12 h-12 rounded-full border-2 border-indigo-500/30 object-cover shrink-0"
-                        referrerPolicy="no-referrer"
-                      />
-                      <div>
-                        <span className="text-xs font-black text-rose-500 uppercase tracking-widest block font-mono">{selectedSystemAthlete.id}</span>
-                        <span className="text-sm font-black text-slate-850 dark:text-white block">{selectedSystemAthlete.name}</span>
-                        <span className="text-[10.5px] text-slate-500 dark:text-slate-400 block font-semibold">{isEng ? "Club/Province: " : "Đoàn / Tỉnh thành: "} {selectedSystemAthlete.province || selectedSystemAthlete.team || "Tự Do"}</span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={isRegistering}
-                      onClick={() => handleRegisterWithSystem(selectedSystemAthlete)}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1 shrink-0"
-                    >
-                      {isRegistering ? (
-                        <span className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></span>
-                      ) : (
-                        <>
-                          <Check className="w-3.5 h-3.5" />
-                          {isEng ? "Confirm & Register This Card" : "Xác Nhận Đăng Ký Thẻ Này"}
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Toggle Manual Form */}
-              <div className="text-center pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowManualForm(true)}
-                  className="text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 text-xs font-black underline cursor-pointer"
-                >
-                  {isEng ? "Option B: Fill in Registration Details Manually (Guest Athlete)" : "Phương Án B: Tự Điền Thông Tin Đăng Ký (VĐV Tự Do)"}
-                </button>
-              </div>
-            </div>
-          ) : (
-            /* Manual Form */
-            <form onSubmit={handleRegisterManual} className="bg-slate-50 dark:bg-slate-950 p-6 rounded-2xl border border-slate-150 dark:border-slate-800 space-y-4 animate-fadeIn">
-              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-850 pb-2">
-                <span className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                  {isEng ? "Manual Athlete Profile Form" : "BIỂU MẪU ĐĂNG KÝ VĐV TỰ DO"}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowManualForm(false)}
-                  className="text-[10px] text-slate-405 font-bold hover:text-slate-700 cursor-pointer"
-                >
-                  {isEng ? "← Back to System Search" : "← Quay lại tìm kiếm hệ thống"}
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">{isEng ? "Full Name *" : "Họ và Tên *"}</label>
-                  <input
-                    type="text"
-                    required
-                    value={manualName}
-                    onChange={(e) => setManualName(e.target.value)}
-                    placeholder="e.g. NGUYEN VAN A"
-                    className="w-full px-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg outline-none font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">{isEng ? "Club / Province *" : "CLB / Đoàn Thi Đấu *"}</label>
-                  <input
-                    type="text"
-                    required
-                    value={manualTeam}
-                    onChange={(e) => setManualTeam(e.target.value)}
-                    placeholder="e.g. SLINGSHOT HA NOI"
-                    className="w-full px-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg outline-none font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">{isEng ? "Gender" : "Giới Tính"}</label>
-                  <select
-                    value={manualGender}
-                    onChange={(e) => setManualGender(e.target.value)}
-                    className="w-full px-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg outline-none font-bold"
-                  >
-                    <option value="Nam">{isEng ? "Male" : "Nam"}</option>
-                    <option value="Nữ">{isEng ? "Female" : "Nữ"}</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">{isEng ? "Email Address" : "Địa chỉ Email"}</label>
-                  <input
-                    type="email"
-                    value={manualEmail}
-                    onChange={(e) => setManualEmail(e.target.value)}
-                    placeholder="name@example.com"
-                    className="w-full px-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg outline-none font-bold"
-                  />
-                </div>
-              </div>
-
-              {/* Technical Specifications of Slingshot Gear */}
-              <div className="pt-3 border-t border-slate-200 dark:border-slate-850">
-                <span className="block text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-3">{isEng ? "Technical Specifications (Optional)" : "THÔNG SỐ KỸ THUẬT NÁ SỬ DỤNG (NẾU CÓ)"}</span>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div>
-                    <label className="block text-[9px] font-black text-slate-550 uppercase mb-1">{isEng ? "Gear Sling" : "Loại Ná"}</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Vo Cuc"
-                      value={manualGearSling}
-                      onChange={(e) => setManualGearSling(e.target.value)}
-                      className="w-full px-2 py-1 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg outline-none font-semibold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-black text-slate-550 uppercase mb-1">{isEng ? "Fork Width" : "Độ rộng chạc"}</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. 7.5cm"
-                      value={manualGearFork}
-                      onChange={(e) => setManualGearFork(e.target.value)}
-                      className="w-full px-2 py-1 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg outline-none font-semibold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-black text-slate-550 uppercase mb-1">{isEng ? "Band Spec" : "Khổ thun"}</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. 0.55mm"
-                      value={manualGearBand}
-                      onChange={(e) => setManualGearBand(e.target.value)}
-                      className="w-full px-2 py-1 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg outline-none font-semibold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-black text-slate-550 uppercase mb-1">{isEng ? "Ammo/Stance" : "Tư thế bắn"}</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Toi ma"
-                      value={manualGearStance}
-                      onChange={(e) => setManualGearStance(e.target.value)}
-                      className="w-full px-2 py-1 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg outline-none font-semibold"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end pt-2">
-                <button
-                  type="submit"
-                  disabled={isRegistering}
-                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black cursor-pointer shadow-sm disabled:opacity-55"
-                >
-                  {isRegistering ? (
-                    <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></span>
-                  ) : (
-                    isEng ? "Submit Registration" : "Hoàn Tất Đăng Ký"
-                  )}
-                </button>
-              </div>
-            </form>
-          )}
+          <button
+            onClick={() => setActiveTab?.("vsc_system_directory")}
+            className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:opacity-90 text-slate-900 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm transition-all cursor-pointer active:scale-98"
+          >
+            {isEng ? "Go Create System Athlete Profile Now" : "ĐĂNG KÝ HỒ SƠ VĐV HỆ THỐNG NGAY"}
+          </button>
         </div>
       ) : (
-        /* Registered User Dashboard, Drawing, Card & Success Info */
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          
-          {/* Left panel: Info status & SBD Drawing button */}
-          <div className="lg:col-span-7 space-y-6">
-            <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 p-6 sm:p-8 rounded-3xl shadow-sm space-y-6">
-              <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-850 pb-4">
-                <div className="p-2.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-2xl">
-                  <CheckCircle className="w-6 h-6 animate-pulse" />
-                </div>
-                <div>
-                  <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">{isEng ? "STATUS" : "TRẠNG THÁI HỒ SƠ"}</span>
-                  <h2 className="text-base font-black text-slate-800 dark:text-white uppercase tracking-wide">
-                    {isEng ? "Registration Completed!" : "ĐÃ ĐĂNG KÝ THI ĐẤU THÀNH CÔNG!"}
-                  </h2>
-                </div>
-              </div>
-
-              {/* Dynamic instruction or info based on SBD status */}
-              {(() => {
-                const sbdNum = drawnNumbers[registeredAthlete.id];
-                const { squadNum, laneNum, pos } = getAthletePlacements(registeredAthlete.id);
-
-                if (sbdNum) {
-                  return (
-                    <div className="bg-emerald-500/5 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 p-5 rounded-2xl space-y-3">
-                      <span className="block text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">{isEng ? "OFFICIAL COMPETITOR CONFIRMED" : "XÁC NHẬN SỐ BÁO DANH & ĐIỀU PHỐI THỰC ĐỊA"}</span>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
-                        {isEng 
-                          ? `You have drawn SBD #${sbdNum} and are scheduled for Squad ${squadNum} on Lane ${laneNum} (Order of Entry: ${pos}). Please present your Athlete Card at the gate.`
-                          : `Bạn đã hoàn tất bốc thăm Số báo danh chính thức là #${String(sbdNum).padStart(3, "0")}. Theo sắp xếp điều phối từ ban tổ chức, bạn sẽ thi đấu tại Lượt ${squadNum} - Bệ bắn (Lane) ${laneNum} (Vị trí xếp hàng: ${pos}).`}
-                      </p>
+        /* Logged in user has a system profile */
+        <div className="space-y-8 animate-fadeIn">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Left panel: Info status & SBD Drawing button */}
+            <div className="lg:col-span-7 space-y-6">
+              
+              {!registeredAthlete ? (
+                /* Profile & Register Button */
+                <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 p-6 sm:p-8 rounded-3xl shadow-sm space-y-6">
+                  <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-850 pb-4">
+                    <div className="p-2.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-2xl">
+                      <ClipboardCheck className="w-6 h-6" />
                     </div>
-                  );
-                } else if (isDrawingOpen) {
-                  return (
-                    <div className="bg-amber-500/5 dark:bg-amber-955/20 border border-amber-100 dark:border-amber-900/40 p-5 rounded-2xl space-y-4">
-                      <span className="block text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest">{isEng ? "LUCKY DRAW FOR SBD PENDING" : "CHỜ BỐC THĂM SỐ BÁO DANH NGẪU NHIÊN"}</span>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
-                        {isEng 
-                          ? "The drawing portal is currently open! Please click the button below to randomly draw your Số Báo Danh (SBD). Your bệ bắn (lane) & lượt thi đấu (squad) will be automatically generated immediately."
-                          : "Ban tổ chức giải đấu đang mở cổng bốc thăm trực tuyến! Vui lòng nhấn nút dưới đây để hòm phiếu điện tử tự động bốc và cấp Số Báo Danh (SBD) ngẫu nhiên cho bạn."}
-                      </p>
-                      
-                      <button
-                        type="button"
-                        disabled={isDrawing}
-                        onClick={handleAthleteDrawSBD}
-                        className="w-full py-3.5 bg-gradient-to-r from-rose-600 to-indigo-650 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 shadow-md transition-all active:scale-98 cursor-pointer"
-                      >
-                        <Shuffle className="w-4 h-4 animate-spin-slow" />
-                        {isDrawing ? (
-                          <span>{isEng ? "Drawing..." : "ĐANG BỐC THĂM..."}</span>
-                        ) : (
-                          <span>{isEng ? "CLICK TO LUCKY DRAW MY SBD" : "BẤM ĐỂ TỰ BỐC THĂM SBD NGẪU NHIÊN"}</span>
-                        )}
-                      </button>
-                    </div>
-                  );
-                } else {
-                  return (
-                    <div className="bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-800 p-5 rounded-2xl space-y-2">
-                      <span className="block text-[10px] font-black text-rose-500 uppercase tracking-widest">{isEng ? "DRAWING PORTAL LOCKED" : "CỔNG BỐC THĂM HIỆN ĐANG ĐÓNG"}</span>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                        {isEng 
-                          ? "The draw has not been opened yet or was closed by the BTC. Please wait for the official notification during the technical briefing."
-                          : "Hệ thống bốc thăm trực tuyến tự động chưa được mở hoặc Ban Tổ Chức đang tạm đóng lại. Vui lòng chờ tín hiệu hoặc thông báo chính thức tại khu vực thi đấu."}
-                      </p>
-                    </div>
-                  );
-                }
-              })()}
-
-              {/* Tournament Details Section */}
-              <div className="border-t border-slate-100 dark:border-slate-850 pt-5 space-y-4">
-                <span className="block text-[10px] font-black text-slate-450 uppercase tracking-widest">{isEng ? "Official Tournament Details" : "THÔNG TIN CHI TIẾT GIẢI ĐẤU"}</span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="flex items-start gap-2.5 text-xs">
-                    <Calendar className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
                     <div>
-                      <span className="font-extrabold text-slate-700 dark:text-slate-300 block">{isEng ? "Match Date" : "Ngày Thi Đấu"}</span>
-                      <span className="text-slate-500 dark:text-slate-400 block font-bold">{matchDate || (isEng ? "To be announced" : "Đang cập nhật")}</span>
+                      <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{isEng ? "STEP 1" : "BƯỚC 1"}</span>
+                      <h2 className="text-base font-black text-slate-800 dark:text-white uppercase tracking-wide">
+                        {isEng ? "Tournament Entry Registration" : "ĐĂNG KÝ THAM GIA GIẢI ĐẤU QUỐC GIA"}
+                      </h2>
                     </div>
                   </div>
-                  <div className="flex items-start gap-2.5 text-xs">
-                    <MapPin className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-extrabold text-slate-700 dark:text-slate-300 block">{isEng ? "Location" : "Địa Điểm"}</span>
-                      <span className="text-slate-500 dark:text-slate-400 block font-bold">{matchLocation || (isEng ? "Official venue" : "Bệ bắn chính thức VSC")}</span>
+
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
+                    {isEng 
+                      ? "Your VSC System profile was successfully detected! Please review your official card below and click confirm to register for the tournament."
+                      : "Hệ thống đã nhận diện thành công hồ sơ VĐV Hệ Thống VSC của bạn! Vui lòng kiểm tra thông tin thẻ bên dưới và nhấn đăng ký tham gia giải đấu chính thức."}
+                  </p>
+
+                  {/* Logged in user's system profile card */}
+                  <div className="bg-slate-50 dark:bg-slate-955/20 border border-slate-150 dark:border-slate-800 p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <img 
+                        src={userProfile.avatarUrl || AVATAR_MALE} 
+                        alt={userProfile.name} 
+                        className="w-14 h-14 rounded-full border-2 border-indigo-500/30 object-cover shrink-0"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="text-center sm:text-left">
+                        <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest block font-mono">{userProfile.id}</span>
+                        <h3 className="text-sm font-black text-slate-850 dark:text-white block">{userProfile.name}</h3>
+                        <span className="text-[11px] text-slate-400 font-bold block">{isEng ? "Province/Club: " : "Tỉnh thành/CLB: "} {userProfile.province || userProfile.team || "Tự Do"}</span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-start gap-2.5 text-xs">
-                    <Users className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-extrabold text-slate-700 dark:text-slate-300 block">{isEng ? "Category" : "Quy Mô"}</span>
-                      <span className="text-slate-500 dark:text-slate-400 block font-bold">{isEng ? "National Slingshot Championship" : "Vô Địch Cup Quốc Gia"}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2.5 text-xs">
-                    <FileText className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-extrabold text-slate-700 dark:text-slate-300 block">{isEng ? "Target Format" : "Thể Thức & Quy Cách Thụ Bia"}</span>
-                      <span className="text-slate-500 dark:text-slate-400 block font-bold">{isEng ? "Official VSC Standard" : "Thụ bia tiêu chuẩn VSC Việt Nam"}</span>
-                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => initiateRegistrationFlow(userProfile)}
+                      className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-md active:scale-98"
+                    >
+                      {isEng ? "Register For Tournament" : "ĐĂNG KÝ THI ĐẤU"}
+                    </button>
                   </div>
                 </div>
-              </div>
+              ) : (
+                /* Registered Dashboard, Drawing & Success Pass */
+                <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 p-6 sm:p-8 rounded-3xl shadow-sm space-y-6">
+                  <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-850 pb-4">
+                    <div className="p-2.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-2xl">
+                      <CheckCircle className="w-6 h-6 animate-pulse" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">{isEng ? "STATUS" : "TRẠNG THÁI HỒ SƠ"}</span>
+                      <h2 className="text-base font-black text-slate-800 dark:text-white uppercase tracking-wide">
+                        {isEng ? "Registration Completed!" : "ĐÃ ĐĂNG KÝ THI ĐẤU THÀNH CÔNG!"}
+                      </h2>
+                    </div>
+                  </div>
+
+                  {/* Dynamic instruction or info based on SBD status */}
+                  {(() => {
+                    const sbdNum = drawnNumbers[registeredAthlete.id];
+                    const { squadNum, laneNum, pos } = getAthletePlacements(registeredAthlete.id);
+
+                    if (sbdNum) {
+                      return (
+                        <div className="bg-emerald-500/5 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 p-5 rounded-2xl space-y-3">
+                          <span className="block text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">{isEng ? "OFFICIAL COMPETITOR CONFIRMED" : "XÁC NHẬN SỐ BÁO DANH & ĐIỀU PHỐI THỰC ĐỊA"}</span>
+                          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
+                            {isEng 
+                              ? `You have drawn SBD #${sbdNum} and are scheduled for Squad ${squadNum} on Lane ${laneNum} (Order of Entry: ${pos}). Please present your Athlete Card at the gate.`
+                              : `Bạn đã hoàn tất bốc thăm Số báo danh chính thức là #${String(sbdNum).padStart(3, "0")}. Theo sắp xếp điều phối từ ban tổ chức, bạn sẽ thi đấu tại Lượt ${squadNum} - Bệ bắn (Lane) ${laneNum} (Vị trí xếp hàng: ${pos}).`}
+                          </p>
+                        </div>
+                      );
+                    } else if (isDrawingOpen) {
+                      return (
+                        <div className="bg-amber-500/5 dark:bg-amber-955/20 border border-amber-100 dark:border-amber-900/40 p-5 rounded-2xl space-y-4">
+                          <span className="block text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest">{isEng ? "LUCKY DRAW FOR SBD PENDING" : "CHỜ BỐC THĂM SỐ BÁO DANH NGẪU NHIÊN"}</span>
+                          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
+                            {isEng 
+                              ? "The drawing portal is currently open! Please click the button below to randomly draw your Số Báo Danh (SBD). Your bệ bắn (lane) & lượt thi đấu (squad) will be automatically generated immediately."
+                              : "Ban tổ chức giải đấu đang mở cổng bốc thăm trực tuyến! Vui lòng nhấn nút dưới đây để hòm phiếu điện tử tự động bốc và cấp Số Báo Danh (SBD) ngẫu nhiên cho bạn."}
+                          </p>
+                          
+                          <button
+                            type="button"
+                            disabled={isDrawing}
+                            onClick={handleAthleteDrawSBD}
+                            className="w-full py-3.5 bg-gradient-to-r from-rose-600 to-indigo-650 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 shadow-md transition-all active:scale-98 cursor-pointer"
+                          >
+                            <Shuffle className="w-4 h-4 animate-spin-slow" />
+                            {isDrawing ? (
+                              <span>{isEng ? "Drawing..." : "ĐANG BỐC THĂM..."}</span>
+                            ) : (
+                              <span>{isEng ? "CLICK TO LUCKY DRAW MY SBD" : "BẤM ĐỂ TỰ BỐC THĂM SBD NGẪU NHIÊN"}</span>
+                            )}
+                          </button>
+                        </div>
+                      );
+                    } else {
+                      return (
+                        <div className="bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-800 p-5 rounded-2xl space-y-2">
+                          <span className="block text-[10px] font-black text-rose-500 uppercase tracking-widest">{isEng ? "DRAWING PORTAL LOCKED" : "CỔNG BỐC THĂM HIỆN ĐANG ĐÓNG"}</span>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                            {isEng 
+                              ? "The draw has not been opened yet or was closed by the BTC. Please wait for the official notification during the technical briefing."
+                              : "Hệ thống bốc thăm trực tuyến tự động chưa được mở hoặc Ban Tổ Chức đang tạm đóng lại. Vui lòng chờ tín hiệu hoặc thông báo chính thức tại khu vực thi đấu."}
+                          </p>
+                        </div>
+                      );
+                    }
+                  })()}
+
+                  {/* Tournament Details Section */}
+                  <div className="border-t border-slate-100 dark:border-slate-850 pt-5 space-y-4">
+                    <span className="block text-[10px] font-black text-slate-450 uppercase tracking-widest">{isEng ? "Official Tournament Details" : "THÔNG TIN CHI TIẾT GIẢI ĐẤU"}</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="flex items-start gap-2.5 text-xs">
+                        <Calendar className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-extrabold text-slate-700 dark:text-slate-300 block">{isEng ? "Match Date" : "Ngày Thi Đấu"}</span>
+                          <span className="text-slate-500 dark:text-slate-400 block font-bold">{matchDate || (isEng ? "To be announced" : "Đang cập nhật")}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2.5 text-xs">
+                        <MapPin className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-extrabold text-slate-700 dark:text-slate-300 block">{isEng ? "Location" : "Địa Điểm"}</span>
+                          <span className="text-slate-500 dark:text-slate-400 block font-bold">{matchLocation || (isEng ? "Official venue" : "Bệ bắn chính thức VSC")}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2.5 text-xs">
+                        <Users className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-extrabold text-slate-700 dark:text-slate-300 block">{isEng ? "Category" : "Quy Mô"}</span>
+                          <span className="text-slate-500 dark:text-slate-400 block font-bold">{isEng ? "National Slingshot Championship" : "Vô Địch Cup Quốc Gia"}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2.5 text-xs">
+                        <FileText className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-extrabold text-slate-700 dark:text-slate-300 block">{isEng ? "Target Format" : "Thể Thức & Quy Cách Thụ Bia"}</span>
+                          <span className="text-slate-500 dark:text-slate-400 block font-bold">{isEng ? "Official VSC Standard" : "Thụ bia tiêu chuẩn VSC Việt Nam"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* CLUB MEMBER REGISTRATION (Exclusive for Club Leaders) */}
+              {isClubLeader && (
+                <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 p-6 sm:p-8 rounded-3xl shadow-sm space-y-6">
+                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-850 pb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-2xl">
+                        <Users className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">
+                          {isEng ? `CLUB LEADER CONTROL: ${activeClub.name}` : `QUYỀN TRƯỞNG CLB: ${activeClub.name}`}
+                        </span>
+                        <h2 className="text-base font-black text-slate-800 dark:text-white uppercase tracking-wide">
+                          {isEng ? "Register Roster On Behalf" : "ĐĂNG KÝ THI ĐẤU HỘ CHO THÀNH VIÊN CLB"}
+                        </h2>
+                      </div>
+                    </div>
+                    <span className="text-[10px] bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-150 dark:border-indigo-900/30 font-black px-2.5 py-1 rounded-xl font-mono">
+                      {clubMemberProfiles.length} MEMBER
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    {isEng 
+                      ? "As the verified Club President, you have special permission to register any official member of your club's roster. Click register on behalf to secure their spot."
+                      : "Với vai trò Trưởng câu lạc bộ đã được phê duyệt, bạn có thẩm quyền tối cao đăng ký thi đấu hộ cho các thành viên chính thức trong CLB của mình tham gia giải đấu này."}
+                  </p>
+
+                  <div className="border border-slate-150 dark:border-slate-800 rounded-2xl overflow-hidden divide-y divide-slate-150 dark:divide-slate-800">
+                    {clubMemberProfiles.length === 0 ? (
+                      <div className="p-6 text-center text-xs text-slate-400 italic">
+                        {isEng ? "No verified members inside this club roster yet." : "Hiện chưa có thành viên chính thức nào trong biên chế CLB."}
+                      </div>
+                    ) : (
+                      clubMemberProfiles.map(member => {
+                        const isRegistered = masterAthletes.some(a => a.id === member.id);
+                        const sbdNum = drawnNumbers[member.id];
+
+                        return (
+                          <div key={member.id} className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-slate-50/50 dark:bg-slate-900/30 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <img 
+                                src={member.avatarUrl || AVATAR_MALE} 
+                                alt={member.name} 
+                                className="w-10 h-10 rounded-full border border-slate-200 dark:border-slate-850 object-cover shrink-0"
+                                referrerPolicy="no-referrer"
+                              />
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-black text-slate-800 dark:text-white">{member.name}</span>
+                                  <span className="text-[9px] font-mono font-black text-rose-500">{member.id}</span>
+                                </div>
+                                <span className="text-[10px] text-slate-400 block font-semibold">
+                                  {member.email || "Không có email"} • {isEng ? "Role: " : "Vai trò: "} {member.clubRole === "leader" ? (isEng ? "Leader" : "Trưởng CLB") : (isEng ? "Member" : "Thành viên")}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="shrink-0">
+                              {isRegistered ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-150 dark:border-emerald-900/20 px-2.5 py-1 rounded-xl">
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                    {isEng ? "Registered" : "Đã đăng ký"}
+                                  </span>
+                                  {sbdNum && (
+                                    <span className="inline-flex items-center text-xs font-black bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-150 dark:border-rose-900/30 px-2.5 py-1 rounded-xl font-mono">
+                                      SBD {String(sbdNum).padStart(3, "0")}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => initiateRegistrationFlow(member)}
+                                  className="w-full sm:w-auto px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors cursor-pointer"
+                                >
+                                  {isEng ? "Register On Behalf" : "Đăng Ký Hộ"}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
 
-          {/* Right panel: Official Athlete ID Card (Standard 5.4cm x 8.6cm layout) */}
-          <div className="lg:col-span-5 flex flex-col items-center gap-4">
-            <span className="text-[10px] font-black text-slate-450 uppercase tracking-widest block">{isEng ? "Official Athlete Pass Card Preview" : "THẺ VẬN ĐỘNG VIÊN BAN TỔ CHỨC"}</span>
-            
-            {/* The Badge itself (Aspect ratio corresponding to standard 5.4cm x 8.6cm) */}
-            <div 
-              id="official-athlete-badge" 
-              className="w-[280px] h-[446px] bg-gradient-to-b from-slate-900 via-slate-850 to-indigo-950 rounded-3xl shadow-xl border-4 border-slate-800 text-white relative overflow-hidden flex flex-col justify-between p-4.5 font-sans animate-scaleUp text-center print:shadow-none print:border-black"
-            >
-              {/* Top luxury badge brand patterns */}
-              <div className="absolute top-0 inset-x-0 h-[100px] bg-gradient-to-b from-amber-500/10 via-transparent to-transparent pointer-events-none"></div>
-              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-indigo-500/5 via-transparent to-transparent pointer-events-none"></div>
+            {/* Right panel: Official Athlete ID Card (Standard 5.4cm x 8.6cm layout) */}
+            <div className="lg:col-span-5 flex flex-col items-center gap-4">
+              <span className="text-[10px] font-black text-slate-450 uppercase tracking-widest block">{isEng ? "Official Athlete Pass Card Preview" : "THẺ VẬN ĐỘNG VIÊN BAN TỔ CHỨC"}</span>
+              
+              {/* The Badge itself (Aspect ratio corresponding to standard 5.4cm x 8.6cm) */}
+              <div 
+                id="official-athlete-badge" 
+                className="w-[280px] h-[446px] bg-gradient-to-b from-indigo-950 via-slate-900 to-red-950 rounded-3xl shadow-2xl border-4 border-amber-400 text-white relative overflow-hidden flex flex-col justify-between p-4.5 font-sans animate-scaleUp text-center print:shadow-none print:border-amber-400"
+              >
+                {/* Top luxury badge brand patterns */}
+                <div className="absolute top-0 inset-x-0 h-[100px] bg-gradient-to-b from-amber-500/10 via-transparent to-transparent pointer-events-none"></div>
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-indigo-500/5 via-transparent to-transparent pointer-events-none"></div>
 
-              {/* Card Header */}
-              <div className="relative z-10 border-b border-white/10 pb-2">
-                <div className="flex items-center justify-center gap-1">
-                  <div className="w-4.5 h-4.5 rounded-full bg-rose-600 flex items-center justify-center font-black text-[8px]">V</div>
-                  <span className="text-[9px] font-black tracking-widest text-amber-400">VSC VIETNAM</span>
+                {/* Card Header: Tournament Name (Tên giải đấu) */}
+                <div className="relative z-10 border-b border-white/10 pb-2">
+                  <div className="flex flex-col items-center justify-center gap-0.5">
+                    <span className="text-[10px] font-black tracking-wider text-yellow-300 uppercase leading-tight line-clamp-2 max-w-[250px] drop-shadow-sm">
+                      {matchName || "VSC VIETNAM CHAMPIONSHIP"}
+                    </span>
+                  </div>
+                  <h3 className="text-[8px] font-bold tracking-widest text-white/75 uppercase mt-1">
+                    {isEng ? "OFFICIAL COMPETITOR" : "THẺ VẬN ĐỘNG VIÊN"}
+                  </h3>
                 </div>
-                <h3 className="text-[8px] font-black tracking-wider text-slate-300 uppercase mt-1">
-                  {isEng ? "OFFICIAL NATIONAL ATHLETE" : "THẺ VẬN ĐỘNG VIÊN QUỐC GIA"}
-                </h3>
-              </div>
 
-              {/* Main Avatar + Photo Holder */}
-              <div className="relative flex flex-col items-center mt-3">
-                <div className="relative">
-                  <img 
-                    src={registeredAthlete.avatarUrl || AVATAR_MALE} 
-                    alt={registeredAthlete.name} 
-                    className="w-24 h-24 rounded-2xl object-cover border-2 border-amber-400 bg-slate-800 shadow-md"
-                    referrerPolicy="no-referrer"
-                  />
-                  {/* Status Overlay */}
-                  <div className="absolute -bottom-2 inset-x-0 mx-auto w-fit bg-amber-400 text-slate-900 text-[8px] font-black uppercase px-2.5 py-0.5 rounded-full border border-slate-950 leading-none">
-                    {registeredAthlete.team || "VĐV TỰ DO"}
+                {/* Main Avatar + Photo Holder */}
+                <div className="relative flex flex-col items-center mt-3">
+                  <div className="relative">
+                    <img 
+                      src={registeredAthlete?.avatarUrl || userProfile.avatarUrl || AVATAR_MALE} 
+                      alt={registeredAthlete?.name || userProfile.name} 
+                      className="w-24 h-24 rounded-2xl object-cover border-2 border-amber-400 bg-slate-800 shadow-lg shadow-black/45"
+                      referrerPolicy="no-referrer"
+                    />
                   </div>
                 </div>
-              </div>
 
-              {/* SBD & ID Row */}
-              <div className="mt-4 space-y-1 relative z-10">
-                <span className="text-[10px] text-slate-400 uppercase tracking-widest font-black block leading-none">SỐ BÁO DANH (SBD)</span>
-                {drawnNumbers[registeredAthlete.id] ? (
-                  <div className="inline-block px-4 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-400 rounded-2xl text-slate-900 font-extrabold text-2xl font-mono border border-amber-500 leading-none shadow-sm shadow-amber-500/10 animate-pulse">
-                    {String(drawnNumbers[registeredAthlete.id]).padStart(3, "0")}
+                {/* SBD & ID Row (Ngang hàng và cùng font size) */}
+                <div className="flex items-center justify-center gap-2.5 relative z-10 py-1.5 px-3 bg-white/5 border border-white/10 rounded-xl mt-3 text-[10px] font-mono font-bold">
+                  <div className="flex items-center gap-1 text-yellow-400">
+                    <span>SBD:</span>
+                    <span className="text-white font-extrabold text-[10px]">
+                      {registeredAthlete && drawnNumbers[registeredAthlete.id] 
+                        ? String(drawnNumbers[registeredAthlete.id]).padStart(3, "0") 
+                        : "---"}
+                    </span>
                   </div>
-                ) : (
-                  <span className="text-rose-500 text-[10px] font-black uppercase tracking-wide block animate-pulse">CHƯA BỐC THĂM</span>
-                )}
-                <div className="text-[9px] font-mono text-slate-405 mt-0.5">ID: {registeredAthlete.id}</div>
-              </div>
+                  <div className="w-px h-3 bg-white/20"></div>
+                  <div className="flex items-center gap-1 text-indigo-300">
+                    <span>ID:</span>
+                    <span className="text-white font-extrabold text-[10px] uppercase">
+                      {(registeredAthlete?.id || userProfile.id || "PENDING").substring(0, 8)}
+                    </span>
+                  </div>
+                </div>
 
-              {/* Athlete Name */}
-              <div className="mt-3 relative z-10">
-                <span className="text-[11px] sm:text-xs font-black text-white block uppercase tracking-wide truncate max-w-[240px]">
-                  {registeredAthlete.name}
-                </span>
-                <span className="text-[8px] text-slate-450 block truncate max-w-[240px] mt-0.5">
-                  {registeredAthlete.email || "Đã liên kết tài khoản"}
-                </span>
-              </div>
-
-              {/* Field Placement Footer Block */}
-              <div className="bg-white/5 border border-white/10 rounded-xl p-2.5 mt-3.5 grid grid-cols-2 gap-2 text-left relative z-10">
-                <div>
-                  <span className="block text-[7px] text-slate-400 font-black uppercase tracking-widest">LƯỢT THI ĐẤU</span>
-                  <span className="block font-black text-[11px] text-indigo-300 font-mono mt-0.5">
-                    {(() => {
-                      const { squadNum } = getAthletePlacements(registeredAthlete.id);
-                      return squadNum ? `SQUAD ${squadNum}` : "CHƯA XẾP";
-                    })()}
+                {/* Athlete Name & Team (Tên viết lớn, ĐẬM, tô màu, có Viền chữ + Tên CLB/Team thay Email) */}
+                <div className="mt-3.5 relative z-10 flex flex-col items-center">
+                  <span 
+                    className="text-lg font-black uppercase tracking-wide text-yellow-300 block truncate max-w-[240px] drop-shadow-md"
+                    style={{ textShadow: "1px 1px 0px #991b1b, -1px -1px 0px #991b1b, 1px -1px 0px #991b1b, -1px 1px 0px #991b1b, 0px 2px 4px rgba(0,0,0,0.8)" }}
+                  >
+                    {registeredAthlete?.name || userProfile.name}
+                  </span>
+                  
+                  {/* Team/Club instead of Email */}
+                  <span className="text-[9px] font-black text-white bg-slate-800/60 border border-white/10 px-2.5 py-0.5 rounded-full inline-block truncate max-w-[240px] mt-1.5 uppercase tracking-widest">
+                    {registeredAthlete?.team || userProfile.team || (isEng ? "FREE AGENT" : "VĐV TỰ DO")}
                   </span>
                 </div>
-                <div className="border-l border-white/10 pl-2">
-                  <span className="block text-[7px] text-slate-400 font-black uppercase tracking-widest">BỆ BẮN (LANE)</span>
-                  <span className="block font-black text-[11px] text-amber-300 font-mono mt-0.5">
-                    {(() => {
-                      const { laneNum } = getAthletePlacements(registeredAthlete.id);
-                      return laneNum ? `LANE ${laneNum}` : "CHƯA XẾP";
-                    })()}
-                  </span>
+
+                {/* Field Placement Footer Block */}
+                <div className="bg-white/5 border border-white/10 rounded-xl p-2 mt-3 grid grid-cols-3 gap-1.5 text-left relative z-10">
+                  <div>
+                    <span className="block text-[7px] text-slate-400 font-black uppercase tracking-widest">LƯỢT BẮN</span>
+                    <span className="block font-black text-[10px] text-indigo-300 font-mono mt-0.5">
+                      {(() => {
+                        if (!registeredAthlete) return "CHƯA ĐK";
+                        const { squadNum } = getAthletePlacements(registeredAthlete.id);
+                        return squadNum ? `SQ ${squadNum}` : "CHƯA XẾP";
+                      })()}
+                    </span>
+                  </div>
+                  <div className="border-l border-white/10 pl-1.5">
+                    <span className="block text-[7px] text-slate-400 font-black uppercase tracking-widest">BỆ (LANE)</span>
+                    <span className="block font-black text-[10px] text-amber-300 font-mono mt-0.5">
+                      {(() => {
+                        if (!registeredAthlete) return "CHƯA ĐK";
+                        const { laneNum } = getAthletePlacements(registeredAthlete.id);
+                        return laneNum ? `LANE ${laneNum}` : "CHƯA XẾP";
+                      })()}
+                    </span>
+                  </div>
+                  <div className="border-l border-white/10 pl-1.5">
+                    <span className="block text-[7px] text-slate-400 font-black uppercase tracking-widest">PHÂN HẠNG</span>
+                    <span className="block font-black text-[10px] text-emerald-400 truncate mt-0.5 uppercase">
+                      {registeredAthlete?.category || "Nghiệp dư"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Footer design ribbon: Location & Competition Date */}
+                <div className="text-[7.5px] font-black text-amber-450 tracking-wider mt-2.5 pt-1 border-t border-white/15 uppercase font-mono">
+                  {(() => {
+                    const locPart = matchLocation ? `${matchLocation}` : "";
+                    const datePart = matchDate ? `ngày ${matchDate}` : "22/8/2026";
+                    
+                    if (isEng) {
+                      const locEng = matchLocation ? `LOCATION: ${matchLocation.toUpperCase()}, ` : "";
+                      const dateEng = matchDate ? `DATE: ${matchDate}` : "DATE: 22/8/2026";
+                      return `${locEng}${dateEng}`;
+                    } else {
+                      if (locPart) {
+                        return `${locPart}, ${datePart}`;
+                      } else {
+                        return `NGÀY THI ĐẤU: ${matchDate || "22/8/2026"}`;
+                      }
+                    }
+                  })()}
                 </div>
               </div>
 
-              {/* Footer design ribbon */}
-              <div className="text-[6.5px] font-black text-slate-500 tracking-wider mt-2 pt-1 border-t border-white/5 uppercase">
-                {matchName || "VSC VIETNAM NATIONAL CHAMPIONSHIP"}
-              </div>
+              {/* Print action button */}
+              {registeredAthlete && (
+                <button
+                  onClick={handlePrintCard}
+                  className="py-1.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-750 dark:text-slate-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>{isEng ? "Print Athlete Card" : "In Thẻ VĐV Ban Tổ Chức"}</span>
+                </button>
+              )}
             </div>
-
-            {/* Print action button */}
-            <button
-              onClick={handlePrintCard}
-              className="py-1.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-750 dark:text-slate-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>{isEng ? "Print Athlete Card" : "In Thẻ VĐV Ban Tổ Chức"}</span>
-            </button>
           </div>
         </div>
+      )}
+
+      {/* Double Confirmation Modal via createPortal */}
+      {showConfirmModal && athleteToRegister && createPortal(
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl relative animate-scaleUp">
+            {/* Close Button */}
+            <button 
+              onClick={() => setShowConfirmModal(false)}
+              className="absolute top-4 right-4 p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 dark:text-slate-500 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {confirmStep === 1 ? (
+              <div className="space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 flex items-center justify-center border border-indigo-150 dark:border-indigo-900/40">
+                  <ClipboardCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-800 dark:text-white uppercase tracking-wide">
+                    {isEng ? "Tournament Registration Request" : "Xác Nhận Đăng Ký Thi Đấu"}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                    {isEng 
+                      ? `Are you sure you want to register ${athleteToRegister.name} for this tournament?`
+                      : `Bạn có chắc chắn muốn đăng ký cho vận động viên ${athleteToRegister.name} tham gia giải đấu này?`}
+                  </p>
+                </div>
+
+                {/* Athlete Quick Info Card inside Modal */}
+                <div className="bg-slate-50 dark:bg-slate-955/20 border border-slate-150 dark:border-slate-800 p-4 rounded-2xl flex items-center gap-3">
+                  <img 
+                    src={athleteToRegister.avatarUrl || AVATAR_MALE} 
+                    alt={athleteToRegister.name} 
+                    className="w-10 h-10 rounded-full border border-slate-200 dark:border-slate-850 object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div>
+                    <span className="text-[10px] font-mono text-rose-500 font-bold block">{athleteToRegister.id}</span>
+                    <span className="text-xs font-bold text-slate-800 dark:text-white block">{athleteToRegister.name}</span>
+                    <span className="text-[10px] text-slate-400 block font-semibold">{athleteToRegister.province || athleteToRegister.team || "Tự Do"}</span>
+                  </div>
+                </div>
+
+                {/* Category Selection for Self Registration */}
+                <div className="space-y-1.5 text-left bg-indigo-50/50 dark:bg-indigo-950/25 border border-indigo-100 dark:border-indigo-900/30 p-3.5 rounded-2xl">
+                  <label className="block text-[11px] font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wide">
+                    {isEng ? "Competition Category:" : "Hạng mục đăng ký thi đấu:"}
+                  </label>
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-950 border border-indigo-200 dark:border-indigo-900 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 font-bold text-indigo-800 dark:text-indigo-300"
+                  >
+                    <option value="Nghiệp dư">{isEng ? "Amateur (Nghiệp dư)" : "Nghiệp dư (Mặc định)"}</option>
+                    <option value="Chuyên nghiệp">{isEng ? "Professional (Chuyên nghiệp)" : "Chuyên nghiệp"}</option>
+                    <option value="Lão tướng">{isEng ? "Senior/Master (Lão tướng)" : "Lão tướng"}</option>
+                    <option value="Trẻ em">{isEng ? "Children (Trẻ em)" : "Trẻ em"}</option>
+                  </select>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => setShowConfirmModal(false)}
+                    className="flex-1 py-2.5 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-black transition-all hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer"
+                  >
+                    {isEng ? "Cancel" : "Hủy Bỏ"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmStep(2)}
+                    className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>{isEng ? "Continue" : "Tiếp Tục"}</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-955/20 text-amber-600 flex items-center justify-center border border-amber-150 dark:border-amber-900/30">
+                  <ShieldAlert className="w-6 h-6 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-amber-600 uppercase tracking-wide">
+                    {isEng ? "Final Anti-Spam Confirmation" : "Xác Nhận Lần Cuối (Chống Spam)"}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                    {isEng 
+                      ? "To prevent automated registrations or accidental submissions, please perform this final step. Click below to secure your place."
+                      : "Nhằm phòng tránh việc đăng ký nhầm lẫn hoặc spam hệ thống, vui lòng thực hiện bước xác nhận cuối cùng này. Nhấp nút bên dưới để ghi tên vào danh sách thi đấu chính thức."}
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => setConfirmStep(1)}
+                    className="flex-1 py-2.5 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-black transition-all hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer"
+                  >
+                    {isEng ? "Back" : "Quay Lại"}
+                  </button>
+                  <button
+                    disabled={isRegistering}
+                    onClick={async () => {
+                      await handleRegisterWithSystem(athleteToRegister);
+                      setShowConfirmModal(false);
+                    }}
+                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {isRegistering ? (
+                      <span className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></span>
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>{isEng ? "Final Confirm" : "Xác Nhận Lần Cuối"}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
