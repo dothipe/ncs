@@ -4505,7 +4505,15 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                   </label>
                   <select
                     value={formTargetType}
-                    onChange={(e) => setFormTargetType(e.target.value as any)}
+                    onChange={(e) => {
+                      const val = e.target.value as "bia_muc_tieu" | "bia_giay_tinh_diem";
+                      setFormTargetType(val);
+                      if (val === "bia_giay_tinh_diem") {
+                        setFormTargetDetail("Bia giấy VSC 10 vòng đường kính 19.5cm tâm 1.5cm");
+                      } else {
+                        setFormTargetDetail("Bia đường kính 4cm");
+                      }
+                    }}
                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
                   >
                     <option value="bia_muc_tieu">{language === "en" ? "Target Plate (Default)" : "Bia mục tiêu (mặc định)"}</option>
@@ -5139,7 +5147,15 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
                   </label>
                   <select
                     value={editTargetType}
-                    onChange={(e) => setEditTargetType(e.target.value as any)}
+                    onChange={(e) => {
+                      const val = e.target.value as "bia_muc_tieu" | "bia_giay_tinh_diem";
+                      setEditTargetType(val);
+                      if (val === "bia_giay_tinh_diem") {
+                        setEditTargetDetail("Bia giấy VSC 10 vòng đường kính 19.5cm tâm 1.5cm");
+                      } else {
+                        setEditTargetDetail("Bia đường kính 4cm");
+                      }
+                    }}
                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                   >
                     <option value="bia_muc_tieu">{language === "en" ? "Target Plate (Default)" : "Bia mục tiêu (mặc định)"}</option>
