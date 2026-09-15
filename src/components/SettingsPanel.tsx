@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { DistanceConfig, Athlete, MatchHistoryItem, StoredAthleteList } from "../types";
-import { Settings, Plus, Edit2, Trash2, Calendar, FileDown, FileUp, RefreshCw, Trophy, Target, PlusCircle, Smartphone, CheckCircle, Users, Lock, Unlock, X, AlertTriangle, Shield } from "lucide-react";
+import { Settings, Plus, Edit2, Trash2, Calendar, FileDown, FileUp, RefreshCw, Trophy, Target, PlusCircle, Smartphone, CheckCircle, Users, Lock, Unlock, X, AlertTriangle, Shield, HelpCircle } from "lucide-react";
 import { getHitCount } from "../utils/qualification";
 import { auth } from "../firebase";
 import { createOnlineTournament, updateOnlineTournament, getVscSystemAthletes, getNextTournamentSequenceId } from "../lib/firebaseService";
@@ -516,6 +516,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const [modalTeamDirectMaxPoints, setModalTeamDirectMaxPoints] = useState<number | undefined>(undefined);
   const [modalTournamentType, setModalTournamentType] = useState<"individual" | "team" | "combined">("combined");
   const [modalIsNational, setModalIsNational] = useState(false);
+  const [hoveringIsNational, setHoveringIsNational] = useState(false);
   const [modalHeadReferee, setModalHeadReferee] = useState("");
 
   useEffect(() => {
@@ -922,7 +923,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             {/* ID Input + National Toggle Side-by-Side */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-              <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-gray-150 dark:border-slate-800 h-[34px]">
+              <div className="relative group flex items-center gap-2 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-gray-150 dark:border-slate-800 h-[34px] cursor-help">
                 <input
                   type="checkbox"
                   id="quickIsNational"
@@ -936,9 +937,25 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   }}
                   className="w-4 h-4 text-rose-600 border-gray-350 rounded focus:ring-rose-500 cursor-pointer"
                 />
-                <label htmlFor="quickIsNational" className="text-[10px] font-black text-slate-700 dark:text-slate-300 cursor-pointer select-none leading-none">
-                  {language === "en" ? "National / Large-scale" : "Giải Quốc gia / Quy mô lớn"}
+                <label htmlFor="quickIsNational" className="text-[10px] font-black text-slate-700 dark:text-slate-300 cursor-pointer select-none leading-none flex items-center gap-1.5">
+                  <span>{language === "en" ? "National / Large-scale" : "Giải Quốc gia / Quy mô lớn"}</span>
+                  <HelpCircle className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 hover:text-amber-500 dark:hover:text-amber-400 transition-colors shrink-0" />
                 </label>
+
+                {/* Tooltip on Hover */}
+                <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-72 bg-slate-950 text-slate-200 text-[10px] leading-relaxed p-3 rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-[10050] border border-slate-800 pointer-events-none">
+                  <div className="font-extrabold text-[11px] mb-1 text-amber-400 flex items-center gap-1">
+                    <HelpCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{language === "en" ? "Tournament Scale Tips" : "Lưu ý Quy mô Giải đấu"}</span>
+                  </div>
+                  <p className="font-medium text-[10px]">
+                    {language === "en"
+                      ? "When checking this, you will have additional settings to run large-scale tournaments. Please use caution. For training or small local tournaments, this option is not necessary!"
+                      : "Khi tích vào nút này, bạn sẽ có thêm nhiều cài đặt để điều hành giải lớn, hãy thận trọng khi tích vào nút này. Nếu chỉ sử dụng cho luyện tập, các giải off nội bộ nhỏ thì không cần phải sử dụng nút tích Giải Quốc Gia Quy Mô Lớn này!"}
+                  </p>
+                  {/* Little Arrow pointing up */}
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 -mb-1 border-4 border-transparent border-b-slate-950" />
+                </div>
               </div>
 
               <div className="sm:col-span-2">
@@ -2942,6 +2959,21 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
       {isNewTournamentModalOpen && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs animate-fadeIn">
+          {/* Stateful Floating Tooltip Overlay (complying with user request to display outside modal completely) */}
+          {hoveringIsNational && (
+            <div className="absolute top-[8%] sm:top-[12%] left-1/2 -translate-x-1/2 w-80 sm:w-96 bg-slate-950 text-slate-200 text-xs leading-relaxed p-4 rounded-2xl shadow-2xl z-[10060] border border-slate-800 animate-fadeIn pointer-events-none">
+              <div className="font-extrabold text-sm mb-1.5 text-amber-400 flex items-center gap-1.5">
+                <HelpCircle className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
+                <span>{language === "en" ? "Tournament Scale Tips" : "Lưu ý Quy mô Giải đấu"}</span>
+              </div>
+              <p className="font-medium text-[11px] leading-relaxed">
+                {language === "en"
+                  ? "When checking this, you will have additional settings to run large-scale tournaments. Please use caution. For training or small local tournaments, this option is not necessary!"
+                  : "Khi tích vào nút này, bạn sẽ có thêm nhiều cài đặt để điều hành giải lớn, hãy thận trọng khi tích vào nút này. Nếu chỉ sử dụng cho luyện tập, các giải off nội bộ nhỏ thì không cần phải sử dụng nút tích Giải Quốc Gia Quy Mô Lớn này!"}
+              </p>
+            </div>
+          )}
+
           <div className="relative w-full max-w-xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden animate-scaleIn text-slate-800 dark:text-slate-100 flex flex-col max-h-[90vh]">
             {/* Header */}
             <div className="px-6 py-5 border-b border-gray-150 dark:border-slate-800 flex justify-between items-center bg-gray-50 dark:bg-slate-950">
@@ -2977,7 +3009,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
             <div className="p-6 space-y-4 overflow-y-auto flex-1">
               {/* ID + Name section */}
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end animate-fadeIn">
-                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-gray-150 dark:border-slate-800 h-[38px]">
+                <div 
+                  onMouseEnter={() => setHoveringIsNational(true)}
+                  onMouseLeave={() => setHoveringIsNational(false)}
+                  className="flex items-center gap-2 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-gray-150 dark:border-slate-800 h-[38px] cursor-help"
+                >
                   <input
                     type="checkbox"
                     id="modalIsNational"
@@ -2985,8 +3021,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     onChange={(e) => setModalIsNational(e.target.checked)}
                     className="w-4 h-4 text-rose-600 border-gray-350 rounded focus:ring-rose-500 cursor-pointer"
                   />
-                  <label htmlFor="modalIsNational" className="text-[10px] font-black text-slate-700 dark:text-slate-300 cursor-pointer select-none leading-none">
-                    {language === "en" ? "National" : "Giải Quốc gia"}
+                  <label htmlFor="modalIsNational" className="text-[10px] font-black text-slate-700 dark:text-slate-300 cursor-pointer select-none leading-none flex items-center gap-1.5">
+                    <span>{language === "en" ? "National / Large-scale" : "Giải Quốc gia / Quy mô lớn"}</span>
+                    <HelpCircle className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 hover:text-amber-500 dark:hover:text-amber-400 transition-colors shrink-0" />
                   </label>
                 </div>
 
