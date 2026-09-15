@@ -79,6 +79,7 @@ import { DashboardView } from "./components/DashboardView";
 import { HistoryView } from "./components/HistoryView";
 import { AdminQltvView } from "./components/AdminQltvView";
 import { PkLobbyView } from "./components/PkLobbyView";
+import { GuidesView } from "./components/GuidesView";
 import { DirectMessageWidget } from "./components/DirectMessageWidget";
 import {
   CompetitionModeSelectionModal,
@@ -350,7 +351,7 @@ export default function App() {
 
         // 2. Active Tab
         const tabParam = params.get("tab");
-        const allowedTabs = ["home", "desktop", "dashboard", "scoring", "input_scores", "leaderboard", "teams", "athletes", "settings", "history", "control_panel", "qltv", "vsc_system_directory", "vsc_clubs_directory", "pk_lobby", "tournament_execution", "tournament_registration"];
+        const allowedTabs = ["home", "desktop", "dashboard", "scoring", "input_scores", "leaderboard", "teams", "athletes", "settings", "history", "control_panel", "qltv", "vsc_system_directory", "vsc_clubs_directory", "pk_lobby", "tournament_execution", "tournament_registration", "guides"];
         if (tabParam && allowedTabs.includes(tabParam)) {
           setActiveTab(tabParam as any);
         } else {
@@ -505,11 +506,11 @@ export default function App() {
     });
   }, [masterAthletes.length]);
 
-  const [activeTab, setActiveTab] = useState<"home" | "desktop" | "dashboard" | "scoring" | "input_scores" | "leaderboard" | "teams" | "athletes" | "settings" | "history" | "control_panel" | "qltv" | "vsc_system_directory" | "vsc_clubs_directory" | "pk_lobby" | "tournament_execution" | "tournament_registration">(() => {
+  const [activeTab, setActiveTab] = useState<"home" | "desktop" | "dashboard" | "scoring" | "input_scores" | "leaderboard" | "teams" | "athletes" | "settings" | "history" | "control_panel" | "qltv" | "vsc_system_directory" | "vsc_clubs_directory" | "pk_lobby" | "tournament_execution" | "tournament_registration" | "guides">(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get("tab");
-      const allowedTabs = ["home", "desktop", "dashboard", "scoring", "input_scores", "leaderboard", "teams", "athletes", "settings", "history", "control_panel", "qltv", "vsc_system_directory", "vsc_clubs_directory", "pk_lobby", "tournament_execution", "tournament_registration"];
+      const allowedTabs = ["home", "desktop", "dashboard", "scoring", "input_scores", "leaderboard", "teams", "athletes", "settings", "history", "control_panel", "qltv", "vsc_system_directory", "vsc_clubs_directory", "pk_lobby", "tournament_execution", "tournament_registration", "guides"];
       if (tabParam && allowedTabs.includes(tabParam)) {
         return tabParam as any;
       }
@@ -607,7 +608,7 @@ export default function App() {
 
   // Keep non-logged in guests restricted to public-facing viewing tabs
   useEffect(() => {
-    if (!currentUser && !["home", "dashboard", "leaderboard", "teams", "vsc_system_directory", "vsc_clubs_directory", "pk_lobby"].includes(activeTab)) {
+    if (!currentUser && !["home", "dashboard", "leaderboard", "teams", "vsc_system_directory", "vsc_clubs_directory", "pk_lobby", "guides"].includes(activeTab)) {
       setActiveTab("home");
     }
   }, [currentUser, activeTab]);
@@ -4004,6 +4005,13 @@ export default function App() {
               editChallengeId={pkChallengeToEditId}
               onClearEditChallengeId={() => setPkChallengeToEditId(null)}
               onViewClubHub={(club) => setGlobalSelectedClub(club)}
+            />
+          )}
+
+          {/* TAB 10: VSC GUIDES KNOWLEDGE BASE */}
+          {activeTab === "guides" && (
+            <GuidesView
+              onBackToHome={() => changeTab("home")}
             />
           )}
 

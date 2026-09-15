@@ -29,6 +29,7 @@ import {
 import { db, collection, addDoc, deleteDoc, doc, query, where, orderBy, onSnapshot } from "../firebase";
 import { TrainingSession } from "../types";
 import { useLanguage } from "../context/LanguageContext";
+import { SmartGuideTrigger } from "./GuidesView";
 
 interface TrainingTrackerProps {
   currentUser: any;
@@ -508,8 +509,9 @@ export default function TrainingTracker({ currentUser }: TrainingTrackerProps) {
             <Target className="w-6 h-6 animate-pulse" />
           </div>
           <div>
-            <h2 className="text-lg font-black uppercase tracking-wide">
-              {isEng ? "🎯 PRACTICE TRAINING PROGRESS" : "🎯 TIẾN TRÌNH TẬP LUYỆN CÁ NHÂN"}
+            <h2 className="text-lg font-black uppercase tracking-wide flex items-center gap-2 flex-wrap">
+              <span>{isEng ? "🎯 PRACTICE TRAINING PROGRESS" : "🎯 TIẾN TRÌNH TẬP LUYỆN CÁ NHÂN"}</span>
+              <SmartGuideTrigger guideId="training_tracker" className="normal-case text-[9px] px-1.5 py-0.5 ml-1" />
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               {isEng 

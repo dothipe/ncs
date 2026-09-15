@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   Plus, 
   ChevronDown, 
@@ -16,7 +16,8 @@ import {
   Menu, 
   User,
   MessageSquare,
-  Sword
+  Sword,
+  HelpCircle
 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import { VSCLogo } from "./VSCLogo";
@@ -123,6 +124,69 @@ export function HeaderNavigation({
   const [isEntryDropdownOpen, setIsEntryDropdownOpen] = useState(false);
   const [isRankingDropdownOpen, setIsRankingDropdownOpen] = useState(false);
   const [isMobileRankingExpanded, setIsMobileRankingExpanded] = useState(false);
+
+  // Drag to scroll helper for desktop mouse users
+  const menuScrollRef = useRef<HTMLDivElement>(null);
+  const isDownRef = useRef(false);
+  const startXRef = useRef(0);
+  const scrollLeftRef = useRef(0);
+  const isDraggingRef = useRef(false);
+
+  const handleMenuMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Only drag with left mouse click, and do not drag if dropdowns are open
+    if (e.button !== 0 || isEntryDropdownOpen || isRankingDropdownOpen) return;
+    const el = menuScrollRef.current;
+    if (!el) return;
+    isDownRef.current = true;
+    isDraggingRef.current = false;
+    startXRef.current = e.pageX - el.offsetLeft;
+    scrollLeftRef.current = el.scrollLeft;
+    el.style.scrollBehavior = "auto";
+    el.style.userSelect = "none";
+  };
+
+  const handleMenuMouseLeave = () => {
+    if (!isDownRef.current) return;
+    isDownRef.current = false;
+    const el = menuScrollRef.current;
+    if (!el) return;
+    el.style.cursor = "grab";
+    el.style.scrollBehavior = "smooth";
+    el.style.removeProperty("user-select");
+  };
+
+  const handleMenuMouseUp = () => {
+    if (!isDownRef.current) return;
+    isDownRef.current = false;
+    const el = menuScrollRef.current;
+    if (!el) return;
+    el.style.cursor = "grab";
+    el.style.scrollBehavior = "smooth";
+    el.style.removeProperty("user-select");
+  };
+
+  const handleMenuMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDownRef.current) return;
+    const el = menuScrollRef.current;
+    if (!el) return;
+    const x = e.pageX - el.offsetLeft;
+    const walk = (x - startXRef.current) * 1.5; // Drag speed multiplier
+    if (Math.abs(walk) > 4) {
+      if (!isDraggingRef.current) {
+        isDraggingRef.current = true;
+        el.style.cursor = "grabbing";
+      }
+      el.scrollLeft = scrollLeftRef.current - walk;
+    }
+  };
+
+  const handleMenuClickCapture = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isDraggingRef.current) {
+      e.stopPropagation();
+      e.preventDefault();
+      isDraggingRef.current = false;
+    }
+  };
 
   // Document click listener to close dropdowns when clicking outside
   useEffect(() => {
@@ -342,7 +406,15 @@ export function HeaderNavigation({
             </div>
 
             {/* Menu Items on the right */}
-            <div className={`flex items-center ${isEntryDropdownOpen || isRankingDropdownOpen ? "overflow-visible" : "overflow-x-auto scrollbar-none"} whitespace-nowrap scroll-smooth max-w-full font-sans select-none pr-4`}>
+            <div 
+              ref={menuScrollRef}
+              onMouseDown={handleMenuMouseDown}
+              onMouseLeave={handleMenuMouseLeave}
+              onMouseUp={handleMenuMouseUp}
+              onMouseMove={handleMenuMouseMove}
+              onClickCapture={handleMenuClickCapture}
+              className={`flex-1 min-w-0 flex items-center justify-start ${isEntryDropdownOpen || isRankingDropdownOpen ? "overflow-visible" : "overflow-x-auto scrollbar-none"} whitespace-nowrap scroll-smooth max-w-full font-sans select-none pr-4 cursor-grab active:cursor-grabbing`}
+            >
               <button
                 onClick={() => changeExitTournament("all")}
                 className={`px-4.5 py-4 text-xs sm:text-sm font-extrabold uppercase tracking-wider transition-all hover:bg-black/15 flex items-center gap-1.5 border-none bg-transparent ${
@@ -704,6 +776,18 @@ export function HeaderNavigation({
                 </button>
               )}
 
+              <button
+                onClick={() => {
+                  changeTab("guides");
+                }}
+                className={`px-4.5 py-4 text-xs sm:text-sm font-extrabold uppercase tracking-wider transition-all hover:bg-black/15 flex items-center gap-1.5 border-none bg-transparent ${
+                  activeTab === "guides" ? "bg-black/25 text-yellow-400 border-b-4 border-yellow-400 font-black" : "text-white"
+                }`}
+              >
+                <HelpCircle className="w-4 h-4 text-amber-350" />
+                {language === "en" ? "Guides" : "HƯỚNG DẪN"}
+              </button>
+
               {isGlobalAdmin && (
                 <button
                   onClick={() => changeTab("qltv")}
@@ -1027,6 +1111,22 @@ export function HeaderNavigation({
                 >
                   <Plus className="w-4 h-4 shrink-0 text-amber-500" />
                   <span>{language === "en" ? "Create Tournament" : "Tạo Giải Đấu Mới"}</span>
+                </button>
+
+                {/* Guides Help */}
+                <button
+                  onClick={() => {
+                    setIsMobileDrawerOpen(false);
+                    changeTab("guides");
+                  }}
+                  className={`w-full px-3 py-2.5 rounded-lg text-xs font-extrabold flex items-center gap-3 transition-all border-none bg-transparent ${
+                    activeTab === "guides"
+                      ? "bg-red-50 text-[#9c0c13] dark:bg-red-950/20 dark:text-red-400"
+                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                  }`}
+                >
+                  <HelpCircle className="w-4 h-4 shrink-0 text-[#9c0c13] dark:text-red-400 font-bold" />
+                  <span>{language === "en" ? "Guides & Tips" : "Hướng Dẫn & Mẹo"}</span>
                 </button>
               </div>
 

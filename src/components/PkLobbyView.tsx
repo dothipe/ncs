@@ -43,6 +43,7 @@ import { PkDashboardHome } from "./PkDashboardHome";
 import { AthleteProfileModal } from "./AthleteProfileModal";
 import { VscSystemClubsDirectory } from "./VscSystemClubsDirectory";
 import { ChatWidget } from "./ChatWidget";
+import { SmartGuideTrigger } from "./GuidesView";
 import { db } from "../firebase";
 import { 
   collection, 
@@ -4453,10 +4454,13 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
           >
             {/* Modal Header */}
             <div className="bg-rose-900 text-white px-6 py-4 flex items-center justify-between shrink-0">
-              <h3 className="font-bold text-base flex items-center gap-2">
-                <Sword className="w-5 h-5 text-rose-400" />
-                <span>{language === "en" ? "Host New PK Challenge" : "Đăng Kèo PK Thách Đấu Mới"}</span>
-              </h3>
+              <div className="flex items-center gap-3">
+                <h3 className="font-bold text-base flex items-center gap-2">
+                  <Sword className="w-5 h-5 text-rose-400" />
+                  <span>{language === "en" ? "Host New PK Challenge" : "Đăng Kèo PK Thách Đấu Mới"}</span>
+                </h3>
+                <SmartGuideTrigger guideId="pk_challenge" className="bg-rose-850/60 hover:bg-rose-800 border-rose-700/50 text-white font-black hover:text-white" />
+              </div>
               <button 
                 onClick={() => setIsCreateModalOpen(false)}
                 className="text-white/80 hover:text-white p-1.5 hover:bg-rose-800 rounded-lg transition-colors cursor-pointer"

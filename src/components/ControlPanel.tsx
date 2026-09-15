@@ -71,6 +71,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { Club } from "../types";
 import { VscSystemClubsDirectory } from "./VscSystemClubsDirectory";
 import TrainingTracker from "./TrainingTracker";
+import { SmartGuideTrigger } from "./GuidesView";
 import { ChatWidget } from "./ChatWidget";
 import { getVscTitleAndBadge, getChallengeTargetLabel } from "../lib/vscPointsHelper";
 
@@ -1891,9 +1892,12 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
                   {/* Left Column: Form Profile */}
                   <form onSubmit={handleSaveProfile} className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/85 dark:border-slate-800 p-6 flex flex-col gap-5 shadow-xs">
-                    <h3 className="text-base sm:text-lg font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-2 border-b border-slate-100 dark:border-slate-850 pb-3">
-                      <User className="w-5 h-5 text-indigo-650 dark:text-indigo-400" /> THÔNG TIN HỒ SƠ VẬN ĐỘNG VIÊN LIÊN KẾT
-                    </h3>
+                    <div className="text-base sm:text-lg font-black tracking-tight text-slate-900 dark:text-white flex items-center justify-between border-b border-slate-100 dark:border-slate-850 pb-3 flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <User className="w-5 h-5 text-indigo-650 dark:text-indigo-400" /> THÔNG TIN HỒ SƠ VẬN ĐỘNG VIÊN LIÊN KẾT
+                      </div>
+                      <SmartGuideTrigger guideId="profile_setup" className="normal-case text-[9px] px-1.5 py-0.5 ml-1" />
+                    </div>
 
                     {profileLoading ? (
                       <div className="py-20 text-center flex flex-col justify-center items-center gap-2">

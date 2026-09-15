@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Athlete, DistanceConfig, Club } from "../types";
 import { calculateRounds, getHitCount } from "../utils/qualification";
+import { SmartGuideTrigger } from "./GuidesView";
 import { 
   X, 
   Tv, 
@@ -1518,6 +1519,7 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
               <span className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.25em] flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
                 TIVI LIVE BROADCAST BOARD
+                <SmartGuideTrigger guideId="tv_mode_guide" className="bg-emerald-500/10 hover:bg-emerald-500/25 border-emerald-500/20 text-emerald-400 font-black text-[9px] px-1.5 py-0.5 ml-1" />
               </span>
               <h1 className="text-3xl font-black uppercase tracking-wider bg-gradient-to-r from-emerald-400 via-teal-300 to-indigo-300 bg-clip-text text-transparent">
                 {matchName || "GIẢI VÔ ĐỊCH NÁ CAO SU VIỆT NAM"}

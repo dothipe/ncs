@@ -13,6 +13,7 @@ import {
 } from "../lib/firebaseService";
 import { VIETNAM_PROVINCES } from "../utils/provinces";
 import { AthleteProfileModal } from "./AthleteProfileModal";
+import { SmartGuideTrigger } from "./GuidesView";
 import { 
   Search, 
   Plus, 
@@ -793,8 +794,9 @@ export const VscSystemDirectory: React.FC<VscSystemDirectoryProps> = ({
             <Sparkles className="w-3.5 h-3.5" />
             VSC National Database
           </div>
-          <h2 className="text-xl md:text-2xl font-black italic tracking-tight uppercase">
-            {language === "en" ? "VSC System Athletes Registry" : "Danh Sách VĐV Hệ Thống Quốc Gia"}
+          <h2 className="text-xl md:text-2xl font-black italic tracking-tight uppercase flex items-center gap-2 flex-wrap">
+            <span>{language === "en" ? "VSC System Athletes Registry" : "Danh Sách VĐV Hệ Thống Quốc Gia"}</span>
+            <SmartGuideTrigger guideId="create_athletes_clubs" className="normal-case tracking-normal not-italic bg-white/10 hover:bg-white/20 border-white/20 hover:border-white/40 text-yellow-300 font-black text-[9px] px-1.5 py-0.5" />
           </h2>
           <p className="text-xs md:text-sm text-red-100 max-w-2xl leading-relaxed">
             {language === "en" 

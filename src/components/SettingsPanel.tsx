@@ -6,6 +6,7 @@ import { getHitCount } from "../utils/qualification";
 import { auth } from "../firebase";
 import { createOnlineTournament, updateOnlineTournament, getVscSystemAthletes, getNextTournamentSequenceId } from "../lib/firebaseService";
 import { useLanguage } from "../context/LanguageContext";
+import { SmartGuideTrigger } from "./GuidesView";
 
 interface SettingsPanelProps {
   currentTournamentDoc?: any;
@@ -2952,9 +2953,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   <h3 className="text-sm sm:text-base font-black uppercase text-slate-900 dark:text-white tracking-wide">
                     {language === "en" ? "Create New Tournament" : "Khởi Tạo Giải Đấu Mới"}
                   </h3>
-                  <p className="text-[10px] text-gray-550 font-extrabold uppercase">
-                    {language === "en" ? "Set up information & system configuration" : "Thiết lập thông tin & cấu hình hệ thống"}
-                  </p>
+                  <div className="text-[10px] text-gray-550 font-extrabold uppercase flex items-center gap-1.5 flex-wrap">
+                    <span>{language === "en" ? "Set up information & system configuration" : "Thiết lập thông tin & cấu hình hệ thống"}</span>
+                    <SmartGuideTrigger guideId="create_tournament" className="normal-case text-[9px] px-1.5 py-0.5 ml-1" />
+                  </div>
                 </div>
               </div>
               <button

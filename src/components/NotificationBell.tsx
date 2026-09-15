@@ -40,9 +40,29 @@ export function NotificationBell({
   const [notifications, setNotifications] = useState<VscNotification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isSendingTest, setIsSendingTest] = useState(false);
+  const [readGlobalIds, setReadGlobalIds] = useState<string[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const prevUnreadCountRef = useRef<number>(0);
   const isFirstLoadRef = useRef<boolean>(true);
+
+  // Initialize readGlobalIds from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("vsc_read_global_notifications");
+      if (saved) {
+        setReadGlobalIds(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.error("Error reading readGlobalIds from localStorage:", e);
+    }
+  }, []);
+
+  const isNotificationRead = (notif: VscNotification) => {
+    if (notif.recipientUid === "all") {
+      return notif.isRead || readGlobalIds.includes(notif.id);
+    }
+    return notif.isRead;
+  };
 
   // Subscribe to real-time notifications
   useEffect(() => {
@@ -82,11 +102,28 @@ export function NotificationBell({
           return getTime(b.createdAt) - getTime(a.createdAt);
         });
 
-        const unread = list.filter((n) => !n.isRead).length;
+        let currentReadGlobalIds: string[] = [];
+        try {
+          const saved = localStorage.getItem("vsc_read_global_notifications");
+          if (saved) {
+            currentReadGlobalIds = JSON.parse(saved);
+          }
+        } catch (e) {
+          console.error(e);
+        }
+
+        const isReadCheck = (n: VscNotification) => {
+          if (n.recipientUid === "all") {
+            return n.isRead || currentReadGlobalIds.includes(n.id);
+          }
+          return n.isRead;
+        };
+
+        const unread = list.filter((n) => !isReadCheck(n)).length;
 
         // Toast on new unread notification arriving while in app
         if (!isFirstLoadRef.current && unread > prevUnreadCountRef.current) {
-          const newest = list.find((n) => !n.isRead);
+          const newest = list.find((n) => !isReadCheck(n));
           if (newest) {
             showToast(`🔔 ${newest.title}`);
           }
@@ -116,27 +153,63 @@ export function NotificationBell({
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, [isOpen]);
 
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const unreadCount = notifications.filter((n) => !isNotificationRead(n)).length;
 
   const handleNotificationClick = async (notif: VscNotification) => {
-    // 1. Mark as read
-    if (!notif.isRead) {
-      await markNotificationAsRead(notif.id);
+    try {
+      // 1. Mark as read
+      if (!isNotificationRead(notif)) {
+        if (notif.recipientUid === "all") {
+          const updated = [...readGlobalIds, notif.id];
+          setReadGlobalIds(updated);
+          localStorage.setItem("vsc_read_global_notifications", JSON.stringify(updated));
+        } else {
+          await markNotificationAsRead(notif.id);
+        }
+      }
+    } catch (err) {
+      console.error("Error marking notification as read:", err);
     }
     setIsOpen(false);
 
     // 2. Parse link and navigate
     if (notif.link) {
-      const params = new URLSearchParams(notif.link);
-      const targetTab = params.get("tab") || "control_panel";
-      const targetSubtab = params.get("subtab");
+      try {
+        const params = new URLSearchParams(notif.link);
+        const targetTab = params.get("tab") || "control_panel";
+        const targetSubtab = params.get("subtab");
 
-      setActiveTab(targetTab);
-      if (targetTab === "control_panel" && targetSubtab && setControlPanelSubTab) {
-        setControlPanelSubTab(targetSubtab);
-      } else if (targetTab === "settings" && targetSubtab && setSettingsSubTab) {
-        setSettingsSubTab(targetSubtab);
+        setActiveTab(targetTab);
+        if (targetTab === "control_panel" && targetSubtab && setControlPanelSubTab) {
+          setControlPanelSubTab(targetSubtab);
+        } else if (targetTab === "settings" && targetSubtab && setSettingsSubTab) {
+          setSettingsSubTab(targetSubtab);
+        }
+      } catch (err) {
+        console.error("Error navigating from notification link:", err);
       }
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      // 1. Mark non-global as read in Firestore
+      const individualUnread = notifications.filter((n) => n.recipientUid !== "all" && !n.isRead);
+      if (individualUnread.length > 0) {
+        await markAllNotificationsAsRead(currentUser.uid);
+      }
+
+      // 2. Mark all global as read in localStorage
+      const globalUnreadIds = notifications
+        .filter((n) => n.recipientUid === "all" && !readGlobalIds.includes(n.id))
+        .map((n) => n.id);
+      if (globalUnreadIds.length > 0) {
+        const updated = [...readGlobalIds, ...globalUnreadIds];
+        setReadGlobalIds(updated);
+        localStorage.setItem("vsc_read_global_notifications", JSON.stringify(updated));
+      }
+    } catch (err) {
+      console.error("Error marking all as read:", err);
     }
   };
 
@@ -231,7 +304,7 @@ export function NotificationBell({
 
       {/* Notifications Dropdown (Facebook style) */}
       {isOpen && (
-        <div className="absolute right-0 mt-3.5 w-80 sm:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl z-[999] overflow-hidden flex flex-col text-slate-800 dark:text-slate-100 max-h-[480px]">
+        <div className="absolute right-0 mt-3.5 w-80 sm:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl z-[999] overflow-hidden flex flex-col text-slate-800 dark:text-slate-101 max-h-[480px]">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 shrink-0">
             <div className="flex items-center gap-2">
@@ -271,7 +344,7 @@ export function NotificationBell({
             <div className="flex items-center justify-between px-4 py-1.5 bg-slate-100/50 dark:bg-slate-900/30 border-b border-slate-100 dark:border-slate-800 text-[11px] font-bold shrink-0">
               <button
                 type="button"
-                onClick={() => markAllNotificationsAsRead(currentUser.uid)}
+                onClick={handleMarkAllAsRead}
                 className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer border-none bg-transparent"
               >
                 <Check className="w-3.5 h-3.5" />
@@ -316,52 +389,90 @@ export function NotificationBell({
                 </button>
               </div>
             ) : (
-              notifications.map((notif) => (
-                <div
-                  key={notif.id}
-                  onClick={() => handleNotificationClick(notif)}
-                  className={`flex gap-3 p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer text-left relative group ${
-                    !notif.isRead ? "bg-amber-500/5 hover:bg-amber-500/10" : ""
-                  }`}
-                >
-                  {/* Unread Indicator Dot */}
-                  {!notif.isRead && (
-                    <span className="absolute top-4 right-4 w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0 shadow-sm" />
-                  )}
+              notifications.map((notif) => {
+                const isRead = isNotificationRead(notif);
+                return (
+                  <div
+                    key={notif.id}
+                    onClick={() => handleNotificationClick(notif)}
+                    className={`flex gap-3 p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer text-left relative group ${
+                      !isRead ? "bg-amber-500/5 hover:bg-amber-500/10" : ""
+                    }`}
+                  >
+                    {/* Unread Indicator Dot */}
+                    {!isRead && (
+                      <span className="absolute top-4 right-4 w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0 shadow-sm animate-pulse" />
+                    )}
 
-                  {/* Icon */}
-                  {getNotificationIcon(notif.type)}
+                    {/* Icon */}
+                    {getNotificationIcon(notif.type)}
 
-                  {/* Content */}
-                  <div className="flex-1 min-w-0 pr-4">
-                    <p className={`text-xs text-slate-900 dark:text-slate-50 leading-normal ${
-                      !notif.isRead ? "font-black" : "font-medium text-slate-600 dark:text-slate-300"
-                    }`}>
-                      {notif.title}
-                    </p>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal mt-1 break-words">
-                      {notif.message}
-                    </p>
-                    <div className="flex items-center gap-1.5 text-[9px] text-slate-400 dark:text-slate-500 mt-2 font-semibold">
-                      <Clock className="w-3 h-3" />
-                      <span>{formatTime(notif.createdAt)}</span>
+                    {/* Content */}
+                    <div className="flex-1 min-w-0 pr-6">
+                      <p className={`text-xs text-slate-900 dark:text-slate-50 leading-normal ${
+                        !isRead ? "font-black text-amber-600 dark:text-amber-400" : "font-medium text-slate-600 dark:text-slate-300"
+                      }`}>
+                        {notif.title}
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal mt-1 break-words">
+                        {notif.message}
+                      </p>
+                      <div className="flex items-center gap-1.5 text-[9px] text-slate-400 dark:text-slate-500 mt-2 font-semibold">
+                        <Clock className="w-3 h-3" />
+                        <span>{formatTime(notif.createdAt)}</span>
+                      </div>
+                    </div>
+
+                    {/* Individual Actions on Hover */}
+                    <div className="flex flex-col gap-1.5 shrink-0 self-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                      {!isRead && (
+                        <button
+                          type="button"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              if (notif.recipientUid === "all") {
+                                const updated = [...readGlobalIds, notif.id];
+                                setReadGlobalIds(updated);
+                                localStorage.setItem("vsc_read_global_notifications", JSON.stringify(updated));
+                              } else {
+                                await markNotificationAsRead(notif.id);
+                              }
+                            } catch (err) {
+                              console.error("Error marking notification as read:", err);
+                            }
+                          }}
+                          className="text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:hover:bg-slate-800 p-1.5 rounded-lg cursor-pointer border-none bg-transparent transition-all"
+                          title={language === "en" ? "Mark as read" : "Đánh dấu đã đọc"}
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          try {
+                            if (notif.recipientUid === "all") {
+                              const updated = [...readGlobalIds, notif.id];
+                              setReadGlobalIds(updated);
+                              localStorage.setItem("vsc_read_global_notifications", JSON.stringify(updated));
+                            } else {
+                              deleteNotification(notif.id);
+                            }
+                          } catch (err) {
+                            console.error("Error deleting notification:", err);
+                          }
+                        }}
+                        className="text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-800 p-1.5 rounded-lg cursor-pointer border-none bg-transparent transition-all"
+                        title={language === "en" ? "Delete" : "Xóa"}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
-
-                  {/* Individual Delete Button on Hover */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteNotification(notif.id);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-slate-400 hover:text-rose-500 p-1 rounded-sm cursor-pointer border-none bg-transparent transition-all self-center"
-                    title={language === "en" ? "Delete" : "Xóa"}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
