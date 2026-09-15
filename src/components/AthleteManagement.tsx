@@ -281,7 +281,7 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
     setDragOverId(null);
   };
 
-  const handleAddVscToTournament = (athlete: Athlete) => {
+  const handleAddVscToTournament = (athlete: Athlete, selectedCategory?: string, selectedIsPrimary?: boolean) => {
     const exists = athletes.some(a => a.id === athlete.id);
     if (exists) {
       alert(language === "en" ? `Athlete "${athlete.name}" (ID: ${athlete.id}) is already in the tournament roster!` : `Vận động viên "${athlete.name}" (ID: ${athlete.id}) đã có sẵn trong danh sách VĐV của giải rồi!`);
@@ -296,6 +296,8 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
 
       const copiedAthlete: Athlete = {
         ...athlete,
+        category: selectedCategory !== undefined ? selectedCategory : (athlete.category || "Nghiệp dư"),
+        isPrimaryTeam: selectedIsPrimary !== undefined ? selectedIsPrimary : (athlete.isPrimaryTeam || false),
         scores: freshScores,
       };
 
@@ -321,14 +323,18 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
   const [athleteToDelete, setAthleteToDelete] = useState<Athlete | null>(null);
   const [listToDelete, setListToDelete] = useState<any | null>(null);
   const [selectedAthlete, setSelectedAthlete] = useState<Athlete | null>(null);
-  const detailAvatarUrl = useMemo(() => {
-    if (!selectedAthlete) return AVATAR_MALE;
-    const systemProfile = vscSystemAthletes.find(
+  const selectedAthleteSystemProfile = useMemo(() => {
+    if (!selectedAthlete) return null;
+    return vscSystemAthletes.find(
       a => (a.id && selectedAthlete.id && a.id.trim().toLowerCase() === selectedAthlete.id.trim().toLowerCase()) ||
            (a.name && selectedAthlete.name && a.name.trim().toLowerCase() === selectedAthlete.name.trim().toLowerCase())
     );
-    return systemProfile?.avatarUrl || selectedAthlete.avatarUrl || AVATAR_MALE;
   }, [selectedAthlete, vscSystemAthletes]);
+
+  const detailAvatarUrl = useMemo(() => {
+    if (!selectedAthlete) return AVATAR_MALE;
+    return selectedAthleteSystemProfile?.avatarUrl || selectedAthlete.avatarUrl || AVATAR_MALE;
+  }, [selectedAthlete, selectedAthleteSystemProfile]);
   const [isEditing, setIsEditing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -380,6 +386,8 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
   // Add system athletes modal states
   const [isAddSystemAthleteModalOpen, setIsAddSystemAthleteModalOpen] = useState(false);
   const [systemAthleteSearchTerm, setSystemAthleteSearchTerm] = useState("");
+  const [sysAthCategories, setSysAthCategories] = useState<Record<string, string>>({});
+  const [sysAthIsPrimary, setSysAthIsPrimary] = useState<Record<string, boolean>>({});
 
   const filteredAthletes = currentRoster.filter(a => {
     const q = searchTerm.toLowerCase();
@@ -2734,84 +2742,7 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
                   </select>
                 </div>
 
-                {/* ----------------- Trang bị & Kỹ thuật ----------------- */}
-                {!isCreating && (
-                  <>
-                    <div className="col-span-1 sm:col-span-2 border-t border-slate-100 pt-4 mt-2">
-                      <h5 className="text-[11px] font-black uppercase text-indigo-600 tracking-wider mb-2">🎯 Cấu hình Trang bị & Kỹ thuật (Gear & Tech)</h5>
-                    </div>
 
-                    {/* Tên loại ná */}
-                    <div>
-                      <label className="block text-[11px] font-semibold text-gray-500 uppercase mb-1">
-                        Tên loại ná:
-                      </label>
-                      <input
-                        type="text"
-                        value={formGearSlingName}
-                        onChange={(e) => setFormGearSlingName(e.target.value)}
-                        placeholder="Vô cực, VIP, Hổ, CNC..."
-                        className="w-full px-3 py-1.5 text-sm bg-slate-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-800"
-                      />
-                    </div>
-
-                    {/* Độ rộng chạc */}
-                    <div>
-                      <label className="block text-[11px] font-semibold text-gray-500 uppercase mb-1">
-                        Độ rộng chạc:
-                      </label>
-                      <input
-                        type="text"
-                        value={formGearForkWidth}
-                        onChange={(e) => setFormGearForkWidth(e.target.value)}
-                        placeholder="7, 7.5, 8... (cm)"
-                        className="w-full px-3 py-1.5 text-sm bg-slate-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-800"
-                      />
-                    </div>
-
-                    {/* Khổ thun sử dụng */}
-                    <div>
-                      <label className="block text-[11px] font-semibold text-gray-500 uppercase mb-1">
-                        Khổ thun sử dụng:
-                      </label>
-                      <input
-                        type="text"
-                        value={formGearBandSpec}
-                        onChange={(e) => setFormGearBandSpec(e.target.value)}
-                        placeholder="10-20-150 dày 0.55mm..."
-                        className="w-full px-3 py-1.5 text-sm bg-slate-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-800"
-                      />
-                    </div>
-
-                    {/* Bi sử dụng */}
-                    <div>
-                      <label className="block text-[11px] font-semibold text-gray-500 uppercase mb-1">
-                        Bi sử dụng (Kích cỡ):
-                      </label>
-                      <input
-                        type="text"
-                        value={formGearAmmoSize}
-                        onChange={(e) => setFormGearAmmoSize(e.target.value)}
-                        placeholder="7, 8, 9... (mm)"
-                        className="w-full px-3 py-1.5 text-sm bg-slate-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-800"
-                      />
-                    </div>
-
-                    {/* Tư thế bắn */}
-                    <div>
-                      <label className="block text-[11px] font-semibold text-gray-500 uppercase mb-1">
-                        Tư thế bắn:
-                      </label>
-                      <input
-                        type="text"
-                        value={formGearStance}
-                        onChange={(e) => setFormGearStance(e.target.value)}
-                        placeholder="Tới má, Semi-butterfly, Full..."
-                        className="w-full px-3 py-1.5 text-sm bg-slate-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-800"
-                      />
-                    </div>
-                  </>
-                )}
 
               </div>
 
@@ -3015,7 +2946,7 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
                 <div>
                   <span className="text-[10px] uppercase font-bold text-gray-400 block tracking-wide">Tên loại ná</span>
                   <span className="text-sm text-indigo-600 dark:text-indigo-400 font-bold">
-                    {selectedAthlete.gearSlingName || <span className="text-gray-300 italic font-normal">Chưa cập nhật</span>}
+                    {selectedAthleteSystemProfile?.gearSlingName || selectedAthlete.gearSlingName || <span className="text-gray-300 italic font-normal">Chưa cập nhật</span>}
                   </span>
                 </div>
 
@@ -3023,7 +2954,7 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
                 <div>
                   <span className="text-[10px] uppercase font-bold text-gray-400 block tracking-wide">Độ rộng chạc</span>
                   <span className="text-sm text-slate-800 dark:text-slate-200 font-semibold">
-                    {selectedAthlete.gearForkWidth ? `${selectedAthlete.gearForkWidth} cm` : <span className="text-gray-300 italic font-normal">Chưa cập nhật</span>}
+                    {selectedAthleteSystemProfile?.gearForkWidth ? `${selectedAthleteSystemProfile.gearForkWidth} cm` : (selectedAthlete.gearForkWidth ? `${selectedAthlete.gearForkWidth} cm` : <span className="text-gray-300 italic font-normal">Chưa cập nhật</span>)}
                   </span>
                 </div>
 
@@ -3031,7 +2962,7 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
                 <div>
                   <span className="text-[10px] uppercase font-bold text-gray-400 block tracking-wide">Khổ thun sử dụng</span>
                   <span className="text-sm text-slate-800 dark:text-slate-200 font-semibold">
-                    {selectedAthlete.gearBandSpec || <span className="text-gray-300 italic font-normal">Chưa cập nhật</span>}
+                    {selectedAthleteSystemProfile?.gearBandSpec || selectedAthlete.gearBandSpec || <span className="text-gray-300 italic font-normal">Chưa cập nhật</span>}
                   </span>
                 </div>
 
@@ -3039,7 +2970,7 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
                 <div>
                   <span className="text-[10px] uppercase font-bold text-gray-400 block tracking-wide">Bi sử dụng</span>
                   <span className="text-sm text-slate-800 dark:text-slate-200 font-semibold">
-                    {selectedAthlete.gearAmmoSize ? `${selectedAthlete.gearAmmoSize} mm` : <span className="text-gray-300 italic font-normal">Chưa cập nhật</span>}
+                    {selectedAthleteSystemProfile?.gearAmmoSize ? `${selectedAthleteSystemProfile.gearAmmoSize} mm` : (selectedAthlete.gearAmmoSize ? `${selectedAthlete.gearAmmoSize} mm` : <span className="text-gray-300 italic font-normal">Chưa cập nhật</span>)}
                   </span>
                 </div>
 
@@ -3047,7 +2978,7 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
                 <div className="sm:col-span-2">
                   <span className="text-[10px] uppercase font-bold text-gray-400 block tracking-wide">Tư thế bắn</span>
                   <span className="text-sm text-slate-800 dark:text-slate-200 font-semibold">
-                    {selectedAthlete.gearStance || <span className="text-gray-300 italic font-normal">Chưa cập nhật</span>}
+                    {selectedAthleteSystemProfile?.gearStance || selectedAthlete.gearStance || <span className="text-gray-300 italic font-normal">Chưa cập nhật</span>}
                   </span>
                 </div>
               </div>
@@ -3449,21 +3380,65 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
                         </div>
                       </div>
 
-                      <div className="shrink-0">
-                        {isAdded ? (
-                          <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-450 dark:text-slate-500 text-xs font-bold rounded-xl border border-slate-200/50 dark:border-slate-700/50">
-                            <Check className="w-3.5 h-3.5" /> {language === "en" ? "Added" : "Đã thêm"}
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleAddVscToTournament(ath)}
-                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1"
-                          >
-                            <PlusCircle className="w-3.5 h-3.5" />
-                            {language === "en" ? "Add" : "Thêm"}
-                          </button>
+                      <div className="shrink-0 flex items-center gap-3.5 flex-wrap sm:flex-nowrap">
+                        {!isAdded && (
+                          <>
+                            {/* Option Phân hạng thi đấu */}
+                            <div className="flex flex-col gap-0.5 min-w-[120px]">
+                              <span className="text-[9px] uppercase font-extrabold text-slate-400 dark:text-slate-500">
+                                {language === "en" ? "Category" : "Phân hạng"}
+                              </span>
+                              <select
+                                value={sysAthCategories[ath.id] || "Nghiệp dư"}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setSysAthCategories(prev => ({ ...prev, [ath.id]: val }));
+                                }}
+                                className="px-2 py-1 text-[11px] bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg focus:outline-none font-bold text-indigo-700 dark:text-indigo-400 cursor-pointer"
+                              >
+                                <option value="Nghiệp dư">{language === "en" ? "Amateur" : "Nghiệp dư"}</option>
+                                <option value="Chuyên nghiệp">{language === "en" ? "Pro" : "Chuyên nghiệp"}</option>
+                                <option value="Lão tướng">{language === "en" ? "Veteran" : "Lão tướng"}</option>
+                                <option value="Trẻ em">{language === "en" ? "Kids" : "Trẻ em"}</option>
+                              </select>
+                            </div>
+
+                            {/* Nút tích BẮN CHÍNH */}
+                            <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-extrabold text-slate-600 dark:text-slate-300 select-none bg-slate-50 dark:bg-slate-950 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800">
+                              <input
+                                type="checkbox"
+                                checked={sysAthIsPrimary[ath.id] || false}
+                                onChange={(e) => {
+                                  const val = e.target.checked;
+                                  setSysAthIsPrimary(prev => ({ ...prev, [ath.id]: val }));
+                                }}
+                                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                              />
+                              <span>{language === "en" ? "PRIMARY" : "BẮN CHÍNH"}</span>
+                            </label>
+                          </>
                         )}
+
+                        <div>
+                          {isAdded ? (
+                            <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-450 dark:text-slate-500 text-xs font-bold rounded-xl border border-slate-200/50 dark:border-slate-700/50">
+                              <Check className="w-3.5 h-3.5" /> {language === "en" ? "Added" : "Đã thêm"}
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleAddVscToTournament(
+                                ath, 
+                                sysAthCategories[ath.id] || "Nghiệp dư", 
+                                sysAthIsPrimary[ath.id] || false
+                              )}
+                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1"
+                            >
+                              <PlusCircle className="w-3.5 h-3.5" />
+                              {language === "en" ? "Add" : "Thêm"}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
