@@ -278,6 +278,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           forceTab={athleteForceTab}
           userRole={userRole}
           hideVscSystemTab={true}
+          activeHistoryId={activeHistoryId}
         />
       )}
     </div>

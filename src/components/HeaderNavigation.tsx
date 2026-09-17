@@ -1113,6 +1113,29 @@ export function HeaderNavigation({
                   <span>{language === "en" ? "Create Tournament" : "Tạo Giải Đấu Mới"}</span>
                 </button>
 
+                {/* Backups / History (Admins only) */}
+                {userRole === "admin" && (
+                  <button
+                    onClick={() => {
+                      setIsMobileDrawerOpen(false);
+                      changeTab("history");
+                    }}
+                    className={`w-full px-3 py-2.5 rounded-lg text-xs font-extrabold flex items-center gap-3 transition-all border-none bg-transparent ${
+                      activeTab === "history"
+                        ? "bg-red-50 text-[#9c0c13] dark:bg-red-950/20 dark:text-red-400"
+                        : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                    }`}
+                  >
+                    <History className="w-4 h-4 shrink-0 text-amber-500" />
+                    <span>{language === "en" ? "Backups" : "Lịch Sử"}</span>
+                    {history.length > 0 && (
+                      <span className="bg-[#9c0c13] text-white border border-red-700 rounded-full text-[8px] font-bold w-3.5 h-3.5 flex items-center justify-center font-sans ml-auto shrink-0">
+                        {history.length}
+                      </span>
+                    )}
+                  </button>
+                )}
+
                 {/* Guides Help */}
                 <button
                   onClick={() => {

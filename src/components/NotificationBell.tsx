@@ -156,8 +156,13 @@ export function NotificationBell({
   const unreadCount = notifications.filter((n) => !isNotificationRead(n)).length;
 
   const handleNotificationClick = async (notif: VscNotification) => {
+    // 1. Optimistic update to immediately reflect in UI
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notif.id ? { ...n, isRead: true } : n))
+    );
+
     try {
-      // 1. Mark as read
+      // 2. Mark as read in DB
       if (!isNotificationRead(notif)) {
         if (notif.recipientUid === "all") {
           const updated = [...readGlobalIds, notif.id];
@@ -430,6 +435,10 @@ export function NotificationBell({
                           type="button"
                           onClick={async (e) => {
                             e.stopPropagation();
+                            // Optimistic update
+                            setNotifications((prev) =>
+                              prev.map((n) => (n.id === notif.id ? { ...n, isRead: true } : n))
+                            );
                             try {
                               if (notif.recipientUid === "all") {
                                 const updated = [...readGlobalIds, notif.id];

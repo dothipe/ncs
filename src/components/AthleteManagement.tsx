@@ -3,6 +3,9 @@ import { createPortal } from "react-dom";
 import { useLanguage } from "../context/LanguageContext";
 import { Athlete, DistanceConfig, StoredAthleteList, Club, VSC_DEFAULT_LOGO } from "../types";
 import { getUserProfileByEmail, saveVscSystemAthletes, subscribeToVscSystemAthletes, saveVscSystemClub, deleteVscSystemClub, findLinkedEmailAndAvatarForAthlete } from "../lib/firebaseService";
+import { sendNotification } from "../lib/notificationService";
+import { db } from "../firebase";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import { VIETNAM_PROVINCES } from "../utils/provinces";
 import * as XLSX from "xlsx";
 import { 
@@ -51,6 +54,7 @@ interface AthleteManagementProps {
   forceTab?: "athletes" | "clubs" | "vsc_system";
   hideVscSystemTab?: boolean;
   userRole?: string;
+  activeHistoryId?: string | null;
 }
 
 export function deduplicateAthletes(list: Athlete[]): Athlete[] {
@@ -141,9 +145,57 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
   currentUser,
   forceTab,
   hideVscSystemTab,
-  userRole
+  userRole,
+  activeHistoryId
 }) => {
   const { language, t } = useLanguage();
+
+  // Helper to send real-time notification to athlete
+  const handleNotifyAthlete = async (athleteEmail: string | undefined, actionType: "added" | "removed") => {
+    if (!athleteEmail) return;
+    try {
+      const emailQueryVal = athleteEmail.trim().toLowerCase();
+      if (!emailQueryVal) return;
+      
+      const usersRef = collection(db, "users");
+      const q = query(usersRef, where("email", "==", emailQueryVal));
+      const userSnap = await getDocs(q);
+      
+      if (!userSnap.empty) {
+        const targetUserId = userSnap.docs[0].id;
+        const tournamentIdStr = activeHistoryId || localStorage.getItem("slingshot_active_tournament_id") || "";
+        
+        if (actionType === "added") {
+          await sendNotification(
+            targetUserId,
+            "tournament_added",
+            language === "en" ? "Tournament invitation" : "Bạn đã được thêm vào giải đấu",
+            language === "en"
+              ? `You have been added to the tournament "${matchName}" by the organizer.`
+              : `Chào mừng! Bạn đã được ban tổ chức thêm vào giải đấu "${matchName}". Bấm để xem chi tiết.`,
+            `tour=${tournamentIdStr}&tab=dashboard`,
+            currentUser?.uid || "",
+            currentUser?.displayName || "Ban tổ chức"
+          );
+        } else {
+          await sendNotification(
+            targetUserId,
+            "tournament_removed",
+            language === "en" ? "Removed from tournament" : "Bạn đã bị xóa khỏi giải đấu",
+            language === "en"
+              ? `You have been removed from the tournament "${matchName}".`
+              : `Thông báo: Bạn đã bị xóa khỏi danh sách vận động viên tham gia giải đấu "${matchName}".`,
+            "tab=home",
+            currentUser?.uid || "",
+            currentUser?.displayName || "Ban tổ chức"
+          );
+        }
+      }
+    } catch (err) {
+      console.error("Error notifying athlete:", err);
+    }
+  };
+
   const [searchTerm, setSearchTerm] = useState("");
   const [leftTab, setLeftTab] = useState<"athletes" | "clubs" | "vsc_system">(forceTab || "athletes");
 
@@ -316,6 +368,11 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
           : `Đã thêm thành công VĐV "${athlete.name}" vào Danh Sách VĐV Giải (Chưa gọi vào bảng Ghi Điểm).`
       });
       setTimeout(() => setNotification(null), 3500);
+
+      // Send real-time notification to the added athlete
+      if (athlete.email) {
+        handleNotifyAthlete(athlete.email, "added");
+      }
     }
   };
 
@@ -2104,6 +2161,12 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
                   }
                   setIsEditing(false);
                   setIsCreating(false);
+                  
+                  // Send real-time notification to the removed athlete
+                  if (athleteToDelete.email) {
+                    handleNotifyAthlete(athleteToDelete.email, "removed");
+                  }
+
                   setAthleteToDelete(null);
                   setNotification({ type: "success", message: `Đã xóa hồ sơ VĐV thành công!` });
                   setTimeout(() => setNotification(null), 3000);
@@ -2822,6 +2885,12 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
                       onClick={() => {
                         setAthletes((prev) => prev.filter((a) => a.id !== selectedAthlete.id));
                         setCurrentActiveAthletes((prev) => prev.filter((a) => a.id !== selectedAthlete.id));
+                        
+                        // Send real-time notification to the removed athlete
+                        if (selectedAthlete.email) {
+                          handleNotifyAthlete(selectedAthlete.email, "removed");
+                        }
+
                         setSelectedAthlete(null);
                         setIsEditing(false);
                         setIsCreating(false);
