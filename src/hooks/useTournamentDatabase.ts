@@ -340,6 +340,33 @@ export const useTournamentDatabase = ({
 
     if (!isDifferent) return;
 
+    // Detect if the differences contain roster or configuration updates (which are discrete user actions)
+    const hasConfigOrRosterChanges = userRole === "admin" && (
+      !deepEqual(matchName, currentTournamentDoc?.matchName) ||
+      !deepEqual(startDate, currentTournamentDoc?.startDate) ||
+      !deepEqual(endDate, currentTournamentDoc?.endDate) ||
+      !deepEqual(location, currentTournamentDoc?.location) ||
+      !deepEqual(distances, currentTournamentDoc?.distances) ||
+      !deepEqual(shotsCount, currentTournamentDoc?.shotsCount) ||
+      !deepEqual(athletes, currentTournamentDoc?.athletes) ||
+      !deepEqual(teamDistances, currentTournamentDoc?.teamDistances) ||
+      !deepEqual(teamShotsCount, currentTournamentDoc?.teamShotsCount) ||
+      !deepEqual(teamAthletes, currentTournamentDoc?.teamAthletes) ||
+      !deepEqual(directMaxPoints, currentTournamentDoc?.directMaxPoints) ||
+      !deepEqual(teamDirectMaxPoints, currentTournamentDoc?.teamDirectMaxPoints) ||
+      !deepEqual(directMaxShots, currentTournamentDoc?.directMaxShots) ||
+      !deepEqual(teamDirectMaxShots, currentTournamentDoc?.teamDirectMaxShots) ||
+      !deepEqual(masterAthletes, currentTournamentDoc?.masterAthletes) ||
+      !deepEqual(bannerUrl, currentTournamentDoc?.bannerUrl) ||
+      !deepEqual(avatarUrl, currentTournamentDoc?.avatarUrl) ||
+      !deepEqual(participatingClubs, currentTournamentDoc?.clubs) ||
+      laneCapacity !== currentTournamentDoc?.laneCapacity
+    );
+
+    // If roster/config has changed, write immediately (50ms delay) so consecutive additions do not collide.
+    // If only scoring input changed, use 850ms to aggregate high-frequency keystrokes.
+    const delay = hasConfigOrRosterChanges ? 50 : 850;
+
     const timer = setTimeout(async () => {
       try {
         const payload: Partial<TournamentData> = userRole === "admin"
@@ -374,7 +401,7 @@ export const useTournamentDatabase = ({
       } catch (err) {
         console.error("Cloud synchronization failed:", err);
       }
-    }, 850);
+    }, delay);
 
     return () => clearTimeout(timer);
   }, [

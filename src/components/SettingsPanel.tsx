@@ -3411,6 +3411,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     // Set active history ID to the newly created Cloud tournament
                     setActiveHistoryId(newTourId);
 
+                    // Redirect to the CÀI ĐẶT (settings) tab to continue detailed configuration
+                    if (setActiveTab) {
+                      setActiveTab("settings");
+                    }
+
                     localStorage.setItem("slingshot_active_tournament_id", newTourId);
                     setTournamentId(modalTournamentId.trim());
                     
