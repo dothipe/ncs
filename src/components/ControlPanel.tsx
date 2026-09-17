@@ -1506,7 +1506,18 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
       if (activeHistoryId === id && onSelectTournament) {
         onSelectTournament("", null);
       }
+      const tournamentToDelete = onlineTournaments?.find((t) => t.id === id);
       await deleteOnlineTournament(id);
+
+      // Clear the local rate limit upon deleting
+      if (currentUser) {
+        if (tournamentToDelete?.isCopied) {
+          localStorage.removeItem(`vsc_last_copy_time_${currentUser.uid}`);
+        } else {
+          localStorage.removeItem(`vsc_last_create_time_${currentUser.uid}`);
+        }
+      }
+
       setShowConfirmDeleteId(null);
     } catch (err) {
       console.error(err);

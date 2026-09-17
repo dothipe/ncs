@@ -125,6 +125,24 @@ export const OnlineTournamentsPanel: React.FC<OnlineTournamentsPanelProps> = ({
       alert(language === "en" ? "Please enter a tournament name!" : "Vui lòng nhập tên giải đấu mới!");
       return;
     }
+
+    // Client-side 15-minute pre-flight rate limit check for copying
+    const lastCopyTimeStr = localStorage.getItem(`vsc_last_copy_time_${currentUser.uid}`);
+    if (lastCopyTimeStr) {
+      const lastCopyTime = Number(lastCopyTimeStr);
+      const diff = Date.now() - lastCopyTime;
+      const fifteenMins = 15 * 60 * 1000;
+      if (diff < fifteenMins) {
+        const minsLeft = Math.ceil((fifteenMins - diff) / 60000);
+        alert(
+          language === "en"
+            ? `Please wait ${minsLeft} more minute(s) before copying another tournament (limit is 15 minutes per copying action)!`
+            : `Vui lòng đợi thêm ${minsLeft} phút trước khi sao chép giải đấu mới (giới hạn 15 phút giữa các lần sao chép)!`
+        );
+        return;
+      }
+    }
+
     setIsCopying(true);
     try {
       const cleanAthleteScores = (ath: Athlete): Athlete => ({
@@ -183,8 +201,13 @@ export const OnlineTournamentsPanel: React.FC<OnlineTournamentsPanelProps> = ({
           subAdmins: copyModalTour.subAdmins || [],
           startDate: copyModalTour.startDate,
           endDate: copyModalTour.endDate,
+          isCopied: true,
+          copiedFrom: copyModalTour.id,
         }
       );
+
+      // Save local storage timestamp upon successful copy
+      localStorage.setItem(`vsc_last_copy_time_${currentUser.uid}`, String(Date.now()));
 
       alert(
         language === "en"
@@ -1243,7 +1266,18 @@ export const OnlineTournamentsPanel: React.FC<OnlineTournamentsPanelProps> = ({
       if (activeHistoryId === id && onSelectTournament) {
         onSelectTournament("", null);
       }
+      const tournamentToDelete = tournaments.find((t) => t.id === id);
       await deleteOnlineTournament(id);
+
+      // Clear the local rate limit upon deleting
+      if (currentUser) {
+        if (tournamentToDelete?.isCopied) {
+          localStorage.removeItem(`vsc_last_copy_time_${currentUser.uid}`);
+        } else {
+          localStorage.removeItem(`vsc_last_create_time_${currentUser.uid}`);
+        }
+      }
+
       setShowConfirmDeleteId(null);
     } catch (err) {
       console.error(err);

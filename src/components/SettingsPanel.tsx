@@ -4,7 +4,7 @@ import { DistanceConfig, Athlete, MatchHistoryItem, StoredAthleteList } from "..
 import { Settings, Plus, Edit2, Trash2, Calendar, FileDown, FileUp, RefreshCw, Trophy, Target, PlusCircle, Smartphone, CheckCircle, Users, Lock, Unlock, X, AlertTriangle, Shield, HelpCircle } from "lucide-react";
 import { getHitCount } from "../utils/qualification";
 import { auth } from "../firebase";
-import { createOnlineTournament, updateOnlineTournament, getVscSystemAthletes, getNextTournamentSequenceId } from "../lib/firebaseService";
+import { createOnlineTournament, updateOnlineTournament, getVscSystemAthletes, getNextTournamentSequenceId, getFriendlyErrorMessage } from "../lib/firebaseService";
 import { useLanguage } from "../context/LanguageContext";
 import { SmartGuideTrigger } from "./GuidesView";
 
@@ -3303,6 +3303,23 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     return;
                   }
 
+                  // Client-side 15-minute pre-flight rate limit check for creating a tournament
+                  const lastCreateTimeStr = localStorage.getItem(`vsc_last_create_time_${currentUser.uid}`);
+                  if (lastCreateTimeStr) {
+                    const lastCreateTime = Number(lastCreateTimeStr);
+                    const diff = Date.now() - lastCreateTime;
+                    const fifteenMins = 15 * 60 * 1000;
+                    if (diff < fifteenMins) {
+                      const minsLeft = Math.ceil((fifteenMins - diff) / 60000);
+                      setTournamentError(
+                        language === "en"
+                          ? `Please wait ${minsLeft} more minute(s) before creating another tournament (limit is 15 minutes per tournament creation)!`
+                          : `Vui lòng đợi thêm ${minsLeft} phút trước khi khởi tạo giải đấu mới (giới hạn 15 phút giữa các lần tạo giải)!`
+                      );
+                      return;
+                    }
+                  }
+
                   try {
                     setTournamentError("");
                     
@@ -3398,6 +3415,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     // Track creation time of new tournament to delay roster auto-save
                     localStorage.setItem("slingshot_new_tournament_created_at", Date.now().toString());
 
+                    // Save local storage timestamp upon successful tournament creation for rate limiting
+                    localStorage.setItem(`vsc_last_create_time_${currentUser.uid}`, Date.now().toString());
+
                     // Set active history ID to the newly created Cloud tournament
                     setActiveHistoryId(newTourId);
 
@@ -3433,7 +3453,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     // 4. Close dialog successfully
                     setIsNewTournamentModalOpen(false);
                   } catch (err: any) {
-                    setTournamentError("Lỗi kết nối tạo giải: " + (err.message || err));
+                    const friendlyMsg = getFriendlyErrorMessage(err, language);
+                    setTournamentError(friendlyMsg);
                   }
                 }}
                 className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black transition-all shadow-md shadow-rose-500/25 cursor-pointer active:scale-98"

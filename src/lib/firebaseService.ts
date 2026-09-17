@@ -76,6 +76,8 @@ export interface TournamentData {
   activeMonitorRoundIdx?: number;
   activeMonitorSquad?: number;
   activeMonitorEnv?: "individual" | "team";
+  isCopied?: boolean;
+  copiedFrom?: string;
 }
 
 export enum OperationType {
@@ -305,6 +307,8 @@ export async function createOnlineTournament(
     sortedAthleteOrder?: string[];
     roundShootingOrders?: Record<string, string[]>;
     roundShootingOrderCriteria?: Record<string, string>;
+    isCopied?: boolean;
+    copiedFrom?: string;
   }
 ): Promise<string> {
   // 1. Fetch user profile and check for existing bans/restrictions
@@ -328,7 +332,7 @@ export async function createOnlineTournament(
   });
 
   if (querySnapshot) {
-    const userTournaments: { id: string; createdTime: number }[] = [];
+    const userTournaments: { id: string; createdTime: number; isCopied: boolean }[] = [];
     querySnapshot.forEach((docSnap) => {
       const data = docSnap.data();
       let createdTime = Date.now();
@@ -343,8 +347,34 @@ export async function createOnlineTournament(
           createdTime = data.createdAt;
         }
       }
-      userTournaments.push({ id: docSnap.id, createdTime });
+      userTournaments.push({ id: docSnap.id, createdTime, isCopied: !!data.isCopied });
     });
+
+    // Enforce 15-minute rate limiting per user/action
+    const fifteenMinutesInMs = 15 * 60 * 1000;
+    const now = Date.now();
+
+    if (config.isCopied) {
+      const copies = userTournaments.filter(t => t.isCopied);
+      if (copies.length > 0) {
+        const lastCopyTime = Math.max(...copies.map(t => t.createdTime));
+        const diff = now - lastCopyTime;
+        if (diff < fifteenMinutesInMs) {
+          const remainingMinutes = Math.ceil((fifteenMinutesInMs - diff) / 60000);
+          throw new Error(`RATE_LIMIT_COPY:${remainingMinutes}`);
+        }
+      }
+    } else {
+      const creations = userTournaments.filter(t => !t.isCopied);
+      if (creations.length > 0) {
+        const lastCreateTime = Math.max(...creations.map(t => t.createdTime));
+        const diff = now - lastCreateTime;
+        if (diff < fifteenMinutesInMs) {
+          const remainingMinutes = Math.ceil((fifteenMinutesInMs - diff) / 60000);
+          throw new Error(`RATE_LIMIT_CREATE:${remainingMinutes}`);
+        }
+      }
+    }
 
     const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
     const recentTournaments = userTournaments.filter((t) => t.createdTime >= tenMinutesAgo);
@@ -1217,6 +1247,20 @@ export function getFriendlyErrorMessage(err: any, language: "vi" | "en" = "vi"):
     return language === "en"
       ? "Alert: You are creating tournaments too quickly! (5 tournaments in 10 minutes). Your account has been restricted for 24 hours, and all your created tournaments have been cleared."
       : "Cảnh báo: Bạn đang tạo giải quá nhanh! (5 giải trong 10 phút). Tài khoản của bạn đã bị hạn chế tạo giải trong 24 giờ, tất cả giải đấu cũ của bạn đã được dọn dẹp khỏi hệ thống.";
+  }
+  if (errMsg.includes("RATE_LIMIT_CREATE")) {
+    const match = errMsg.match(/RATE_LIMIT_CREATE:(\d+)/);
+    const mins = match ? match[1] : "15";
+    return language === "en"
+      ? `Please wait ${mins} more minute(s) before creating another tournament (limit is 15 minutes per tournament creation)!`
+      : `Vui lòng đợi thêm ${mins} phút trước khi khởi tạo giải đấu mới (giới hạn 15 phút giữa các lần tạo giải)!`;
+  }
+  if (errMsg.includes("RATE_LIMIT_COPY")) {
+    const match = errMsg.match(/RATE_LIMIT_COPY:(\d+)/);
+    const mins = match ? match[1] : "15";
+    return language === "en"
+      ? `Please wait ${mins} more minute(s) before copying another tournament (limit is 15 minutes per copying action)!`
+      : `Vui lòng đợi thêm ${mins} phút trước khi sao chép giải đấu mới (giới hạn 15 phút giữa các lần sao chép)!`;
   }
   return errMsg;
 }
