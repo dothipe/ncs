@@ -213,7 +213,13 @@ export function InputScoresWorkspace({
             {(() => {
               const unselected = masterAthletes.filter((m) => {
                 if (m.status === "Bỏ thi") return false;
-                if (competitionMode === "team" && !m.isPrimaryTeam) return false;
+                if (competitionMode === "team") {
+                  if (!m.isPrimaryTeam) return false;
+                  const teamName = (m.team || "").toLowerCase().trim();
+                  if (!teamName || teamName === "tự do" || teamName === "tu do" || teamName.includes("free") || teamName.includes("independent")) {
+                    return false;
+                  }
+                }
                 
                 // Exclude only if already called by ME (the current user)
                 const isAlreadyCalledByMe = currentInputAthletes.some((a) => {
@@ -282,7 +288,13 @@ export function InputScoresWorkspace({
             {(() => {
               const unselected = masterAthletes.filter((m) => {
                 if (m.status === "Bỏ thi") return false;
-                if (competitionMode === "team" && !m.isPrimaryTeam) return false;
+                if (competitionMode === "team") {
+                  if (!m.isPrimaryTeam) return false;
+                  const teamName = (m.team || "").toLowerCase().trim();
+                  if (!teamName || teamName === "tự do" || teamName === "tu do" || teamName.includes("free") || teamName.includes("independent")) {
+                    return false;
+                  }
+                }
                 
                 // Exclude only if already called by ME (the current user)
                 const isAlreadyCalledByMe = currentInputAthletes.some((a) => {

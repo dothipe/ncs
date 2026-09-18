@@ -135,13 +135,34 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
 
   // Auto-subscribe to changes if tournament doc updates (via parent triggers)
   const isNational = currentTournamentDoc?.isNational || false;
-  const isDrawingOpen = currentTournamentDoc?.isDrawingOpen || false;
   const forcedRefMode = currentTournamentDoc?.forcedRefMode || "free";
   const laneCapacity = currentTournamentDoc?.laneCapacity || 10;
   const masterAthletes = currentTournamentDoc?.masterAthletes || [];
   const drawnNumbers = currentTournamentDoc?.drawnNumbers || {};
   const teamDrawnNumbers = currentTournamentDoc?.teamDrawnNumbers || {};
   const teamLaneLayoutType = currentTournamentDoc?.teamLaneLayoutType || "sequential";
+
+  // Aligned 3-day gate transition calculation
+  const rawStartDate = currentTournamentDoc?.startDate || currentTournamentDoc?.matchDate || "";
+  let isWithin3DaysOfStart = false;
+  if (rawStartDate) {
+    const startD = new Date(rawStartDate);
+    startD.setHours(0, 0, 0, 0);
+    const now = new Date();
+    const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+    const diff = startD.getTime() - now.getTime();
+    if (diff <= threeDaysMs) {
+      isWithin3DaysOfStart = true;
+    }
+  }
+
+  const isRegOpen = currentTournamentDoc?.isRegistrationOpen !== undefined
+    ? currentTournamentDoc.isRegistrationOpen
+    : !isWithin3DaysOfStart;
+
+  const isDrawingOpen = currentTournamentDoc?.isDrawingOpen !== undefined
+    ? currentTournamentDoc.isDrawingOpen
+    : isWithin3DaysOfStart;
 
   // Memoize qualifying clubs (excluding Tự do/empty, and must contain at least one main shooter isPrimaryTeam)
   const qualifyingClubs = useMemo(() => {
@@ -335,6 +356,25 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
     }
   };
 
+  // Toggle đăng ký trực tuyến status
+  const handleToggleRegistrationStatus = async () => {
+    if (!activeHistoryId) return;
+    try {
+      const nextStatus = !isRegOpen;
+      await updateOnlineTournament(activeHistoryId, {
+        isRegistrationOpen: nextStatus
+      });
+      showToast(
+        isEng 
+          ? `Online Registration is now ${nextStatus ? "OPEN" : "CLOSED"}!` 
+          : `Cổng đăng ký trực tuyến hiện đã ${nextStatus ? "MỞ" : "ĐÓNG"}!`
+      );
+    } catch (err) {
+      console.error("Failed to toggle registration status:", err);
+      showToast(isEng ? "Failed to update status." : "Lỗi khi cập nhật trạng thái.");
+    }
+  };
+
   // Set Forced Environment Mode
   const handleSetForcedMode = async (mode: "individual" | "team" | "free" | "locked") => {
     if (!activeHistoryId) return;
@@ -374,6 +414,12 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
         return;
       }
 
+      const undrawnAthletes = masterAthletes.filter(a => !drawnNumbers[a.id]);
+      if (undrawnAthletes.length === 0) {
+        showToast(isEng ? "All athletes already have SBD." : "Tất cả vận động viên đã có SBD.");
+        return;
+      }
+
       // Collect numbers already drawn
       const existingNumbers = new Set(Object.values(drawnNumbers));
       const availableNumbers: number[] = [];
@@ -383,29 +429,103 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
         }
       }
 
-      // Shuffle available numbers
-      const shuffled = [...availableNumbers].sort(() => Math.random() - 0.5);
-
-      const nextDrawnNumbers = { ...drawnNumbers };
+      const sortedAvailable = [...availableNumbers].sort((a, b) => a - b);
       const nextDrawMethods = { ...(currentTournamentDoc?.drawMethods || {}) };
-      let drawnCount = 0;
 
-      masterAthletes.forEach((athlete) => {
-        if (!nextDrawnNumbers[athlete.id]) {
-          const pickedNum = shuffled.pop();
-          if (pickedNum !== undefined) {
-            nextDrawnNumbers[athlete.id] = pickedNum;
-            nextDrawMethods[athlete.id] = "btc";
-            drawnCount++;
+      // Helper function to calculate penalty for same-club SBD proximity
+      const calculateClubPenalty = (candidateMap: Record<string, number>): number => {
+        const clubToSbds: Record<string, number[]> = {};
+        masterAthletes.forEach(a => {
+          const club = ((a.team || a.club || "Tự do") as string).trim().toLowerCase();
+          if (club === "tự do" || club === "") return; // Skip spacing check for independent shooters
+          const num = candidateMap[a.id];
+          if (num !== undefined) {
+            if (!clubToSbds[club]) clubToSbds[club] = [];
+            clubToSbds[club].push(num);
           }
+        });
+
+        let penalty = 0;
+        for (const club in clubToSbds) {
+          const sbds = clubToSbds[club].sort((a, b) => a - b);
+          for (let i = 0; i < sbds.length - 1; i++) {
+            const diff = sbds[i+1] - sbds[i];
+            if (diff === 1) penalty += 1000;
+            else if (diff === 2) penalty += 100;
+            else if (diff === 3) penalty += 10;
+          }
+        }
+        return penalty;
+      };
+
+      let bestDrawnNumbers = { ...drawnNumbers };
+      let minPenalty = Infinity;
+
+      // Run multiple randomized interleave attempts to find the absolute minimum club clustering penalty
+      const attempts = 100;
+      for (let attempt = 0; attempt < attempts; attempt++) {
+        const candidateDrawnNumbers = { ...drawnNumbers };
+        
+        // Group undrawn by club
+        const clubGroups: Record<string, Athlete[]> = {};
+        undrawnAthletes.forEach(a => {
+          const club = ((a.team || a.club || "Tự do") as string).trim().toLowerCase();
+          if (!clubGroups[club]) clubGroups[club] = [];
+          clubGroups[club].push(a);
+        });
+
+        // Shuffle within each group and shuffle keys
+        const clubKeys = Object.keys(clubGroups).sort(() => Math.random() - 0.5);
+        const queues = clubKeys.map(k => {
+          const list = [...clubGroups[k]].sort(() => Math.random() - 0.5);
+          return list;
+        });
+
+        // Interleave using greedy length-descending round-robin
+        const interleaved: Athlete[] = [];
+        const activeQueues = [...queues].sort((a, b) => b.length - a.length);
+
+        while (activeQueues.length > 0) {
+          for (let i = 0; i < activeQueues.length; i++) {
+            const q = activeQueues[i];
+            const item = q.shift();
+            if (item) {
+              interleaved.push(item);
+            }
+          }
+          for (let i = activeQueues.length - 1; i >= 0; i--) {
+            if (activeQueues[i].length === 0) {
+              activeQueues.splice(i, 1);
+            }
+          }
+        }
+
+        // Pair with sorted available numbers
+        interleaved.forEach((athlete, index) => {
+          candidateDrawnNumbers[athlete.id] = sortedAvailable[index];
+        });
+
+        const penalty = calculateClubPenalty(candidateDrawnNumbers);
+        if (penalty < minPenalty) {
+          minPenalty = penalty;
+          bestDrawnNumbers = candidateDrawnNumbers;
+          if (penalty === 0) break; // Perfect separation found, exit early!
+        }
+      }
+
+      // Mark the methods
+      undrawnAthletes.forEach(a => {
+        if (bestDrawnNumbers[a.id] !== undefined) {
+          nextDrawMethods[a.id] = "btc";
         }
       });
 
       await updateOnlineTournament(activeHistoryId, {
-        drawnNumbers: nextDrawnNumbers,
+        drawnNumbers: bestDrawnNumbers,
         drawMethods: nextDrawMethods
       });
 
+      const drawnCount = undrawnAthletes.length;
       showToast(
         isEng 
           ? `Successfully drawn SBDs for ${drawnCount} athletes!` 
@@ -951,7 +1071,20 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                     </div>
                   )}
 
-                  {/* Toggle open draw button */}
+                   {/* Toggle Online Registration Gate Button */}
+                   <button
+                     onClick={handleToggleRegistrationStatus}
+                     className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shadow-sm border ${
+                       isRegOpen
+                         ? "bg-rose-50/50 hover:bg-rose-100/50 text-rose-600 border-rose-200"
+                         : "bg-emerald-50/50 hover:bg-emerald-100/50 text-emerald-600 border-emerald-200"
+                     }`}
+                   >
+                     {isRegOpen ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                     <span>{isRegOpen ? (isEng ? "Close Online Reg" : "ĐÓNG CỔNG ĐĂNG KÝ") : (isEng ? "Open Online Reg" : "MỞ CỔNG ĐĂNG KÝ")}</span>
+                   </button>
+
+                  {/* Toggle SBD Drawing Gate Button */}
                   <button
                     onClick={handleToggleDrawingStatus}
                     className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shadow-sm border ${
@@ -961,7 +1094,7 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                     }`}
                   >
                     {isDrawingOpen ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
-                    <span>{isDrawingOpen ? (isEng ? "Close Online Portal" : "ĐÓNG CỔNG TRỰC TUYẾN") : (isEng ? "Open Online Portal" : "MỞ CỔNG TRỰC TUYẾN")}</span>
+                    <span>{isDrawingOpen ? (isEng ? "Close SBD Drawing" : "ĐÓNG CỔNG BỐC THĂM SBD") : (isEng ? "Open SBD Drawing" : "MỞ CỔNG BỐC THĂM SBD")}</span>
                   </button>
 
                   {/* Auto batch draw remaining button */}

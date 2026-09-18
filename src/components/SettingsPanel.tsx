@@ -3357,6 +3357,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         isNational: modalIsNational,
                         headReferee: modalHeadReferee.trim().toLowerCase(),
                         isDrawingOpen: false,
+                        isRegistrationOpen: true,
                         drawnNumbers: {},
                         teamDrawnNumbers: {},
                         drawMethods: {},

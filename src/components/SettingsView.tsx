@@ -271,6 +271,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           setStoredAthleteLists={setStoredAthleteLists}
           currentActiveAthletes={currentAthletes}
           setCurrentActiveAthletes={competitionMode === "individual" ? setAthletes : setTeamAthletes}
+          setActiveIndividualAthletes={setAthletes}
+          setTeamAthletes={setTeamAthletes}
+          setInputAthletes={setInputAthletes}
+          setTeamInputAthletes={setTeamInputAthletes}
           matchName={matchName}
           clubs={clubs}
           setClubs={setClubs}
@@ -279,6 +283,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           userRole={userRole}
           hideVscSystemTab={true}
           activeHistoryId={activeHistoryId}
+          currentTournamentDoc={currentTournamentDoc}
+          updateOnlineTournament={updateOnlineTournament}
         />
       )}
     </div>

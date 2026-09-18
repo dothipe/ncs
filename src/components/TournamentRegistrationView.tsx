@@ -62,9 +62,33 @@ export const TournamentRegistrationView: React.FC<TournamentRegistrationViewProp
 
   const masterAthletes: Athlete[] = currentTournamentDoc?.masterAthletes || [];
   const drawnNumbers = currentTournamentDoc?.drawnNumbers || {};
-  const isDrawingOpen = currentTournamentDoc?.isDrawingOpen || false;
   const laneCapacity = currentTournamentDoc?.laneCapacity || 10;
   const matchName = currentTournamentDoc?.matchName || "";
+
+  // 3-day automatic gate transitions based on tournament startDate
+  const rawStartDate = currentTournamentDoc?.startDate || currentTournamentDoc?.matchDate || "";
+  let isWithin3DaysOfStart = false;
+  if (rawStartDate) {
+    const startD = new Date(rawStartDate);
+    startD.setHours(0, 0, 0, 0);
+    const now = new Date();
+    // 3 days in milliseconds
+    const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+    const diff = startD.getTime() - now.getTime();
+    if (diff <= threeDaysMs) {
+      isWithin3DaysOfStart = true;
+    }
+  }
+
+  // Registration Gate: Open if explicitly enabled, or if not yet within 3 days and not explicitly disabled
+  const isRegistrationOpen = currentTournamentDoc?.isRegistrationOpen !== undefined
+    ? currentTournamentDoc.isRegistrationOpen
+    : !isWithin3DaysOfStart;
+
+  // SBD Drawing Gate: Open if explicitly enabled, or if within 3 days and not explicitly disabled
+  const isSbdDrawingOpen = currentTournamentDoc?.isDrawingOpen !== undefined
+    ? currentTournamentDoc.isDrawingOpen
+    : isWithin3DaysOfStart;
   
   const rawMatchDate = currentTournamentDoc?.startDate || currentTournamentDoc?.matchDate || "";
   const formatMatchDate = (dateStr: string) => {
@@ -153,6 +177,11 @@ export const TournamentRegistrationView: React.FC<TournamentRegistrationViewProp
 
   const handleRegisterWithSystem = async (sysAthlete: any) => {
     if (!activeHistoryId) return;
+
+    if (!isRegistrationOpen) {
+      alert(isEng ? "The registration portal is currently closed!" : "Cổng đăng ký trực tuyến hiện đang đóng!");
+      return;
+    }
     
     // Check if already registered
     const exists = masterAthletes.some(a => a.id === sysAthlete.id);
@@ -207,6 +236,11 @@ export const TournamentRegistrationView: React.FC<TournamentRegistrationViewProp
   // Athlete self random drawing SBD
   const handleAthleteDrawSBD = async () => {
     if (!activeHistoryId || !registeredAthlete) return;
+
+    if (!isSbdDrawingOpen) {
+      alert(isEng ? "The SBD drawing portal is currently closed!" : "Cổng bốc thăm số báo danh hiện đang đóng!");
+      return;
+    }
     
     setIsDrawing(true);
     try {
@@ -225,9 +259,45 @@ export const TournamentRegistrationView: React.FC<TournamentRegistrationViewProp
         return;
       }
 
-      // Pick random SBD
-      const randomIndex = Math.floor(Math.random() * availableNumbers.length);
-      const pickedSBD = availableNumbers[randomIndex];
+      // Spacing optimization: Find already-drawn SBDs from the same club to avoid adjacent/close numbers
+      const athleteClub = ((((registeredAthlete as any).team || (registeredAthlete as any).club || "Tự do") as string)).trim().toLowerCase();
+      const sameClubSBDs: number[] = [];
+      if (athleteClub !== "tự do" && athleteClub !== "") {
+        masterAthletes.forEach(a => {
+          if (a.id !== registeredAthlete.id) {
+            const c = ((((a as any).team || (a as any).club || "Tự do") as string)).trim().toLowerCase();
+            if (c === athleteClub) {
+              const s = drawnNumbers[a.id];
+              if (s !== undefined) {
+                sameClubSBDs.push(s);
+              }
+            }
+          }
+        });
+      }
+
+      let bestNumbers = [...availableNumbers];
+      if (sameClubSBDs.length > 0) {
+        // Calculate penalty for each available number
+        const penalties = availableNumbers.map(num => {
+          let penalty = 0;
+          sameClubSBDs.forEach(s => {
+            const diff = Math.abs(num - s);
+            if (diff === 1) penalty += 1000;
+            else if (diff === 2) penalty += 100;
+            else if (diff === 3) penalty += 10;
+          });
+          return { num, penalty };
+        });
+
+        // Get the minimum penalty value and filter the pool to only these best spaced options
+        const minPenalty = Math.min(...penalties.map(p => p.penalty));
+        bestNumbers = penalties.filter(p => p.penalty === minPenalty).map(p => p.num);
+      }
+
+      // Pick random SBD from the best-spaced candidate pool
+      const randomIndex = Math.floor(Math.random() * bestNumbers.length);
+      const pickedSBD = bestNumbers[randomIndex];
 
       const nextDrawnNumbers = { ...drawnNumbers };
       nextDrawnNumbers[registeredAthlete.id] = pickedSBD;
@@ -260,7 +330,7 @@ export const TournamentRegistrationView: React.FC<TournamentRegistrationViewProp
   };
 
   // Portal Gate Closed for unregistered users
-  if (!isDrawingOpen && !registeredAthlete) {
+  if (!isRegistrationOpen && !registeredAthlete) {
     return (
       <div className="max-w-xl mx-auto my-12 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 p-8 rounded-3xl text-center shadow-md animate-fadeIn font-sans">
         <div className="w-16 h-16 bg-rose-50 dark:bg-rose-950/40 text-rose-600 rounded-2xl flex items-center justify-center mx-auto mb-5 border border-rose-100 dark:border-rose-900/40 animate-bounce">
@@ -271,8 +341,8 @@ export const TournamentRegistrationView: React.FC<TournamentRegistrationViewProp
         </h2>
         <p className="text-slate-500 dark:text-slate-400 text-sm mt-3 leading-relaxed">
           {isEng 
-            ? "The registration and lucky SBD drawing portal for this tournament is currently closed by the organizers."
-            : "Cổng đăng ký thi đấu trực tuyến và bốc thăm Số báo danh ngẫu nhiên đã được Ban Tổ Chức đóng lại."}
+            ? "The online registration portal for this tournament is currently closed or closed automatically 3 days before the tournament starts."
+            : "Cổng đăng ký thi đấu trực tuyến đã được Ban Tổ Chức đóng lại hoặc tự động đóng trước ngày thi đấu 3 ngày."}
         </p>
         <div className="mt-6 border-t border-slate-100 dark:border-slate-850 pt-5 text-left space-y-3.5">
           <div className="flex items-start gap-2 text-xs">
@@ -300,12 +370,21 @@ export const TournamentRegistrationView: React.FC<TournamentRegistrationViewProp
       <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-rose-950 rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden shadow-lg border border-slate-800">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-500/10 via-transparent to-transparent"></div>
         <div className="relative z-10 space-y-2">
-          <div className="inline-flex items-center gap-1.5 bg-rose-500/25 text-rose-300 border border-rose-500/30 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">
-            {isDrawingOpen ? (
-              <span className="flex items-center gap-1 animate-pulse"><Unlock className="w-3 h-3" /> {isEng ? "Drawing Open" : "CỔNG BỐC THĂM ĐANG MỞ"}</span>
-            ) : (
-              <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> {isEng ? "Drawing Closed" : "CỔNG BỐC THĂM ĐÃ ĐÓNG"}</span>
-            )}
+          <div className="flex flex-wrap gap-2">
+            <div className="inline-flex items-center gap-1.5 bg-rose-500/25 text-rose-300 border border-rose-500/30 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">
+              {isRegistrationOpen ? (
+                <span className="flex items-center gap-1 animate-pulse"><Unlock className="w-3 h-3" /> {isEng ? "Registration Open" : "CỔNG ĐĂNG KÝ ĐANG MỞ"}</span>
+              ) : (
+                <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> {isEng ? "Registration Closed" : "CỔNG ĐĂNG KÝ ĐÃ ĐÓNG"}</span>
+              )}
+            </div>
+            <div className="inline-flex items-center gap-1.5 bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">
+              {isSbdDrawingOpen ? (
+                <span className="flex items-center gap-1 animate-pulse"><Unlock className="w-3 h-3" /> {isEng ? "Drawing Open" : "CỔNG BỐC THĂM SBD ĐANG MỞ"}</span>
+              ) : (
+                <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> {isEng ? "Drawing Closed" : "CỔNG BỐC THĂM SBD ĐÃ ĐÓNG"}</span>
+              )}
+            </div>
           </div>
           <h1 className="text-xl sm:text-3xl font-black uppercase tracking-wide leading-tight">
             {isEng ? "National Tournament Registration" : "Đăng Ký & Bốc Thăm Giải Quốc Gia"}
@@ -444,7 +523,7 @@ export const TournamentRegistrationView: React.FC<TournamentRegistrationViewProp
                           </p>
                         </div>
                       );
-                    } else if (isDrawingOpen) {
+                    } else if (isSbdDrawingOpen) {
                       return (
                         <div className="bg-amber-500/5 dark:bg-amber-955/20 border border-amber-100 dark:border-amber-900/40 p-5 rounded-2xl space-y-4">
                           <span className="block text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest">{isEng ? "LUCKY DRAW FOR SBD PENDING" : "CHỜ BỐC THĂM SỐ BÁO DANH NGẪU NHIÊN"}</span>

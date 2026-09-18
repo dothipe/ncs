@@ -338,7 +338,7 @@ export function ScoringWorkspace({
 
               {(() => {
                 const unselected = masterAthletes.filter(
-                  (m) => !currentAthletes.some((a) => a.id === m.id) && m.status !== "Bỏ thi" && (competitionMode !== "team" || m.isPrimaryTeam)
+                  (m) => !currentAthletes.some((a) => a.id === m.id) && m.status !== "Bỏ thi" && (competitionMode !== "team" || (m.isPrimaryTeam && m.team && m.team.toLowerCase().trim() !== "tự do" && m.team.toLowerCase().trim() !== "tu do" && !m.team.toLowerCase().includes("free") && !m.team.toLowerCase().includes("independent")))
                 );
                 const filtered = unselected.filter((m) => {
                   if (!tourAddSearch.trim()) return true;
@@ -387,7 +387,7 @@ export function ScoringWorkspace({
             <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2 min-h-[220px]">
               {(() => {
                 const unselected = masterAthletes.filter(
-                  (m) => !currentAthletes.some((a) => a.id === m.id) && m.status !== "Bỏ thi" && (competitionMode !== "team" || m.isPrimaryTeam)
+                  (m) => !currentAthletes.some((a) => a.id === m.id) && m.status !== "Bỏ thi" && (competitionMode !== "team" || (m.isPrimaryTeam && m.team && m.team.toLowerCase().trim() !== "tự do" && m.team.toLowerCase().trim() !== "tu do" && !m.team.toLowerCase().includes("free") && !m.team.toLowerCase().includes("independent")))
                 );
                 const filtered = unselected.filter((m) => {
                   if (!tourAddSearch.trim()) return true;

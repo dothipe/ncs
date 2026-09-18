@@ -3064,6 +3064,8 @@ export default function App() {
         creatorEmail,
         {
           competitionMode: draftPreviewItem.teamAthletes && draftPreviewItem.teamAthletes.length > 0 ? "team" : "individual",
+          isRegistrationOpen: true,
+          isDrawingOpen: false,
           shotsCount: draftPreviewItem.shotCount,
           teamShotsCount: draftPreviewItem.teamShotCount || DEFAULT_SHOTS_COUNT,
           distances: draftPreviewItem.distances,

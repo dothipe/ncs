@@ -55,6 +55,12 @@ interface AthleteManagementProps {
   hideVscSystemTab?: boolean;
   userRole?: string;
   activeHistoryId?: string | null;
+  currentTournamentDoc?: any;
+  updateOnlineTournament?: (id: string, updates: any, immediate?: boolean) => Promise<void>;
+  setActiveIndividualAthletes?: React.Dispatch<React.SetStateAction<Athlete[]>>;
+  setTeamAthletes?: React.Dispatch<React.SetStateAction<Athlete[]>>;
+  setInputAthletes?: React.Dispatch<React.SetStateAction<Athlete[]>>;
+  setTeamInputAthletes?: React.Dispatch<React.SetStateAction<Athlete[]>>;
 }
 
 export function deduplicateAthletes(list: Athlete[]): Athlete[] {
@@ -146,7 +152,13 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
   forceTab,
   hideVscSystemTab,
   userRole,
-  activeHistoryId
+  activeHistoryId,
+  currentTournamentDoc,
+  updateOnlineTournament,
+  setActiveIndividualAthletes,
+  setTeamAthletes,
+  setInputAthletes,
+  setTeamInputAthletes
 }) => {
   const { language, t } = useLanguage();
 
@@ -705,6 +717,9 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
         updateVscSystemAthletesAndKeepSync([...vscSystemAthletes, newAthlete]);
       } else {
         setAthletes(prev => [...prev, newAthlete]);
+        if (newAthlete.email) {
+          handleNotifyAthlete(newAthlete.email, "added");
+        }
       }
       setSelectedAthlete(null);
       setIsCreating(false);
@@ -2154,8 +2169,31 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  // 1. Remove from masterAthletes (global roster)
                   setAthletes(prev => prev.filter(a => a.id !== athleteToDelete.id));
-                  setCurrentActiveAthletes(prev => prev.filter(a => a.id !== athleteToDelete.id));
+
+                  // 2. Remove from active individual competitors list
+                  if (setActiveIndividualAthletes) {
+                    setActiveIndividualAthletes(prev => prev.filter(a => a.id !== athleteToDelete.id));
+                  } else {
+                    setCurrentActiveAthletes(prev => prev.filter(a => a.id !== athleteToDelete.id));
+                  }
+
+                  // 3. Remove from active team competitors list
+                  if (setTeamAthletes) {
+                    setTeamAthletes(prev => prev.filter(a => a.id !== athleteToDelete.id));
+                  } else {
+                    setCurrentActiveAthletes(prev => prev.filter(a => a.id !== athleteToDelete.id));
+                  }
+
+                  // 4. Remove from live inputAthletes / teamInputAthletes lists
+                  if (setInputAthletes) {
+                    setInputAthletes(prev => prev.filter(a => a.id !== athleteToDelete.id));
+                  }
+                  if (setTeamInputAthletes) {
+                    setTeamInputAthletes(prev => prev.filter(a => a.id !== athleteToDelete.id));
+                  }
+
                   if (selectedAthlete && selectedAthlete.id === athleteToDelete.id) {
                     setSelectedAthlete(null);
                   }
@@ -2165,6 +2203,35 @@ export const AthleteManagement: React.FC<AthleteManagementProps> = ({
                   // Send real-time notification to the removed athlete
                   if (athleteToDelete.email) {
                     handleNotifyAthlete(athleteToDelete.email, "removed");
+                  }
+
+                  // Cleanup and write everything atomically to online database immediately if in an active online tournament
+                  if (activeHistoryId && activeHistoryId.startsWith("tour-") && currentTournamentDoc && updateOnlineTournament) {
+                    const cleanMasterAthletes = (currentTournamentDoc.masterAthletes || []).filter((a: any) => a.id !== athleteToDelete.id);
+                    const cleanAthletes = (currentTournamentDoc.athletes || []).filter((a: any) => a.id !== athleteToDelete.id);
+                    const cleanTeamAthletes = (currentTournamentDoc.teamAthletes || []).filter((a: any) => a.id !== athleteToDelete.id);
+                    const cleanInputAthletes = (currentTournamentDoc.inputAthletes || []).filter((a: any) => a.id !== athleteToDelete.id);
+                    const cleanTeamInputAthletes = (currentTournamentDoc.teamInputAthletes || []).filter((a: any) => a.id !== athleteToDelete.id);
+
+                    const nextDrawnNumbers = { ...(currentTournamentDoc.drawnNumbers || {}) };
+                    const nextDrawMethods = { ...(currentTournamentDoc.drawMethods || {}) };
+                    
+                    if (nextDrawnNumbers[athleteToDelete.id] !== undefined) {
+                      delete nextDrawnNumbers[athleteToDelete.id];
+                    }
+                    if (nextDrawMethods[athleteToDelete.id] !== undefined) {
+                      delete nextDrawMethods[athleteToDelete.id];
+                    }
+                    
+                    updateOnlineTournament(activeHistoryId, {
+                      masterAthletes: cleanMasterAthletes,
+                      athletes: cleanAthletes,
+                      teamAthletes: cleanTeamAthletes,
+                      inputAthletes: cleanInputAthletes,
+                      teamInputAthletes: cleanTeamInputAthletes,
+                      drawnNumbers: nextDrawnNumbers,
+                      drawMethods: nextDrawMethods,
+                    }, true).catch((err: any) => console.error("Failed to atomic update during athlete deletion:", err));
                   }
 
                   setAthleteToDelete(null);

@@ -303,10 +303,15 @@ export const useTournamentDatabase = ({
 
       if (!matchName || !matchName.trim()) return;
       if (currentTournamentDoc.matchName && matchName.trim() !== currentTournamentDoc.matchName.trim() && !matchName.trim()) return;
-      if ((!athletes || athletes.length === 0) && currentTournamentDoc.athletes && currentTournamentDoc.athletes.length > 0) return;
-      if ((!masterAthletes || masterAthletes.length === 0) && currentTournamentDoc.masterAthletes && currentTournamentDoc.masterAthletes.length > 0) return;
-      if ((!teamAthletes || teamAthletes.length === 0) && currentTournamentDoc.teamAthletes && currentTournamentDoc.teamAthletes.length > 0) return;
-      if ((!distances || distances.length === 0) && currentTournamentDoc.distances && currentTournamentDoc.distances.length > 0) return;
+      
+      // Guard empty array synchronization only during initial system bootup to prevent accidental database wipes.
+      // Once config is fully loaded, any array becoming empty is a deliberate user administrative action.
+      if (!isTournamentConfigLoaded) {
+        if ((!athletes || athletes.length === 0) && currentTournamentDoc.athletes && currentTournamentDoc.athletes.length > 0) return;
+        if ((!masterAthletes || masterAthletes.length === 0) && currentTournamentDoc.masterAthletes && currentTournamentDoc.masterAthletes.length > 0) return;
+        if ((!teamAthletes || teamAthletes.length === 0) && currentTournamentDoc.teamAthletes && currentTournamentDoc.teamAthletes.length > 0) return;
+        if ((!distances || distances.length === 0) && currentTournamentDoc.distances && currentTournamentDoc.distances.length > 0) return;
+      }
     }
 
     const isDifferent = userRole === "admin"
@@ -397,7 +402,7 @@ export const useTournamentDatabase = ({
               inputAthletes,
               teamInputAthletes
             };
-        await updateOnlineTournament(activeHistoryId, payload);
+        await updateOnlineTournament(activeHistoryId, payload, hasConfigOrRosterChanges);
       } catch (err) {
         console.error("Cloud synchronization failed:", err);
       }

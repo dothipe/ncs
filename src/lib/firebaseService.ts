@@ -63,6 +63,8 @@ export interface TournamentData {
   auditLog?: string;
   isNational?: boolean;
   isDrawingOpen?: boolean;
+  isRegistrationOpen?: boolean;
+  isSbdDrawingOpen?: boolean;
   drawnNumbers?: Record<string, number>;
   teamDrawnNumbers?: Record<string, number>;
   drawMethods?: Record<string, "self" | "btc">;
@@ -78,6 +80,8 @@ export interface TournamentData {
   activeMonitorEnv?: "individual" | "team";
   isCopied?: boolean;
   copiedFrom?: string;
+  isDrawingExplicitlyClosed?: boolean;
+  isRegistrationExplicitlyOpened?: boolean;
 }
 
 export enum OperationType {
@@ -297,6 +301,7 @@ export async function createOnlineTournament(
     endDate?: string;
     isNational?: boolean;
     isDrawingOpen?: boolean;
+    isRegistrationOpen?: boolean;
     drawnNumbers?: Record<string, number>;
     teamDrawnNumbers?: Record<string, number>;
     drawMethods?: Record<string, "self" | "btc">;
@@ -445,6 +450,8 @@ export async function createOnlineTournament(
     referees: restConfig.referees || [], // Admin can add referee emails later
     subAdmins: restConfig.subAdmins || [], // Sub admins with full admin rights
     isPublic: true,
+    isRegistrationOpen: restConfig.isRegistrationOpen !== undefined ? restConfig.isRegistrationOpen : true,
+    isDrawingOpen: restConfig.isDrawingOpen !== undefined ? restConfig.isDrawingOpen : false,
     ...restConfig,
     avatarUrl: restConfig.avatarUrl || VSC_DEFAULT_LOGO,
     bannerUrl: restConfig.bannerUrl || VSC_DEFAULT_LOGO,
@@ -573,8 +580,9 @@ async function executeActualOnlineTournamentUpdate(id: string, updates: Partial<
 /**
  * Updates a tournament in Firestore (e.g. updating scores, configs, referees)
  * Fully debounced to aggregate rapid user events (e.g. fast score hits) and avoid write stream exhaustion!
+ * Supports an immediate bypass parameter to write critical administrative or roster updates synchronously.
  */
-export function updateOnlineTournament(id: string, updates: Partial<TournamentData>): Promise<void> {
+export function updateOnlineTournament(id: string, updates: Partial<TournamentData>, immediate = false): Promise<void> {
   if (!id) return Promise.resolve();
 
   // Merge the new updates into the queued updates for this tournament
@@ -590,6 +598,28 @@ export function updateOnlineTournament(id: string, updates: Partial<TournamentDa
   const promise = new Promise<void>((resolve, reject) => {
     pendingTournamentPromises[id].push({ resolve, reject });
   });
+
+  if (immediate) {
+    if (pendingTournamentTimeouts[id]) {
+      clearTimeout(pendingTournamentTimeouts[id]);
+      delete pendingTournamentTimeouts[id];
+    }
+    const finalUpdates = pendingTournamentUpdates[id];
+    const promisesToResolve = pendingTournamentPromises[id];
+
+    delete pendingTournamentUpdates[id];
+    delete pendingTournamentPromises[id];
+
+    executeActualOnlineTournamentUpdate(id, finalUpdates)
+      .then(() => {
+        promisesToResolve.forEach((p) => p.resolve());
+      })
+      .catch((err) => {
+        promisesToResolve.forEach((p) => p.reject(err));
+      });
+
+    return promise;
+  }
 
   if (pendingTournamentTimeouts[id]) {
     clearTimeout(pendingTournamentTimeouts[id]);
