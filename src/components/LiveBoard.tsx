@@ -135,27 +135,37 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
   const [tvSlideSecondsRemaining, setTvSlideSecondsRemaining] = useState<number>(10);
   const [tvLanePageIdx, setTvLanePageIdx] = useState<number>(0);
 
+  const scrollRef1 = useRef<HTMLDivElement>(null);
   const scrollRef2 = useRef<HTMLDivElement>(null);
   const scrollRef3 = useRef<HTMLDivElement>(null);
   const scrollRef4 = useRef<HTMLDivElement>(null);
+
+  const getTvSlideDuration = (idx: number) => {
+    if (idx === 0) return 5;   // Bảng vàng: 5s
+    if (idx === 1) return 15;  // Top X: 15s
+    if (idx === 2) return 20;  // Đang bắn: 20s
+    if (idx === 3) return 15;  // Chờ bắn: 15s
+    if (idx === 4) return 15;  // Bắn thử: 15s
+    return 10;
+  };
 
   useEffect(() => {
     if (!isTvMode || isTvPaused) return;
 
     let activeRef: React.RefObject<HTMLDivElement | null>;
-    let durationSeconds = 10;
-    if (tvSlideIdx === 2) {
+    if (tvSlideIdx === 1) {
+      activeRef = scrollRef1;
+    } else if (tvSlideIdx === 2) {
       activeRef = scrollRef2;
-      durationSeconds = 20;
     } else if (tvSlideIdx === 3) {
       activeRef = scrollRef3;
-      durationSeconds = 10;
     } else if (tvSlideIdx === 4) {
       activeRef = scrollRef4;
-      durationSeconds = 10;
     } else {
       return;
     }
+
+    const durationSeconds = getTvSlideDuration(tvSlideIdx);
 
     const el = activeRef.current;
     if (!el) return;
@@ -191,10 +201,11 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
     return () => cancelAnimationFrame(frameId);
   }, [isTvMode, isTvPaused, tvSlideIdx]);
 
-  const getTvSlideDuration = (idx: number) => {
-    if (idx === 2) return 20; // 'Đang bắn' has a 20s display duration
-    return 10; // Others default to 10s
-  };
+  useEffect(() => {
+    if (isTvMode) {
+      setTvSlideSecondsRemaining(getTvSlideDuration(tvSlideIdx));
+    }
+  }, [tvSlideIdx, isTvMode]);
 
   const handleSetTvSlide = (idx: number) => {
     setTvSlideIdx(idx);
@@ -1498,7 +1509,7 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
 
   if (isTvMode) {
     return (
-      <div className="fixed inset-0 z-50 bg-[#030712] text-white flex flex-col justify-between font-sans select-none overflow-hidden p-8 animate-fadeIn" id="live-board-tv-backdrop">
+      <div className="fixed inset-0 z-50 bg-[#030712] text-white flex flex-col justify-between font-sans select-none overflow-hidden px-8 py-4 animate-fadeIn" id="live-board-tv-backdrop">
         <style>{`
           .scrollbar-none::-webkit-scrollbar {
             display: none;
@@ -1560,7 +1571,7 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
         </div>
 
         {/* MAIN SLIDE BODY */}
-        <div className="flex-1 flex flex-col justify-center py-6 min-h-0 overflow-hidden relative">
+        <div className="flex-1 flex flex-col justify-center py-3 min-h-0 overflow-hidden relative">
           
           {/* SLIDE 0: BẢNG VÀNG CÁ NHÂN & ĐỒNG ĐỘI */}
           {tvSlideIdx === 0 && (() => {
@@ -1800,13 +1811,11 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
           {/* SLIDE 1: BẢNG XẾP HẠNG TOP X */}
           {tvSlideIdx === 1 && (() => {
             const drawnNumbers = currentTournamentDoc?.drawnNumbers || {};
-            const leftColumnItems = rankedSurvivalAthletes.slice(0, 6);
-            const rightColumnItems = rankedSurvivalAthletes.slice(6, 12);
 
             const renderRow = (item: any, globalIndex: number) => {
               if (!item) {
                 return (
-                  <div key={`tv-empty-row-${globalIndex}`} className="flex items-center justify-center border border-dashed border-slate-900 p-4.5 rounded-2xl bg-slate-950/20 text-slate-700 text-sm font-bold h-[76px]">
+                  <div key={`tv-empty-row-${globalIndex}`} className="flex items-center justify-center border border-dashed border-slate-900 p-6 rounded-3xl bg-slate-950/20 text-slate-700 text-lg font-bold h-[115px]">
                     HÀNG TRỐNG
                   </div>
                 );
@@ -1817,24 +1826,24 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
               const sbd = drawnNumbers[item.id] || currentTournamentDoc?.drawnNumbers?.[item.id] || null;
 
               return (
-                <div key={`tv-lb-row-${item.id}`} className="flex items-center justify-between bg-slate-950/90 border border-slate-900 px-5 py-4 rounded-2xl shadow-md h-[76px]">
-                  <div className="flex items-center gap-4 min-w-0">
-                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg shadow-sm shrink-0 ${badgeBg}`}>
+                <div key={`tv-lb-row-${item.id}`} className="flex items-center justify-between bg-slate-950/90 border border-slate-900 px-8 py-5 rounded-3xl shadow-xl h-[115px] hover:border-teal-500/30 transition-all">
+                  <div className="flex items-center gap-6 min-w-0">
+                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-md shrink-0 ${badgeBg}`}>
                       {place}
                     </div>
                     <div className="min-w-0">
-                      <h4 className="text-lg font-black text-slate-100 truncate uppercase tracking-wide">
+                      <h4 className="text-2xl font-black text-slate-100 truncate uppercase tracking-wide">
                         {item.name}
                       </h4>
-                      <div className="flex items-center gap-2.5 mt-1">
-                        <span className="text-xs text-slate-450 font-mono font-black">
-                          {item.id?.replace("ath-", "") || "---"}
+                      <div className="flex items-center gap-3.5 mt-2 flex-wrap">
+                        <span className="text-sm text-slate-450 font-mono font-black bg-slate-900/80 border border-slate-800/80 px-2.5 py-0.5 rounded">
+                          SBD: {sbd ? String(sbd).padStart(3, "0") : "---"}
                         </span>
-                        <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-black px-2 py-0.5 rounded uppercase">
+                        <span className="text-sm bg-slate-900 border border-slate-800 text-slate-400 font-black px-2.5 py-0.5 rounded uppercase">
                           {item.team || "Tự Do"}
                         </span>
                         {item.category && (
-                          <span className="text-[10px] bg-indigo-950 text-indigo-400 font-black uppercase px-2 py-0.5 rounded tracking-wide">
+                          <span className="text-sm bg-indigo-950/80 text-indigo-400 border border-indigo-900/40 font-black uppercase px-2.5 py-0.5 rounded tracking-wide">
                             {item.category}
                           </span>
                         )}
@@ -1843,11 +1852,11 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
                   </div>
 
                   <div className="text-right shrink-0">
-                    <div className="text-lg font-black text-teal-300 font-mono">
-                      {item.survivalScore || 0} Điểm
+                    <div className="text-3xl font-black text-teal-400 font-mono">
+                      {item.survivalScore || 0} ĐIỂM
                     </div>
-                    <div className="text-[10px] text-slate-400 font-black font-mono mt-0.5 uppercase">
-                      {item.survivalSoloHits || 0} Hit / {item.survivalVal || 0} Vòng
+                    <div className="text-xs text-slate-400 font-black font-mono mt-1 uppercase tracking-wider">
+                      {item.survivalSoloHits || 0} HIT / {item.survivalVal || 0} VÒNG
                     </div>
                   </div>
                 </div>
@@ -1856,26 +1865,20 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
 
             return (
               <div className="flex flex-col h-full bg-slate-950/60 border border-slate-900 p-8 rounded-3xl relative shadow-2xl animate-fadeIn">
-                <div className="flex items-center justify-between pb-4 border-b border-slate-900 mb-5">
-                  <h2 className="text-2xl font-black text-teal-400 uppercase tracking-widest flex items-center gap-2.5">
-                    <TrendingUp className="w-8 h-8 text-teal-400" />
+                <div className="flex items-center justify-between pb-4 border-b border-slate-900 mb-6">
+                  <h2 className="text-3xl font-black text-teal-400 uppercase tracking-widest flex items-center gap-3">
+                    <TrendingUp className="w-9 h-9 text-teal-400" />
                     BẢNG XẾP HẠNG TOP X DẪN ĐẦU
                   </h2>
-                  <span className="text-[10px] bg-teal-950 text-teal-300 border border-teal-900 px-4 py-1.5 rounded-full font-black uppercase tracking-widest font-mono">
+                  <span className="text-xs bg-teal-950 text-teal-300 border border-teal-900 px-5 py-2 rounded-full font-black uppercase tracking-widest font-mono">
                     SỐ LIỆU ĐỒNG BỘ THỜI GIAN THỰC
                   </span>
                 </div>
 
-                {/* Two columns that flow top-to-bottom first, then left-to-right */}
-                <div className="grid grid-cols-2 gap-x-8 gap-y-3.5 flex-1 min-h-0 overflow-hidden">
-                  {/* Column 1 (Ranks 1 to 6) */}
-                  <div className="flex flex-col gap-3.5 justify-stretch">
-                    {Array.from({ length: 6 }).map((_, i) => renderRow(leftColumnItems[i], i))}
-                  </div>
-
-                  {/* Column 2 (Ranks 7 to 12) */}
-                  <div className="flex flex-col gap-3.5 justify-stretch">
-                    {Array.from({ length: 6 }).map((_, i) => renderRow(rightColumnItems[i], i + 6))}
+                {/* Single list with Auto-Scroll */}
+                <div ref={scrollRef1} className="flex-1 min-h-0 overflow-y-auto scrollbar-none">
+                  <div className="grid grid-cols-1 gap-5 pb-4">
+                    {rankedSurvivalAthletes.slice(0, 10).map((item, i) => renderRow(item, i))}
                   </div>
                 </div>
               </div>
@@ -1884,10 +1887,6 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
 
                     {/* SLIDE 2: KHU VỰC THI ĐẤU - ĐANG BẮN */}
           {tvSlideIdx === 2 && (() => {
-            const half = Math.ceil(currentGroup1Lanes.length / 2);
-            const leftCol = currentGroup1Lanes.slice(0, half);
-            const rightCol = currentGroup1Lanes.slice(half);
-
             return (
               <div className="flex flex-col h-full bg-slate-950/60 border border-slate-900 p-8 rounded-3xl relative shadow-2xl animate-fadeIn">
                 <div className="flex items-center justify-between pb-4 border-b border-slate-900 mb-6">
@@ -1907,174 +1906,187 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
 
                 {/* Auto Scroll container */}
                 <div ref={scrollRef2} className="flex-1 min-h-0 overflow-y-auto scrollbar-none">
-                  <div className="grid grid-cols-2 gap-6 items-start pb-4">
-                    {/* Left Column Stack */}
-                    <div className="flex flex-col gap-6">
-                      {leftCol.map((laneItem, slotIdx) => {
-                        const actualLaneNum = laneItem?.laneNum || (slotIdx + 1);
-                        const ath = laneItem?.athleteObj;
-                        const isBỏThi = ath ? ath.status === "Bỏ thi" : false;
+                  <div className="grid grid-cols-1 gap-6 items-start pb-4">
+                    {currentGroup1Lanes.map((laneItem, slotIdx) => {
+                      const actualLaneNum = laneItem?.laneNum || (slotIdx + 1);
+                      const ath = laneItem?.athleteObj;
+                      const isBỏThi = ath ? ath.status === "Bỏ thi" : false;
 
-                        if (!laneItem || !laneItem.name) {
-                          return (
-                            <div key={`tv-lane-empty-g1-L-${slotIdx}`} className="border-2 border-dashed border-slate-900 rounded-3xl bg-slate-950/10 flex flex-col items-center justify-center p-6 text-slate-800 h-[104px]">
-                              <span className="text-2xl font-black font-mono">L{actualLaneNum}</span>
-                              <span className="text-xs font-bold uppercase tracking-widest text-slate-700">ĐƯỜNG TRỐNG</span>
-                            </div>
-                          );
-                        }
+                      if (!laneItem || !laneItem.name) {
+                        return (
+                          <div key={`tv-lane-empty-g1-L-${slotIdx}`} className="border-2 border-dashed border-slate-900 rounded-3xl bg-slate-950/10 flex flex-col items-center justify-center p-6 text-slate-800 h-[135px]">
+                            <span className="text-3xl font-black font-mono">L{actualLaneNum}</span>
+                            <span className="text-sm font-bold uppercase tracking-widest text-slate-700">ĐƯỜNG TRỐNG</span>
+                          </div>
+                        );
+                      }
 
-                        // Score calculation
-                        const currentDistance = distances[selectedRoundIndex];
-                        const currentDistanceId = currentDistance?.id;
-                        const currentDistanceShots = currentDistanceId ? (ath?.scores?.[currentDistanceId] || []) : [];
-                        const currentDistanceHits = getHitCount(currentDistanceShots);
-                        const scoreVal = currentDistanceHits * (currentDistance?.multiplier || 1);
+                      if (laneItem.isClub) {
+                        const distId = lanesDataByFlight.activeRound?.id;
+                        const currentDistance = distances.find(d => d.id === distId) || distances[selectedRoundIndex];
+                        const multiplier = currentDistance?.multiplier || 1;
+                        const totalTeamHits = laneItem.clubShooters?.reduce((sum, s) => {
+                          const shots = distId ? (s.scores?.[distId] || []) : [];
+                          return sum + shots.filter(v => v === true).length;
+                        }, 0) || 0;
+                        const totalTeamPoints = totalTeamHits * multiplier;
+                        
                         const maxShots = shotsCount || 5;
-                        const filledCount = isDirectMode
-                          ? (currentDistanceShots[0] !== undefined && currentDistanceShots[0] !== null && currentDistanceShots[0] !== "" ? 1 : 0)
-                          : currentDistanceShots.slice(0, maxShots).filter((s) => s === true || s === false).length;
-                        const statusText = filledCount === maxShots ? "HOÀN THÀNH" : `ĐANG BẮN VIÊN ${filledCount + 1}`;
+                        const isTeamCompleted = laneItem.clubShooters?.every(s => {
+                          const shots = distId ? (s.scores?.[distId] || []) : [];
+                          return shots.filter((v) => v === true || v === false).length === maxShots;
+                        });
 
                         return (
-                          <div key={`tv-lane-g1-${ath?.id || "ath"}-L-${slotIdx}`} className={`rounded-3xl border-2 p-5 flex items-center justify-between shadow-xl transition-all relative h-[104px] ${
-                            isBỏThi 
-                              ? "bg-rose-950/10 border-rose-950/40 opacity-45" 
-                              : "bg-emerald-950/15 border-emerald-900/60"
-                          }`}>
-                            <div className="flex items-center gap-5 min-w-0">
-                              <div className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center text-3xl font-black shrink-0 border-2 uppercase shadow-inner ${
-                                isBỏThi ? "bg-rose-950 border-rose-900 text-rose-400" : "bg-emerald-950 border-emerald-800 text-emerald-400"
-                              }`}>
-                                <span className="text-[9px] font-black text-emerald-500/80 uppercase -mb-0.5 tracking-wider">LANE</span>
+                          <div key={`tv-lane-g1-club-${laneItem.name}-L-${slotIdx}`} className="rounded-3xl border-2 px-8 py-6 flex items-center justify-between shadow-xl transition-all relative h-[135px] bg-indigo-950/15 border-indigo-900/60">
+                            <div className="flex items-center gap-6 min-w-0 flex-1">
+                              <div className="w-20 h-20 rounded-2xl flex flex-col items-center justify-center text-4xl font-black shrink-0 border-2 uppercase shadow-inner bg-indigo-950 border-indigo-800 text-indigo-400">
+                                <span className="text-[10px] font-black text-indigo-500/80 uppercase -mb-0.5 tracking-wider">LANE</span>
                                 {actualLaneNum}
                               </div>
-                              <div className="min-w-0">
-                                <h3 className="text-xl font-black text-slate-100 uppercase tracking-wide truncate flex items-center gap-2">
+                              <div className="min-w-0 max-w-[35%]">
+                                <h3 className="text-2xl font-black text-slate-100 uppercase tracking-wide truncate">
                                   {laneItem.name}
-                                  {isBỏThi && <span className="text-[8px] bg-rose-950 border border-rose-900 text-rose-450 font-black px-1 rounded">BỎ THI</span>}
                                 </h3>
-                                <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                                  <span className="text-xs text-slate-450 font-mono font-black">
-                                    {ath?.id?.replace("ath-", "") || "---"}
+                                <div className="flex items-center gap-3 mt-2 flex-wrap">
+                                  <span className="text-sm text-indigo-400 font-mono font-black bg-slate-900/80 border border-slate-800/80 px-2.5 py-0.5 rounded">
+                                    SBD CLB: {laneItem.sbd ? String(laneItem.sbd).padStart(3, "0") : "---"}
                                   </span>
-                                  <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-black px-2 py-0.5 rounded uppercase">
-                                    {laneItem.team || "Tự Do"}
+                                  <span className="text-sm bg-indigo-500/20 text-indigo-300 font-black px-2.5 py-0.5 rounded uppercase">
+                                    ĐỒNG ĐỘI
                                   </span>
-                                  {ath?.category && (
-                                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-black px-2 py-0.5 rounded uppercase">
-                                      {ath.category}
-                                    </span>
-                                  )}
                                 </div>
                               </div>
-                            </div>
-                            {!isBỏThi && ath ? (
-                              <div className="text-right shrink-0">
-                                <span className="text-lg font-black text-emerald-400 font-mono block">
-                                  {scoreVal} ĐIỂM
-                                </span>
-                                <span className={`text-[10px] font-black uppercase tracking-wider block mt-1 ${
-                                  filledCount === maxShots ? "text-emerald-500" : "text-amber-400"
-                                }`}>
-                                  {statusText}
-                                </span>
+
+                              <div className="flex items-center gap-4 ml-auto mr-8 overflow-hidden">
+                                {laneItem.clubShooters?.map(s => {
+                                  const shots = distId ? (s.scores?.[distId] || []) : [];
+                                  const hits = shots.filter(v => v === true).length;
+                                  const pts = hits * multiplier;
+                                  const completed = shots.filter((v) => v === true || v === false).length === maxShots;
+                                  return (
+                                    <div key={s.id} className="bg-slate-900/70 border border-slate-850 px-3.5 py-2 rounded-2xl flex flex-col items-center justify-center min-w-[130px] shrink-0">
+                                      <span className="text-xs font-black text-slate-200 truncate max-w-[110px]">{s.name}</span>
+                                      <span className="text-emerald-400 font-mono font-black text-sm mt-1">{hits}/{lanesDataByFlight.effectiveShotsCount} HITS</span>
+                                      <span className="text-[10px] text-slate-450 font-black font-mono mt-0.5">{pts}đ ({completed ? "Xong" : "Bắn"})</span>
+                                    </div>
+                                  );
+                                })}
                               </div>
-                            ) : (
-                              <div className="text-right shrink-0">
-                                <span className="text-xs bg-rose-950/80 text-rose-400 border border-rose-900/50 px-3.5 py-1.5 rounded-full font-black uppercase tracking-wider">
-                                  KHÔNG THI
+                            </div>
+
+                            <div className="text-right shrink-0">
+                              <span className="text-3xl font-black text-indigo-400 font-mono block">
+                                {totalTeamPoints} ĐIỂM
+                              </span>
+                              <span className={`text-xs font-black uppercase tracking-wider block mt-1.5 ${
+                                isTeamCompleted ? "text-indigo-500" : "text-amber-400"
+                              }`}>
+                                {isTeamCompleted ? "HOÀN THÀNH" : "ĐANG BẮN"}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // Score calculation
+                      const currentDistance = distances[selectedRoundIndex];
+                      const currentDistanceId = currentDistance?.id;
+                      const currentDistanceShots = currentDistanceId ? (ath?.scores?.[currentDistanceId] || []) : [];
+                      const currentDistanceHits = getHitCount(currentDistanceShots);
+                      const scoreVal = currentDistanceHits * (currentDistance?.multiplier || 1);
+                      const maxShots = shotsCount || 5;
+                      const filledCount = isDirectMode
+                        ? (currentDistanceShots[0] !== undefined && currentDistanceShots[0] !== null && currentDistanceShots[0] !== "" ? 1 : 0)
+                        : currentDistanceShots.slice(0, maxShots).filter((s) => s === true || s === false).length;
+                      const statusText = filledCount === maxShots ? "HOÀN THÀNH" : `ĐANG BẮN VIÊN ${filledCount + 1}`;
+
+                      const renderShotsGrid = () => {
+                        return (
+                          <div className="flex items-center gap-3">
+                            {Array.from({ length: maxShots }).map((_, sIdx) => {
+                              const val = currentDistanceShots[sIdx];
+                              let bgClass = "bg-slate-900/90 border border-slate-800 text-slate-500";
+                              let content = (sIdx + 1).toString();
+                              if (val === true) {
+                                bgClass = "bg-emerald-500 border-2 border-emerald-300 text-slate-950 font-black scale-110 shadow-lg shadow-emerald-500/25";
+                                content = "●";
+                              } else if (val === false) {
+                                bgClass = "bg-rose-600 border-2 border-rose-400 text-white font-black scale-110 shadow-lg shadow-rose-500/25";
+                                content = "×";
+                              }
+                              return (
+                                <div key={`shot-dot-${sIdx}`} className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-black shadow-inner transition-all duration-300 ${bgClass}`}>
+                                  {content}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      };
+
+                      return (
+                        <div key={`tv-lane-g1-${ath?.id || "ath"}-L-${slotIdx}`} className={`rounded-3xl border-2 px-8 py-6 flex items-center justify-between shadow-xl transition-all relative h-[135px] ${
+                          isBỏThi 
+                            ? "bg-rose-950/10 border-rose-950/40 opacity-45" 
+                            : "bg-emerald-950/15 border-emerald-900/60"
+                        }`}>
+                          <div className="flex items-center gap-6 min-w-0 flex-1">
+                            <div className={`w-20 h-20 rounded-2xl flex flex-col items-center justify-center text-4xl font-black shrink-0 border-2 uppercase shadow-inner ${
+                              isBỏThi ? "bg-rose-950 border-rose-900 text-rose-400" : "bg-emerald-950 border-emerald-800 text-emerald-400"
+                            }`}>
+                              <span className="text-[10px] font-black text-emerald-500/80 uppercase -mb-0.5 tracking-wider">LANE</span>
+                              {actualLaneNum}
+                            </div>
+                            <div className="min-w-0 max-w-[40%]">
+                              <h3 className="text-2xl font-black text-slate-100 uppercase tracking-wide truncate flex items-center gap-3">
+                                {laneItem.name}
+                                {isBỏThi && <span className="text-xs bg-rose-950 border border-rose-900 text-rose-450 font-black px-2 py-0.5 rounded">BỎ THI</span>}
+                              </h3>
+                              <div className="flex items-center gap-3 mt-2 flex-wrap">
+                                <span className="text-sm text-slate-400 font-mono font-black bg-slate-900/80 border border-slate-800/80 px-2.5 py-0.5 rounded">
+                                  SBD: {ath?.id?.replace("ath-", "") || "---"}
                                 </span>
+                                <span className="text-sm bg-slate-900 border border-slate-800 text-slate-400 font-black px-2.5 py-0.5 rounded uppercase">
+                                  {laneItem.team || "Tự Do"}
+                                </span>
+                                {ath?.category && (
+                                  <span className="text-sm bg-emerald-500/20 text-emerald-300 font-black px-2.5 py-0.5 rounded uppercase">
+                                    {ath.category}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Live Target Ticks */}
+                            {!isBỏThi && ath && (
+                              <div className="ml-auto mr-8 shrink-0">
+                                {renderShotsGrid()}
                               </div>
                             )}
                           </div>
-                        );
-                      })}
-                    </div>
 
-                    {/* Right Column Stack */}
-                    <div className="flex flex-col gap-6">
-                      {rightCol.map((laneItem, slotIdx) => {
-                        const actualLaneNum = laneItem?.laneNum || (half + slotIdx + 1);
-                        const ath = laneItem?.athleteObj;
-                        const isBỏThi = ath ? ath.status === "Bỏ thi" : false;
-
-                        if (!laneItem || !laneItem.name) {
-                          return (
-                            <div key={`tv-lane-empty-g1-R-${slotIdx}`} className="border-2 border-dashed border-slate-900 rounded-3xl bg-slate-950/10 flex flex-col items-center justify-center p-6 text-slate-800 h-[104px]">
-                              <span className="text-2xl font-black font-mono">L{actualLaneNum}</span>
-                              <span className="text-xs font-bold uppercase tracking-widest text-slate-700">ĐƯỜNG TRỐNG</span>
-                            </div>
-                          );
-                        }
-
-                        // Score calculation
-                        const currentDistance = distances[selectedRoundIndex];
-                        const currentDistanceId = currentDistance?.id;
-                        const currentDistanceShots = currentDistanceId ? (ath?.scores?.[currentDistanceId] || []) : [];
-                        const currentDistanceHits = getHitCount(currentDistanceShots);
-                        const scoreVal = currentDistanceHits * (currentDistance?.multiplier || 1);
-                        const maxShots = shotsCount || 5;
-                        const filledCount = isDirectMode
-                          ? (currentDistanceShots[0] !== undefined && currentDistanceShots[0] !== null && currentDistanceShots[0] !== "" ? 1 : 0)
-                          : currentDistanceShots.slice(0, maxShots).filter((s) => s === true || s === false).length;
-                        const statusText = filledCount === maxShots ? "HOÀN THÀNH" : `ĐANG BẮN VIÊN ${filledCount + 1}`;
-
-                        return (
-                          <div key={`tv-lane-g1-${ath?.id || "ath"}-R-${slotIdx}`} className={`rounded-3xl border-2 p-5 flex items-center justify-between shadow-xl transition-all relative h-[104px] ${
-                            isBỏThi 
-                              ? "bg-rose-950/10 border-rose-950/40 opacity-45" 
-                              : "bg-emerald-950/15 border-emerald-900/60"
-                          }`}>
-                            <div className="flex items-center gap-5 min-w-0">
-                              <div className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center text-3xl font-black shrink-0 border-2 uppercase shadow-inner ${
-                                isBỏThi ? "bg-rose-950 border-rose-900 text-rose-400" : "bg-emerald-950 border-emerald-800 text-emerald-400"
+                          {!isBỏThi && ath ? (
+                            <div className="text-right shrink-0">
+                              <span className="text-3xl font-black text-emerald-400 font-mono block">
+                                {scoreVal} ĐIỂM
+                              </span>
+                              <span className={`text-xs font-black uppercase tracking-wider block mt-1.5 ${
+                                filledCount === maxShots ? "text-emerald-500" : "text-amber-400"
                               }`}>
-                                <span className="text-[9px] font-black text-emerald-500/80 uppercase -mb-0.5 tracking-wider">LANE</span>
-                                {actualLaneNum}
-                              </div>
-                              <div className="min-w-0">
-                                <h3 className="text-xl font-black text-slate-100 uppercase tracking-wide truncate flex items-center gap-2">
-                                  {laneItem.name}
-                                  {isBỏThi && <span className="text-[8px] bg-rose-950 border border-rose-900 text-rose-450 font-black px-1 rounded">BỎ THI</span>}
-                                </h3>
-                                <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                                  <span className="text-xs text-slate-450 font-mono font-black">
-                                    {ath?.id?.replace("ath-", "") || "---"}
-                                  </span>
-                                  <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-black px-2 py-0.5 rounded uppercase">
-                                    {laneItem.team || "Tự Do"}
-                                  </span>
-                                  {ath?.category && (
-                                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-black px-2 py-0.5 rounded uppercase">
-                                      {ath.category}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
+                                {statusText}
+                              </span>
                             </div>
-                            {!isBỏThi && ath ? (
-                              <div className="text-right shrink-0">
-                                <span className="text-lg font-black text-emerald-400 font-mono block">
-                                  {scoreVal} ĐIỂM
-                                </span>
-                                <span className={`text-[10px] font-black uppercase tracking-wider block mt-1 ${
-                                  filledCount === maxShots ? "text-emerald-500" : "text-amber-400"
-                                }`}>
-                                  {statusText}
-                                </span>
-                              </div>
-                            ) : (
-                              <div className="text-right shrink-0">
-                                <span className="text-xs bg-rose-950/80 text-rose-400 border border-rose-900/50 px-3.5 py-1.5 rounded-full font-black uppercase tracking-wider">
-                                  KHÔNG THI
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+                          ) : (
+                            <div className="text-right shrink-0">
+                              <span className="text-sm bg-rose-950/80 text-rose-400 border border-rose-900/50 px-5 py-2 rounded-full font-black uppercase tracking-wider">
+                                KHÔNG THI
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -2083,10 +2095,6 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
 
           {/* SLIDE 3: KHU VỰC THI ĐẤU - CHỜ BẮN */}
           {tvSlideIdx === 3 && (() => {
-            const half = Math.ceil(currentGroup2Lanes.length / 2);
-            const leftCol = currentGroup2Lanes.slice(0, half);
-            const rightCol = currentGroup2Lanes.slice(half);
-
             return (
               <div className="flex flex-col h-full bg-slate-950/60 border border-slate-900 p-8 rounded-3xl relative shadow-2xl animate-fadeIn">
                 <div className="flex items-center justify-between pb-4 border-b border-slate-900 mb-6">
@@ -2103,136 +2111,106 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
 
                 {/* Auto Scroll container */}
                 <div ref={scrollRef3} className="flex-1 min-h-0 overflow-y-auto scrollbar-none">
-                  <div className="grid grid-cols-2 gap-6 items-start pb-4">
-                    {/* Left Column Stack */}
-                    <div className="flex flex-col gap-6">
-                      {leftCol.map((laneItem, slotIdx) => {
-                        const actualLaneNum = laneItem?.laneNum || (slotIdx + 1);
-                        const ath = laneItem?.athleteObj;
-                        const isBỏThi = ath ? ath.status === "Bỏ thi" : false;
+                  <div className="grid grid-cols-1 gap-6 items-start pb-4">
+                    {currentGroup2Lanes.map((laneItem, slotIdx) => {
+                      const actualLaneNum = laneItem?.laneNum || (slotIdx + 1);
+                      const ath = laneItem?.athleteObj;
+                      const isBỏThi = ath ? ath.status === "Bỏ thi" : false;
 
-                        if (!laneItem || !laneItem.name) {
-                          return (
-                            <div key={`tv-lane-empty-g2-L-${slotIdx}`} className="border-2 border-dashed border-slate-900 rounded-3xl bg-slate-950/10 flex flex-col items-center justify-center p-6 text-slate-800 h-[104px]">
-                              <span className="text-2xl font-black font-mono">L{actualLaneNum}</span>
-                              <span className="text-xs font-bold uppercase tracking-widest text-slate-700">ĐƯỜNG TRỐNG</span>
-                            </div>
-                          );
-                        }
-
+                      if (!laneItem || !laneItem.name) {
                         return (
-                          <div key={`tv-lane-g2-${ath?.id || "ath"}-L-${slotIdx}`} className={`rounded-3xl border-2 p-5 flex items-center justify-between shadow-xl transition-all relative h-[104px] ${
-                            isBỏThi 
-                              ? "bg-rose-950/10 border-rose-950/40 opacity-45" 
-                              : "bg-blue-950/15 border-blue-900/60"
-                          }`}>
-                            <div className="flex items-center gap-5 min-w-0">
-                              <div className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center text-3xl font-black shrink-0 border-2 uppercase shadow-inner ${
-                                isBỏThi ? "bg-rose-950 border-rose-900 text-rose-400" : "bg-blue-950 border-blue-800 text-blue-400"
-                              }`}>
-                                <span className="text-[9px] font-black text-blue-500/80 uppercase -mb-0.5 tracking-wider">LANE</span>
+                          <div key={`tv-lane-empty-g2-L-${slotIdx}`} className="border-2 border-dashed border-slate-900 rounded-3xl bg-slate-950/10 flex flex-col items-center justify-center p-6 text-slate-800 h-[135px]">
+                            <span className="text-3xl font-black font-mono">L{actualLaneNum}</span>
+                            <span className="text-sm font-bold uppercase tracking-widest text-slate-700">ĐƯỜNG TRỐNG</span>
+                          </div>
+                        );
+                      }
+
+                      if (laneItem.isClub) {
+                        return (
+                          <div key={`tv-lane-g2-club-${laneItem.name}-L-${slotIdx}`} className="rounded-3xl border-2 px-8 py-6 flex items-center justify-between shadow-xl transition-all relative h-[135px] bg-blue-950/15 border-blue-900/60">
+                            <div className="flex items-center gap-6 min-w-0">
+                              <div className="w-20 h-20 rounded-2xl flex flex-col items-center justify-center text-4xl font-black shrink-0 border-2 uppercase shadow-inner bg-blue-950 border-blue-800 text-blue-400">
+                                <span className="text-[10px] font-black text-blue-500/80 uppercase -mb-0.5 tracking-wider">LANE</span>
                                 {actualLaneNum}
                               </div>
                               <div className="min-w-0">
-                                <h3 className="text-xl font-black text-slate-100 uppercase tracking-wide truncate flex items-center gap-2">
+                                <h3 className="text-2xl font-black text-slate-100 uppercase tracking-wide truncate">
                                   {laneItem.name}
-                                  {isBỏThi && <span className="text-[8px] bg-rose-950 border border-rose-900 text-rose-450 font-black px-1 rounded">BỎ THI</span>}
                                 </h3>
-                                <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                                  <span className="text-xs text-slate-450 font-mono font-black">
-                                    {ath?.id?.replace("ath-", "") || "---"}
+                                <div className="flex items-center gap-3 mt-2 flex-wrap">
+                                  <span className="text-sm text-blue-400 font-mono font-black bg-slate-900/80 border border-slate-800/80 px-2.5 py-0.5 rounded">
+                                    SBD CLB: {laneItem.sbd ? String(laneItem.sbd).padStart(3, "0") : "---"}
                                   </span>
-                                  <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-black px-2 py-0.5 rounded uppercase">
-                                    {laneItem.team || "Tự Do"}
+                                  <span className="text-sm bg-blue-500/20 text-blue-300 font-black px-2.5 py-0.5 rounded uppercase">
+                                    ĐỒNG ĐỘI
                                   </span>
-                                  {ath?.category && (
-                                    <span className="text-[10px] bg-blue-500/20 text-blue-300 font-black px-2 py-0.5 rounded uppercase">
-                                      {ath.category}
-                                    </span>
-                                  )}
+                                  <span className="text-sm text-slate-450 font-bold">
+                                    Xạ thủ: {laneItem.clubShooters?.map(s => s.name).join(" - ")}
+                                  </span>
                                 </div>
                               </div>
                             </div>
 
                             <div className="text-right shrink-0">
-                              <span className={`text-xs px-3.5 py-1.5 rounded-full font-black uppercase tracking-wider border ${
-                                isBỏThi ? "bg-rose-950/85 text-rose-400 border-rose-900/50" : "bg-blue-950/80 text-blue-400 border-blue-900/50"
-                              }`}>
-                                {isBỏThi ? "BỎ THI" : "CHUẨN BỊ"}
+                              <span className="text-sm px-5 py-2.5 rounded-full font-black uppercase tracking-wider border bg-blue-950/80 text-blue-450 border-blue-900/50">
+                                CHUẨN BỊ
                               </span>
-                              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-2.5">
-                                {isBỏThi ? "KHÔNG THI ĐẤU" : "LÊN THỚT TIẾP THEO"}
+                              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mt-3">
+                                LÊN THỚT TIẾP THEO
                               </p>
                             </div>
                           </div>
                         );
-                      })}
-                    </div>
+                      }
 
-                    {/* Right Column Stack */}
-                    <div className="flex flex-col gap-6">
-                      {rightCol.map((laneItem, slotIdx) => {
-                        const actualLaneNum = laneItem?.laneNum || (half + slotIdx + 1);
-                        const ath = laneItem?.athleteObj;
-                        const isBỏThi = ath ? ath.status === "Bỏ thi" : false;
-
-                        if (!laneItem || !laneItem.name) {
-                          return (
-                            <div key={`tv-lane-empty-g2-R-${slotIdx}`} className="border-2 border-dashed border-slate-900 rounded-3xl bg-slate-950/10 flex flex-col items-center justify-center p-6 text-slate-800 h-[104px]">
-                              <span className="text-2xl font-black font-mono">L{actualLaneNum}</span>
-                              <span className="text-xs font-bold uppercase tracking-widest text-slate-700">ĐƯỜNG TRỐNG</span>
+                      return (
+                        <div key={`tv-lane-g2-${ath?.id || "ath"}-L-${slotIdx}`} className={`rounded-3xl border-2 px-8 py-6 flex items-center justify-between shadow-xl transition-all relative h-[135px] ${
+                          isBỏThi 
+                            ? "bg-rose-950/10 border-rose-950/40 opacity-45" 
+                            : "bg-blue-950/15 border-blue-900/60"
+                        }`}>
+                          <div className="flex items-center gap-6 min-w-0">
+                            <div className={`w-20 h-20 rounded-2xl flex flex-col items-center justify-center text-4xl font-black shrink-0 border-2 uppercase shadow-inner ${
+                              isBỏThi ? "bg-rose-950 border-rose-900 text-rose-450" : "bg-blue-950 border-blue-800 text-blue-400"
+                            }`}>
+                              <span className="text-[10px] font-black text-blue-500/80 uppercase -mb-0.5 tracking-wider">LANE</span>
+                              {actualLaneNum}
                             </div>
-                          );
-                        }
-
-                        return (
-                          <div key={`tv-lane-g2-${ath?.id || "ath"}-R-${slotIdx}`} className={`rounded-3xl border-2 p-5 flex items-center justify-between shadow-xl transition-all relative h-[104px] ${
-                            isBỏThi 
-                              ? "bg-rose-950/10 border-rose-950/40 opacity-45" 
-                              : "bg-blue-950/15 border-blue-900/60"
-                          }`}>
-                            <div className="flex items-center gap-5 min-w-0">
-                              <div className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center text-3xl font-black shrink-0 border-2 uppercase shadow-inner ${
-                                isBỏThi ? "bg-rose-950 border-rose-900 text-rose-400" : "bg-blue-950 border-blue-800 text-blue-400"
-                              }`}>
-                                <span className="text-[9px] font-black text-blue-500/80 uppercase -mb-0.5 tracking-wider">LANE</span>
-                                {actualLaneNum}
-                              </div>
-                              <div className="min-w-0">
-                                <h3 className="text-xl font-black text-slate-100 uppercase tracking-wide truncate flex items-center gap-2">
-                                  {laneItem.name}
-                                  {isBỏThi && <span className="text-[8px] bg-rose-950 border border-rose-900 text-rose-450 font-black px-1 rounded">BỎ THI</span>}
-                                </h3>
-                                <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                                  <span className="text-xs text-slate-450 font-mono font-black">
-                                    {ath?.id?.replace("ath-", "") || "---"}
+                            <div className="min-w-0">
+                              <h3 className="text-2xl font-black text-slate-100 uppercase tracking-wide truncate flex items-center gap-3">
+                                {laneItem.name}
+                                {isBỏThi && <span className="text-xs bg-rose-950 border border-rose-900 text-rose-450 font-black px-2 py-0.5 rounded">BỎ THI</span>}
+                              </h3>
+                              <div className="flex items-center gap-3 mt-2 flex-wrap">
+                                <span className="text-sm text-slate-400 font-mono font-black bg-slate-900/80 border border-slate-800/80 px-2.5 py-0.5 rounded">
+                                  SBD: {ath?.id?.replace("ath-", "") || "---"}
+                                </span>
+                                <span className="text-sm bg-slate-900 border border-slate-800 text-slate-400 font-black px-2.5 py-0.5 rounded uppercase">
+                                  {laneItem.team || "Tự Do"}
+                                </span>
+                                {ath?.category && (
+                                  <span className="text-sm bg-blue-500/20 text-blue-300 font-black px-2.5 py-0.5 rounded uppercase">
+                                    {ath.category}
                                   </span>
-                                  <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-black px-2 py-0.5 rounded uppercase">
-                                    {laneItem.team || "Tự Do"}
-                                  </span>
-                                  {ath?.category && (
-                                    <span className="text-[10px] bg-blue-500/20 text-blue-300 font-black px-2 py-0.5 rounded uppercase">
-                                      {ath.category}
-                                    </span>
-                                  )}
-                                </div>
+                                )}
                               </div>
-                            </div>
-
-                            <div className="text-right shrink-0">
-                              <span className={`text-xs px-3.5 py-1.5 rounded-full font-black uppercase tracking-wider border ${
-                                isBỏThi ? "bg-rose-950/85 text-rose-400 border-rose-900/50" : "bg-blue-950/80 text-blue-400 border-blue-900/50"
-                              }`}>
-                                {isBỏThi ? "BỎ THI" : "CHUẨN BỊ"}
-                              </span>
-                              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-2.5">
-                                {isBỏThi ? "KHÔNG THI ĐẤU" : "LÊN THỚT TIẾP THEO"}
-                              </p>
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
+
+                          <div className="text-right shrink-0">
+                            <span className={`text-sm px-5 py-2.5 rounded-full font-black uppercase tracking-wider border ${
+                              isBỏThi ? "bg-rose-950/85 text-rose-400 border-rose-900/50" : "bg-blue-950/80 text-blue-400 border-blue-900/50"
+                            }`}>
+                              {isBỏThi ? "BỎ THI" : "CHUẨN BỊ"}
+                            </span>
+                            <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mt-3">
+                              {isBỏThi ? "KHÔNG THI ĐẤU" : "LÊN THỚT TIẾP THEO"}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -2241,10 +2219,6 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
 
           {/* SLIDE 4: KHU VỰC THI ĐẤU - BẮN THỬ */}
           {tvSlideIdx === 4 && (() => {
-            const half = Math.ceil(currentGroup3Lanes.length / 2);
-            const leftCol = currentGroup3Lanes.slice(0, half);
-            const rightCol = currentGroup3Lanes.slice(half);
-
             return (
               <div className="flex flex-col h-full bg-slate-950/60 border border-slate-900 p-8 rounded-3xl relative shadow-2xl animate-fadeIn">
                 <div className="flex items-center justify-between pb-4 border-b border-slate-900 mb-6">
@@ -2261,188 +2235,158 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
 
                 {/* Auto Scroll container */}
                 <div ref={scrollRef4} className="flex-1 min-h-0 overflow-y-auto scrollbar-none">
-                  <div className="grid grid-cols-2 gap-6 items-start pb-4">
-                    {/* Left Column Stack */}
-                    <div className="flex flex-col gap-6">
-                      {leftCol.map((laneItem, slotIdx) => {
-                        const actualLaneNum = laneItem?.laneNum || (slotIdx + 1);
-                        const ath = laneItem?.athleteObj;
-                        const isBỏThi = ath ? ath.status === "Bỏ thi" : false;
+                  <div className="grid grid-cols-1 gap-6 items-start pb-4">
+                    {currentGroup3Lanes.map((laneItem, slotIdx) => {
+                      const actualLaneNum = laneItem?.laneNum || (slotIdx + 1);
+                      const ath = laneItem?.athleteObj;
+                      const isBỏThi = ath ? ath.status === "Bỏ thi" : false;
 
-                        if (!laneItem || !laneItem.name) {
-                          return (
-                            <div key={`tv-lane-empty-g3-L-${slotIdx}`} className="border-2 border-dashed border-slate-900 rounded-3xl bg-slate-950/10 flex flex-col items-center justify-center p-6 text-slate-800 h-[104px]">
-                              <span className="text-2xl font-black font-mono">L{actualLaneNum}</span>
-                              <span className="text-xs font-bold uppercase tracking-widest text-slate-700">ĐƯỜNG TRỐNG</span>
-                            </div>
-                          );
-                        }
-
+                      if (!laneItem || !laneItem.name) {
                         return (
-                          <div key={`tv-lane-g3-${ath?.id || "ath"}-L-${slotIdx}`} className={`rounded-3xl border-2 p-5 flex items-center justify-between shadow-xl transition-all relative h-[104px] ${
-                            isBỏThi 
-                              ? "bg-rose-950/10 border-rose-950/40 opacity-45" 
-                              : "bg-violet-950/15 border-violet-900/60"
-                          }`}>
-                            <div className="flex items-center gap-5 min-w-0">
-                              <div className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center text-3xl font-black shrink-0 border-2 uppercase shadow-inner ${
-                                isBỏThi ? "bg-rose-950 border-rose-900 text-rose-400" : "bg-violet-950 border-violet-800 text-violet-400"
-                              }`}>
-                                <span className="text-[9px] font-black text-violet-500/80 uppercase -mb-0.5 tracking-wider">LANE</span>
+                          <div key={`tv-lane-empty-g3-L-${slotIdx}`} className="border-2 border-dashed border-slate-900 rounded-3xl bg-slate-950/10 flex flex-col items-center justify-center p-6 text-slate-800 h-[135px]">
+                            <span className="text-3xl font-black font-mono">L{actualLaneNum}</span>
+                            <span className="text-sm font-bold uppercase tracking-widest text-slate-700">ĐƯỜNG TRỐNG</span>
+                          </div>
+                        );
+                      }
+
+                      if (laneItem.isClub) {
+                        return (
+                          <div key={`tv-lane-g3-club-${laneItem.name}-L-${slotIdx}`} className="rounded-3xl border-2 px-8 py-6 flex items-center justify-between shadow-xl transition-all relative h-[135px] bg-violet-950/15 border-violet-900/60">
+                            <div className="flex items-center gap-6 min-w-0">
+                              <div className="w-20 h-20 rounded-2xl flex flex-col items-center justify-center text-4xl font-black shrink-0 border-2 uppercase shadow-inner bg-violet-950 border-violet-800 text-violet-400">
+                                <span className="text-[10px] font-black text-violet-500/80 uppercase -mb-0.5 tracking-wider">LANE</span>
                                 {actualLaneNum}
                               </div>
                               <div className="min-w-0">
-                                <h3 className="text-xl font-black text-slate-100 uppercase tracking-wide truncate flex items-center gap-2">
+                                <h3 className="text-2xl font-black text-slate-100 uppercase tracking-wide truncate">
                                   {laneItem.name}
-                                  {isBỏThi && <span className="text-[8px] bg-rose-950 border border-rose-900 text-rose-450 font-black px-1 rounded">BỎ THI</span>}
                                 </h3>
-                                <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                                  <span className="text-xs text-slate-450 font-mono font-black">
-                                    {ath?.id?.replace("ath-", "") || "---"}
+                                <div className="flex items-center gap-3 mt-2 flex-wrap">
+                                  <span className="text-sm text-violet-400 font-mono font-black bg-slate-900/80 border border-slate-800/80 px-2.5 py-0.5 rounded">
+                                    SBD CLB: {laneItem.sbd ? String(laneItem.sbd).padStart(3, "0") : "---"}
                                   </span>
-                                  <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-black px-2 py-0.5 rounded uppercase">
-                                    {laneItem.team || "Tự Do"}
+                                  <span className="text-sm bg-violet-500/20 text-violet-300 font-black px-2.5 py-0.5 rounded uppercase">
+                                    ĐỒNG ĐỘI
                                   </span>
-                                  {ath?.category && (
-                                    <span className="text-[10px] bg-violet-500/20 text-violet-300 font-black px-2 py-0.5 rounded uppercase">
-                                      {ath.category}
-                                    </span>
-                                  )}
+                                  <span className="text-sm text-slate-450 font-bold">
+                                    Xạ thủ: {laneItem.clubShooters?.map(s => s.name).join(" - ")}
+                                  </span>
                                 </div>
                               </div>
                             </div>
 
                             <div className="text-right shrink-0">
-                              <span className={`text-xs px-3.5 py-1.5 rounded-full font-black uppercase tracking-wider border ${
-                                isBỏThi ? "bg-rose-950/85 text-rose-400 border-rose-900/50" : "bg-violet-950/80 text-violet-400 border-violet-900/50"
-                              }`}>
-                                {isBỏThi ? "BỎ THI" : "KHỞI ĐỘNG"}
+                              <span className="text-sm px-5 py-2.5 rounded-full font-black uppercase tracking-wider border bg-violet-950/80 text-violet-450 border-violet-900/50">
+                                KHỞI ĐỘNG
                               </span>
-                              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-2.5">
-                                {isBỏThi ? "KHÔNG THI ĐẤU" : "SẴN SÀNG THIẾT BỊ"}
+                              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mt-3">
+                                SẴN SÀNG THIẾT BỊ
                               </p>
                             </div>
                           </div>
                         );
-                      })}
-                    </div>
+                      }
 
-                    {/* Right Column Stack */}
-                    <div className="flex flex-col gap-6">
-                      {rightCol.map((laneItem, slotIdx) => {
-                        const actualLaneNum = laneItem?.laneNum || (half + slotIdx + 1);
-                        const ath = laneItem?.athleteObj;
-                        const isBỏThi = ath ? ath.status === "Bỏ thi" : false;
-
-                        if (!laneItem || !laneItem.name) {
-                          return (
-                            <div key={`tv-lane-empty-g3-R-${slotIdx}`} className="border-2 border-dashed border-slate-900 rounded-3xl bg-slate-950/10 flex flex-col items-center justify-center p-6 text-slate-800 h-[104px]">
-                              <span className="text-2xl font-black font-mono">L{actualLaneNum}</span>
-                              <span className="text-xs font-bold uppercase tracking-widest text-slate-700">ĐƯỜNG TRỐNG</span>
+                      return (
+                        <div key={`tv-lane-g3-${ath?.id || "ath"}-L-${slotIdx}`} className={`rounded-3xl border-2 px-8 py-6 flex items-center justify-between shadow-xl transition-all relative h-[135px] ${
+                          isBỏThi 
+                            ? "bg-rose-950/10 border-rose-950/40 opacity-45" 
+                            : "bg-violet-950/15 border-violet-900/60"
+                        }`}>
+                          <div className="flex items-center gap-6 min-w-0">
+                            <div className={`w-20 h-20 rounded-2xl flex flex-col items-center justify-center text-4xl font-black shrink-0 border-2 uppercase shadow-inner ${
+                              isBỏThi ? "bg-rose-950 border-rose-900 text-rose-450" : "bg-violet-950 border-violet-800 text-violet-400"
+                            }`}>
+                              <span className="text-[10px] font-black text-violet-500/80 uppercase -mb-0.5 tracking-wider">LANE</span>
+                              {actualLaneNum}
                             </div>
-                          );
-                        }
-
-                        return (
-                          <div key={`tv-lane-g3-${ath?.id || "ath"}-R-${slotIdx}`} className={`rounded-3xl border-2 p-5 flex items-center justify-between shadow-xl transition-all relative h-[104px] ${
-                            isBỏThi 
-                              ? "bg-rose-950/10 border-rose-950/40 opacity-45" 
-                              : "bg-violet-950/15 border-violet-900/60"
-                          }`}>
-                            <div className="flex items-center gap-5 min-w-0">
-                              <div className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center text-3xl font-black shrink-0 border-2 uppercase shadow-inner ${
-                                isBỏThi ? "bg-rose-950 border-rose-900 text-rose-400" : "bg-violet-950 border-violet-800 text-violet-400"
-                              }`}>
-                                <span className="text-[9px] font-black text-violet-500/80 uppercase -mb-0.5 tracking-wider">LANE</span>
-                                {actualLaneNum}
-                              </div>
-                              <div className="min-w-0">
-                                <h3 className="text-xl font-black text-slate-100 uppercase tracking-wide truncate flex items-center gap-2">
-                                  {laneItem.name}
-                                  {isBỏThi && <span className="text-[8px] bg-rose-950 border border-rose-900 text-rose-450 font-black px-1 rounded">BỎ THI</span>}
-                                </h3>
-                                <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                                  <span className="text-xs text-slate-450 font-mono font-black">
-                                    {ath?.id?.replace("ath-", "") || "---"}
+                            <div className="min-w-0">
+                              <h3 className="text-2xl font-black text-slate-100 uppercase tracking-wide truncate flex items-center gap-3">
+                                {laneItem.name}
+                                {isBỏThi && <span className="text-xs bg-rose-950 border border-rose-900 text-rose-450 font-black px-2 py-0.5 rounded">BỎ THI</span>}
+                              </h3>
+                              <div className="flex items-center gap-3 mt-2 flex-wrap">
+                                <span className="text-sm text-slate-400 font-mono font-black bg-slate-900/80 border border-slate-800/80 px-2.5 py-0.5 rounded">
+                                  SBD: {ath?.id?.replace("ath-", "") || "---"}
+                                </span>
+                                <span className="text-sm bg-slate-900 border border-slate-800 text-slate-400 font-black px-2.5 py-0.5 rounded uppercase">
+                                  {laneItem.team || "Tự Do"}
+                                </span>
+                                {ath?.category && (
+                                  <span className="text-sm bg-violet-500/20 text-violet-300 font-black px-2.5 py-0.5 rounded uppercase">
+                                    {ath.category}
                                   </span>
-                                  <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-black px-2 py-0.5 rounded uppercase">
-                                    {laneItem.team || "Tự Do"}
-                                  </span>
-                                  {ath?.category && (
-                                    <span className="text-[10px] bg-violet-500/20 text-violet-300 font-black px-2 py-0.5 rounded uppercase">
-                                      {ath.category}
-                                    </span>
-                                  )}
-                                </div>
+                                )}
                               </div>
-                            </div>
-
-                            <div className="text-right shrink-0">
-                              <span className={`text-xs px-3.5 py-1.5 rounded-full font-black uppercase tracking-wider border ${
-                                isBỏThi ? "bg-rose-950/85 text-rose-400 border-rose-900/50" : "bg-violet-950/80 text-violet-400 border-violet-900/50"
-                              }`}>
-                                {isBỏThi ? "BỎ THI" : "KHỞI ĐỘNG"}
-                              </span>
-                              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-2.5">
-                                {isBỏThi ? "KHÔNG THI ĐẤU" : "SẴN SÀNG THIẾT BỊ"}
-                              </p>
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
+
+                          <div className="text-right shrink-0">
+                            <span className={`text-sm px-5 py-2.5 rounded-full font-black uppercase tracking-wider border ${
+                              isBỏThi ? "bg-rose-950/85 text-rose-400 border-rose-900/50" : "bg-violet-950/80 text-violet-400 border-violet-900/50"
+                            }`}>
+                              {isBỏThi ? "BỎ THI" : "KHỞI ĐỘNG"}
+                            </span>
+                            <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mt-3">
+                              {isBỏThi ? "KHÔNG THI ĐẤU" : "SẴN SÀNG THIẾT BỊ"}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
             );
           })()}</div>{/* BOTTOM FLOATING CONTROLLER FOR PRESENTATION ADMIN */}
-        <div className="flex items-center justify-between border-t border-slate-900 pt-5">
+        <div className="flex items-center justify-between border-t border-slate-900 pt-3">
           {/* Active slide progress indicator ribbon */}
-          <div className="flex items-center gap-4 text-xs font-bold text-slate-500 uppercase tracking-widest">
+          <div className="flex items-center gap-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">
             <span>SƠ ĐỒ TRÌNH CHIẾU TV</span>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               {[0, 1, 2, 3, 4].map((idx) => (
                 <div
                   key={`tv-progress-dot-${idx}`}
-                  className={`h-2.5 rounded-full transition-all duration-500 ${
+                  className={`h-1.5 rounded-full transition-all duration-500 ${
                     tvSlideIdx === idx
-                      ? "w-8 bg-gradient-to-r from-emerald-500 to-indigo-500"
-                      : "w-2.5 bg-slate-800"
+                      ? "w-6 bg-gradient-to-r from-emerald-500 to-indigo-500"
+                      : "w-1.5 bg-slate-800"
                   }`}
                 />
               ))}
             </div>
           </div>
 
-          {/* Controls button overlay */}
-          <div className="flex items-center gap-4 bg-slate-950/90 border border-slate-900 px-5 py-3 rounded-2xl shadow-xl">
+          {/* Controls button overlay - flattened and compact */}
+          <div className="flex items-center gap-3 bg-slate-950/80 border border-slate-900/60 px-3 py-1.5 rounded-xl shadow-lg">
             {/* Previous button */}
             <button
               onClick={() => handleSetTvSlide((tvSlideIdx - 1 + 5) % 5)}
-              className="w-10 h-10 bg-slate-900 hover:bg-slate-800 text-white rounded-xl flex items-center justify-center active:scale-95 transition-all cursor-pointer border border-slate-800"
+              className="w-8 h-8 bg-slate-900 hover:bg-slate-800 text-white rounded-lg flex items-center justify-center active:scale-95 transition-all cursor-pointer border border-slate-800"
               title="Slide trước"
             >
-              <ChevronLeft className="w-5 h-5" />
+              <ChevronLeft className="w-4 h-4" />
             </button>
 
             {/* Pause/Play button */}
             <button
               onClick={() => setIsTvPaused(!isTvPaused)}
-              className={`px-4.5 py-2 rounded-xl flex items-center gap-2 font-black text-xs uppercase cursor-pointer border transition-all ${
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-black text-[10px] uppercase cursor-pointer border transition-all h-8 ${
                 isTvPaused
-                  ? "bg-amber-500 text-black border-amber-400 hover:bg-amber-600 animate-pulse"
+                  ? "bg-amber-500 text-black border-amber-400 hover:bg-amber-600"
                   : "bg-slate-900 text-amber-400 border-slate-800 hover:bg-slate-800"
               }`}
             >
               {isTvPaused ? (
                 <>
-                  <Play className="w-4 h-4 fill-black" />
-                  <span>TIẾP TỤC CHẠY</span>
+                  <Play className="w-3.5 h-3.5 fill-black" />
+                  <span>TIẾP TỤC</span>
                 </>
               ) : (
                 <>
-                  <Pause className="w-4 h-4 fill-amber-400" />
-                  <span>DỪNG XOAY SLIDE</span>
+                  <Pause className="w-3.5 h-3.5 fill-amber-400" />
+                  <span>TẠM DỪNG</span>
                 </>
               )}
             </button>
@@ -2450,18 +2394,18 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
             {/* Next button */}
             <button
               onClick={() => handleSetTvSlide((tvSlideIdx + 1) % 5)}
-              className="w-10 h-10 bg-slate-900 hover:bg-slate-800 text-white rounded-xl flex items-center justify-center active:scale-95 transition-all cursor-pointer border border-slate-800"
+              className="w-8 h-8 bg-slate-900 hover:bg-slate-800 text-white rounded-lg flex items-center justify-center active:scale-95 transition-all cursor-pointer border border-slate-800"
               title="Slide tiếp theo"
             >
-              <ChevronRight className="w-5 h-5" />
+              <ChevronRight className="w-4 h-4" />
             </button>
 
-            <div className="h-6 w-px bg-slate-800"></div>
+            <div className="h-4 w-px bg-slate-800"></div>
 
             {/* Close TV Mode back to live board */}
             <button
               onClick={() => setIsTvMode(false)}
-              className="px-5 py-2 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white font-black text-xs rounded-xl flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer shadow-lg shadow-rose-950/20 uppercase tracking-wider"
+              className="px-4 py-1.5 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white font-black text-[10px] rounded-lg flex items-center gap-1 active:scale-95 transition-all cursor-pointer shadow-md shadow-rose-950/10 uppercase tracking-wider h-8"
             >
               Thoát TV
             </button>
@@ -3034,6 +2978,15 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
 
                     if (laneItem.isClub) {
                       // Render Club Card
+                      const distId = lanesDataByFlight.activeRound?.id;
+                      const currentDistance = distances.find(d => d.id === distId) || distances[selectedRoundIndex];
+                      const multiplier = currentDistance?.multiplier || 1;
+                      const totalTeamHits = laneItem.clubShooters?.reduce((sum, s) => {
+                        const shots = distId ? (s.scores?.[distId] || []) : [];
+                        return sum + shots.filter(v => v === true).length;
+                      }, 0) || 0;
+                      const totalTeamPoints = totalTeamHits * multiplier;
+
                       return (
                         <div key={`live-g1-club-${laneItem.name}-${slotIdx}`} className="p-2 rounded-xl border bg-indigo-950/10 border-indigo-900/40 hover:border-indigo-550 shadow-md animate-fadeIn flex flex-col justify-center shrink-0 md:flex-1 md:shrink md:min-h-0">
                           <div className="flex items-start justify-between gap-2.5 w-full">
@@ -3050,18 +3003,26 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
                                 </p>
                               </div>
                             </div>
+                            <div className="text-right shrink-0 flex flex-col items-end">
+                              <span className="text-[11px] sm:text-xs font-black text-indigo-400 font-mono">
+                                {totalTeamPoints} ĐIỂM
+                              </span>
+                              <span className="text-[8px] text-slate-400 font-bold uppercase font-mono mt-0.5">
+                                {totalTeamHits} HITS
+                              </span>
+                            </div>
                           </div>
                           
                           {/* Club Members list compact inside the card */}
                           <div className="mt-1 border-t border-[#1b2640]/50 pt-1 space-y-0.5">
                             {laneItem.clubShooters?.map(s => {
-                              const distId = lanesDataByFlight.activeRound?.id;
                               const shots = distId ? (s.scores?.[distId] || []) : [];
                               const hits = shots.filter(v => v === true).length;
+                              const pts = hits * multiplier;
                               return (
                                 <div key={s.id} className="flex justify-between items-center text-[8px] font-extrabold uppercase tracking-wide">
                                   <span className="text-slate-350 truncate max-w-[120px]">{s.name} | {s.id.replace("ath-", "")}</span>
-                                  <span className="text-emerald-400 font-mono">HITS: {hits}/{lanesDataByFlight.effectiveShotsCount}</span>
+                                  <span className="text-emerald-400 font-mono">HITS: {hits}/{lanesDataByFlight.effectiveShotsCount} ({pts}đ)</span>
                                 </div>
                               );
                             })}

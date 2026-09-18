@@ -281,10 +281,17 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
       const badge = getUserBadge();
       const club = getUserClub();
 
+      // Resolve athlete name
+      const matchingAth = systemAthletes.find(
+        a => (a.email && a.email.trim().toLowerCase() === currentUser.email?.trim().toLowerCase()) ||
+             (a.name && a.name.trim().toLowerCase() === currentUser.displayName?.trim().toLowerCase())
+      );
+      const senderName = matchingAth?.name || currentUser.displayName || currentUser.email?.split("@")[0] || "Xạ thủ VSC";
+
       await sendChatMessage({
         roomId,
         senderUid: currentUser.uid,
-        senderName: currentUser.displayName || currentUser.email?.split("@")[0] || "Xạ thủ VSC",
+        senderName,
         senderEmail: currentUser.email || "",
         senderAvatar: currentUser.photoURL || "",
         senderRole: isBtcOrAdmin ? "btc" : isReferee ? "referee" : "user",
@@ -312,7 +319,12 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
   const handleTogglePin = async (msg: ChatMessage) => {
     if (!currentUser) return;
     try {
-      await togglePinChatMessage(msg.roomId || roomId, msg.id, !msg.isPinned, currentUser.displayName || "BTC");
+      const matchingAth = systemAthletes.find(
+        a => (a.email && a.email.trim().toLowerCase() === currentUser.email?.trim().toLowerCase()) ||
+             (a.name && a.name.trim().toLowerCase() === currentUser.displayName?.trim().toLowerCase())
+      );
+      const senderName = matchingAth?.name || currentUser.displayName || "BTC";
+      await togglePinChatMessage(msg.roomId || roomId, msg.id, !msg.isPinned, senderName);
     } catch (err) {
       console.error("Failed to pin/unpin message:", err);
     }
@@ -536,6 +548,12 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
                 const dateObj = new Date(msg.createdAt);
                 const timeStr = isNaN(dateObj.getTime()) ? "" : dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+                const senderProfile = localSystemAthletes.find(
+                  a => (msg.senderEmail && a.email && a.email.trim().toLowerCase() === msg.senderEmail.trim().toLowerCase()) ||
+                       (a.name && msg.senderName && a.name.trim().toLowerCase() === msg.senderName.trim().toLowerCase())
+                );
+                const resolvedSenderName = senderProfile?.name || msg.senderName;
+
                 return (
                   <div 
                     key={msg.id}
@@ -545,19 +563,15 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
                       
                       {/* Avatar */}
                       <div 
-                        onClick={() => handleViewProfileInternally(msg.senderName, msg.senderEmail)}
+                        onClick={() => handleViewProfileInternally(resolvedSenderName, msg.senderEmail)}
                         className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-gray-200 bg-white flex items-center justify-center cursor-pointer shadow-2xs hover:ring-2 hover:ring-blue-400 transition-all"
                       >
                         {(() => {
-                          const senderProfile = localSystemAthletes.find(
-                            a => (msg.senderEmail && a.email && a.email.trim().toLowerCase() === msg.senderEmail.trim().toLowerCase()) ||
-                                 (a.name && msg.senderName && a.name.trim().toLowerCase() === msg.senderName.trim().toLowerCase())
-                          );
                           const effectiveAvatar = senderProfile?.avatarUrl || msg.senderAvatar;
                           return effectiveAvatar ? (
                             <img 
                               src={effectiveAvatar} 
-                              alt={msg.senderName} 
+                              alt={resolvedSenderName} 
                               className="w-full h-full object-cover" 
                               referrerPolicy="no-referrer"
                             />
@@ -568,7 +582,7 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
                               msg.senderRole === "referee" ? "bg-purple-600 text-white" :
                               "bg-blue-600 text-white"
                             }`}>
-                              {msg.senderName.charAt(0).toUpperCase()}
+                              {resolvedSenderName.charAt(0).toUpperCase()}
                             </div>
                           );
                         })()}
@@ -580,10 +594,10 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
                         <div className="flex items-center gap-1.5 flex-wrap mb-1">
                           <button
                             type="button"
-                            onClick={() => handleViewProfileInternally(msg.senderName, msg.senderEmail)}
+                            onClick={() => handleViewProfileInternally(resolvedSenderName, msg.senderEmail)}
                             className="font-bold text-xs text-gray-900 hover:text-blue-600 cursor-pointer transition-colors"
                           >
-                            {msg.senderName}
+                            {resolvedSenderName}
                           </button>
 
                           {/* Role Badges */}
