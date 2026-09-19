@@ -1921,24 +1921,57 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                 const isQualified = activeRoundResTeam?.qualifiedTeams?.includes(clubName) && !activeRoundResTeam?.eliminatedTeams?.includes(clubName);
                 const isEliminated = activeRoundResTeam?.eliminatedTeams?.includes(clubName);
                 
-                let statusStr = "";
-                if (isQualified) {
-                  statusStr = isEng ? "Qualified" : "Vào vòng sau";
-                } else if (isEliminated) {
-                  statusStr = isEng ? "Eliminated" : "Bị loại";
-                } else {
-                  statusStr = isEng ? "Competing" : "Đang đấu";
-                }
+                const inCurrentRound = activeRoundResTeam ? activeRoundResTeam.qualifiedTeams?.includes(clubName) : true;
+                const wasAlreadyEliminated = !inCurrentRound;
 
-                const prevRoundResTeam = selectedMonitorRoundIdx > 0 ? teamRoundResultsLocal[selectedMonitorRoundIdx - 1] : null;
-                const wasAlreadyEliminated = prevRoundResTeam && !prevRoundResTeam.qualifiedTeams?.includes(clubName);
+                const isSoloPending = activeRoundResTeam?.pendingSoloTeams?.includes(clubName) || false;
+                const isResoloPending = activeRoundResTeam?.pendingResoloTeams?.includes(clubName) || false;
 
-                if (wasAlreadyEliminated) {
-                  statusStr = isEng ? "Eliminated previously" : "Bị loại vòng trước";
-                }
-
+                const currentRoundDist = currentDistances[selectedMonitorRoundIdx];
                 const mainShooters = primaryAthletes.filter((a) => a.team?.trim() === clubName);
                 mainShooters.sort((a, b) => a.name.localeCompare(b.name));
+
+                // Check isUnshot for team
+                const isUnshot = mainShooters.length > 0 && mainShooters.every(pa => {
+                  const rScores = currentRoundDist ? pa.scores?.[currentRoundDist.id] : undefined;
+                  return !rScores || rScores.length === 0 || rScores.every(val => val === null || val === undefined);
+                });
+
+                // Check isCompleted for team
+                const shotsCount = currentRoundDist?.teamShotCount || currentRoundDist?.shotCount || currentTournamentDoc?.teamShotsCount || currentTournamentDoc?.shotsCount || 5;
+                const isCompleted = mainShooters.length > 0 && mainShooters.every(pa => {
+                  const rScores = currentRoundDist ? pa.scores?.[currentRoundDist.id] : undefined;
+                  return rScores && rScores.length === Number(shotsCount) && rScores.every(val => val !== null && val !== undefined);
+                });
+
+                let statusStr = "";
+                let statusType = "playing"; // "dns", "solo", "resolo", "eliminated_earlier", "unshot", "eliminated_this_round", "completed", "playing"
+
+                if (isSoloPending) {
+                  statusStr = "SOLO";
+                  statusType = "solo";
+                } else if (isResoloPending) {
+                  statusStr = isEng ? "RE-SOLO" : "SOLO LẠI";
+                  statusType = "resolo";
+                } else if (wasAlreadyEliminated) {
+                  statusStr = isEng ? "Cut" : "Đã bị loại";
+                  statusType = "eliminated_earlier";
+                } else if (isUnshot) {
+                  statusStr = isEng ? "Not Shot" : "Chưa bắn";
+                  statusType = "unshot";
+                } else if (isEliminated) {
+                  statusStr = isEng ? "Cut This Rd" : "Bị loại V. này";
+                  statusType = "eliminated_this_round";
+                } else if (isCompleted) {
+                  statusStr = isEng ? "Finished" : "Đã bắn";
+                  statusType = "completed";
+                } else if (isQualified) {
+                  statusStr = isEng ? "Qualified" : "Vào vòng sau";
+                  statusType = "completed";
+                } else {
+                  statusStr = isEng ? "Playing" : "Đang đấu";
+                  statusType = "playing";
+                }
 
                 return {
                   id: clubName,
@@ -1952,12 +1985,13 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                   displayScore: scoreObj?.displayScore ?? 0,
                   displayScoreWithSolo: scoreObj?.displayScoreWithSolo ?? 0,
                   statusStr,
+                  statusType,
                   isQualified,
                   isEliminated,
                   wasAlreadyEliminated,
                   mainShooters,
                 };
-              }).sort((a, b) => {
+              }).filter((team) => !team.wasAlreadyEliminated).sort((a, b) => {
                 if (a.wasAlreadyEliminated && !b.wasAlreadyEliminated) return 1;
                 if (!a.wasAlreadyEliminated && b.wasAlreadyEliminated) return -1;
                 
@@ -1975,20 +2009,50 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                 const isQualified = activeRoundRes?.qualifiedIds?.includes(a.id);
                 const isEliminated = activeRoundRes?.eliminatedIds?.includes(a.id);
                 
+                const inCurrentRound = activeRoundRes ? activeRoundRes.qualifiedIds?.includes(a.id) : true;
+                const wasAlreadyEliminated = !inCurrentRound;
+
+                const isSoloPending = activeRoundRes?.pendingSoloIds?.includes(a.id) || false;
+                const isResoloPending = activeRoundRes?.pendingResoloIds?.includes(a.id) || false;
+
+                const currentRoundDist = currentDistances[selectedMonitorRoundIdx];
+                const rScores = currentRoundDist ? a.scores?.[currentRoundDist.id] : undefined;
+
+                const isUnshot = !rScores || rScores.length === 0 || rScores.every(val => val === null || val === undefined);
+
+                const shotsCount = currentRoundDist?.shotCount || currentTournamentDoc?.shotsCount || 5;
+                const isCompleted = rScores && rScores.length === Number(shotsCount) && rScores.every(val => val !== null && val !== undefined);
+
                 let statusStr = "";
-                if (isQualified) {
-                  statusStr = isEng ? "Qualified" : "Vào vòng sau";
+                let statusType = "playing"; // "dns", "solo", "resolo", "eliminated_earlier", "unshot", "eliminated_this_round", "completed", "playing"
+
+                if (a.status === "Bỏ thi") {
+                  statusStr = isEng ? "DNS" : "Bỏ thi";
+                  statusType = "dns";
+                } else if (isSoloPending) {
+                  statusStr = "SOLO";
+                  statusType = "solo";
+                } else if (isResoloPending) {
+                  statusStr = isEng ? "RE-SOLO" : "SOLO LẠI";
+                  statusType = "resolo";
+                } else if (wasAlreadyEliminated) {
+                  statusStr = isEng ? "Cut" : "Đã bị loại";
+                  statusType = "eliminated_earlier";
+                } else if (isUnshot) {
+                  statusStr = isEng ? "Not Shot" : "Chưa bắn";
+                  statusType = "unshot";
                 } else if (isEliminated) {
-                  statusStr = isEng ? "Eliminated" : "Bị loại";
+                  statusStr = isEng ? "Cut This Rd" : "Bị loại V. này";
+                  statusType = "eliminated_this_round";
+                } else if (isCompleted) {
+                  statusStr = isEng ? "Finished" : "Đã bắn";
+                  statusType = "completed";
+                } else if (isQualified) {
+                  statusStr = isEng ? "Qualified" : "Vào vòng sau";
+                  statusType = "completed";
                 } else {
-                  statusStr = isEng ? "Competing" : "Đang đấu";
-                }
-
-                const prevRoundRes = selectedMonitorRoundIdx > 0 ? roundResults[selectedMonitorRoundIdx - 1] : null;
-                const wasAlreadyEliminated = prevRoundRes && !prevRoundRes.qualifiedIds?.includes(a.id);
-
-                if (wasAlreadyEliminated) {
-                  statusStr = isEng ? "Eliminated previously" : "Bị loại vòng trước";
+                  statusStr = isEng ? "Playing" : "Đang đấu";
+                  statusType = "playing";
                 }
 
                 return {
@@ -2001,11 +2065,12 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                   displayScore: scoreObj?.displayScore ?? 0,
                   displayScoreWithSolo: scoreObj?.displayScoreWithSolo ?? 0,
                   statusStr,
+                  statusType,
                   isQualified,
                   isEliminated,
                   wasAlreadyEliminated
                 };
-              }).sort((a, b) => {
+              }).filter((ath) => !ath.wasAlreadyEliminated).sort((a, b) => {
                 if (a.wasAlreadyEliminated && !b.wasAlreadyEliminated) return 1;
                 if (!a.wasAlreadyEliminated && b.wasAlreadyEliminated) return -1;
                 
@@ -2534,8 +2599,25 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                            <tbody className="divide-y divide-gray-150 dark:divide-slate-850 font-medium text-slate-700 dark:text-slate-300">
                              {miniLeaderboardData.map((athlete, idx) => {
                                const sbd = athlete.sbd;
-                               const isQual = athlete.isQualified;
-                               const isElim = athlete.isEliminated || athlete.wasAlreadyEliminated;
+                               const getStatusBadgeClass = (type: string) => {
+                                 switch (type) {
+                                   case "dns":
+                                   case "eliminated_earlier":
+                                     return "bg-rose-50 border-rose-200 text-rose-600 dark:bg-rose-950/20 dark:border-rose-900/50";
+                                   case "solo":
+                                     return "bg-indigo-50 border-indigo-200 text-indigo-600 dark:bg-indigo-950/20 dark:border-indigo-900/50 animate-pulse";
+                                   case "resolo":
+                                     return "bg-amber-50 border-amber-200 text-amber-600 dark:bg-amber-955/20 dark:border-amber-900/50 animate-pulse";
+                                   case "unshot":
+                                     return "bg-slate-50 border-slate-200 text-slate-550 dark:bg-slate-900/40 dark:border-slate-800/80";
+                                   case "eliminated_this_round":
+                                     return "bg-amber-50 border-amber-200 text-amber-600 dark:bg-amber-955/20 dark:border-amber-900/50";
+                                   case "completed":
+                                     return "bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-950/20 dark:border-blue-900/50";
+                                   default:
+                                     return "bg-emerald-50 border-emerald-200 text-emerald-600 dark:bg-emerald-950/20 dark:border-emerald-900/50";
+                                 }
+                               };
 
                                if (athlete.isClub) {
                                  return (
@@ -2561,13 +2643,7 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                                          {athlete.displayScore}
                                        </td>
                                        <td className="p-2.5 text-right">
-                                         <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded border ${
-                                           isQual
-                                             ? "bg-emerald-50 border-emerald-200 text-emerald-600 dark:bg-emerald-950/20 dark:border-emerald-900/50"
-                                             : isElim
-                                             ? "bg-rose-50 border-rose-200 text-rose-600 dark:bg-rose-950/20 dark:border-rose-900/50"
-                                             : "bg-amber-50 border-amber-200 text-amber-600 dark:bg-amber-950/20 dark:border-amber-900/50"
-                                         }`}>
+                                         <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded border ${getStatusBadgeClass(athlete.statusType)}`}>
                                            {athlete.statusStr}
                                          </span>
                                        </td>
@@ -2628,13 +2704,7 @@ export const TournamentExecutionHub: React.FC<TournamentExecutionHubProps> = ({
                                      {athlete.displayScore}
                                    </td>
                                    <td className="p-2.5 text-right">
-                                     <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded border ${
-                                       isQual
-                                         ? "bg-emerald-50 border-emerald-200 text-emerald-600 dark:bg-emerald-950/20 dark:border-emerald-900/50"
-                                         : isElim
-                                         ? "bg-rose-50 border-rose-200 text-rose-600 dark:bg-rose-950/20 dark:border-rose-900/50"
-                                         : "bg-amber-50 border-amber-200 text-amber-600 dark:bg-amber-950/20 dark:border-amber-900/50"
-                                     }`}>
+                                     <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded border ${getStatusBadgeClass(athlete.statusType)}`}>
                                        {athlete.statusStr}
                                      </span>
                                    </td>
