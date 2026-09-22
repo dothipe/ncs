@@ -260,37 +260,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         } else {
           const statsAtLastRound = roundResultsIndividual[lastActiveRoundIdx]?.scores[athlete.id];
           if (statsAtLastRound) {
-            survivalScore = statsAtLastRound.cumulativeScore;
-            survivalHits = statsAtLastRound.cumulativeHits;
-            if (isPointModeActiveIndividual && effectiveDirectMaxPointsIndividual !== undefined) {
-              let totalMultiplier = 0;
-              for (let i = 0; i <= lastActiveRoundIdx; i++) {
-                const d = actualIndDistances[i];
-                const wasShot = athlete.scores[d.id] && athlete.scores[d.id].length > 0 && athlete.scores[d.id].some(v => v !== null && v !== undefined);
-                if (wasShot) {
-                  totalMultiplier += d.multiplier;
-                }
-              }
-              if (totalMultiplier === 0 && actualIndDistances[lastActiveRoundIdx]) {
-                totalMultiplier = actualIndDistances[lastActiveRoundIdx].multiplier;
-              }
-              const totalPossPoints = effectiveDirectMaxPointsIndividual * totalMultiplier;
-              survivalAccuracy = totalPossPoints > 0 ? (survivalScore / totalPossPoints) * 100 : 0;
-            } else {
-              let shotRoundsCount = 0;
-              for (let i = 0; i <= lastActiveRoundIdx; i++) {
-                const d = actualIndDistances[i];
-                const wasShot = athlete.scores[d.id] && athlete.scores[d.id].length > 0 && athlete.scores[d.id].some(v => v !== null && v !== undefined);
-                if (wasShot) {
-                  shotRoundsCount++;
-                }
-              }
-              if (shotRoundsCount === 0) {
-                shotRoundsCount = 1;
-              }
-              const totalPossShots = shotRoundsCount * effectiveShotsCountIndividual;
-              survivalAccuracy = totalPossShots > 0 ? (survivalHits / totalPossShots) * 100 : 0;
-            }
+            survivalScore = statsAtLastRound.displayScore;
+            survivalHits = statsAtLastRound.displayHits;
+            survivalAccuracy = statsAtLastRound.accuracy;
           }
           const lastActiveDist = actualIndDistances[lastActiveRoundIdx];
           if (lastActiveDist && lastActiveDist.isSolo) {
@@ -515,7 +487,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         let N = sortedTeams.length;
         const elimVal = dist.eliminationValue || 0;
 
-        if (dist.eliminationType === "count") {
+        if (dist.eliminationType === "count" || dist.eliminationType === "fixed") {
           N = Math.min(sortedTeams.length, elimVal);
         } else {
           N = Math.max(1, Math.round(sortedTeams.length * (elimVal / 105))); // standard ratio
@@ -824,37 +796,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         } else {
           const statsAtLastRound = roundResultsTeam[lastActiveRoundIdx]?.scores[athlete.id];
           if (statsAtLastRound) {
-            survivalScore = statsAtLastRound.cumulativeScore;
-            survivalHits = statsAtLastRound.cumulativeHits;
-            if (isPointModeActiveTeam && effectiveDirectMaxPointsTeam !== undefined) {
-              let totalMultiplier = 0;
-              for (let i = 0; i <= lastActiveRoundIdx; i++) {
-                const d = actualTeamDistances[i];
-                const wasShot = athlete.scores[d.id] && athlete.scores[d.id].length > 0 && athlete.scores[d.id].some(v => v !== null && v !== undefined);
-                if (wasShot) {
-                  totalMultiplier += d.multiplier;
-                }
-              }
-              if (totalMultiplier === 0 && actualTeamDistances[lastActiveRoundIdx]) {
-                totalMultiplier = actualTeamDistances[lastActiveRoundIdx].multiplier;
-              }
-              const totalPossPoints = effectiveDirectMaxPointsTeam * totalMultiplier;
-              survivalAccuracy = totalPossPoints > 0 ? (survivalScore / totalPossPoints) * 100 : 0;
-            } else {
-              let shotRoundsCount = 0;
-              for (let i = 0; i <= lastActiveRoundIdx; i++) {
-                const d = actualTeamDistances[i];
-                const wasShot = athlete.scores[d.id] && athlete.scores[d.id].length > 0 && athlete.scores[d.id].some(v => v !== null && v !== undefined);
-                if (wasShot) {
-                  shotRoundsCount++;
-                }
-              }
-              if (shotRoundsCount === 0) {
-                shotRoundsCount = 1;
-              }
-              const totalPossShots = shotRoundsCount * effectiveShotsCountTeam;
-              survivalAccuracy = totalPossShots > 0 ? (survivalHits / totalPossShots) * 100 : 0;
-            }
+            survivalScore = statsAtLastRound.displayScore;
+            survivalHits = statsAtLastRound.displayHits;
+            survivalAccuracy = statsAtLastRound.accuracy;
           }
           const lastActiveDist = actualTeamDistances[lastActiveRoundIdx];
           if (lastActiveDist && lastActiveDist.isSolo) {

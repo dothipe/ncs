@@ -257,6 +257,8 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
       ? (leaderboardTeamAthletes && leaderboardTeamAthletes.length > 0 ? leaderboardTeamAthletes : teamAthletes || athletes)
       : (athletes || []);
 
+    const hasAnyPrimaryInMonitor = activeAthletesForMonitor.some(a => a.isPrimaryTeam);
+
     // Run qualification calculateRounds
     const roundResults = calculateRounds(
       activeAthletesForMonitor,
@@ -267,7 +269,7 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
 
     // Get ordered athletes for this round
     let orderedAthletesForRound = activeMonitorEnv === "team"
-      ? activeAthletesForMonitor.filter(a => a.isPrimaryTeam)
+      ? activeAthletesForMonitor.filter(a => hasAnyPrimaryInMonitor ? a.isPrimaryTeam : true)
       : [...activeAthletesForMonitor];
 
     // If subsequent round, filter only qualified athletes
@@ -487,7 +489,7 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
           const clubName = squadClubs[(s - 1) * laneCapacity + idx] || null;
           const clubSbd = clubName ? ((currentTournamentDoc?.teamDrawnNumbers || {})[clubName] || null) : null;
           const clubShooters = clubName 
-            ? activeAthletesForMonitor.filter(a => a.team?.trim() === clubName && a.isPrimaryTeam)
+            ? activeAthletesForMonitor.filter(a => a.team?.trim() === clubName && (hasAnyPrimaryInMonitor ? a.isPrimaryTeam : true))
             : [];
           lanes.push({
             laneNum,
@@ -583,6 +585,252 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
     return 1;
   };
 
+  const hasAnyPrimary = useMemo(() => {
+    const source = leaderboardTeamAthletes && leaderboardTeamAthletes.length > 0 
+      ? leaderboardTeamAthletes 
+      : (teamAthletes && teamAthletes.length > 0 ? teamAthletes : []);
+    return source.some((a) => a.isPrimaryTeam);
+  }, [leaderboardTeamAthletes, teamAthletes]);
+
+  // -----------------------------------------------------------------
+  // TEAM SURVIVAL RANKINGS (For Team Podium)
+  // -----------------------------------------------------------------
+  const resolvedTeamAthletes = useMemo(() => {
+    if (tournamentType === "individual") {
+      return activeAthletesList; // use individual list, no isPrimaryTeam filter
+    }
+    const source = leaderboardTeamAthletes && leaderboardTeamAthletes.length > 0 
+      ? leaderboardTeamAthletes 
+      : (teamAthletes && teamAthletes.length > 0 ? teamAthletes : []);
+    return source.filter((a) => hasAnyPrimary ? a.isPrimaryTeam : true);
+  }, [leaderboardTeamAthletes, teamAthletes, activeAthletesList, tournamentType, hasAnyPrimary]);
+
+  const activeTeamDistances = useMemo(() => {
+    if (tournamentType === "individual") {
+      return activeDistances;
+    }
+    return teamDistances && teamDistances.length > 0 ? teamDistances : (distances || []);
+  }, [tournamentType, activeDistances, teamDistances, distances]);
+
+  const activeTeamShotsCount = useMemo(() => {
+    if (tournamentType === "individual") {
+      return effectiveShotsCount;
+    }
+    return effectiveTeamShotsCount;
+  }, [tournamentType, effectiveShotsCount, effectiveTeamShotsCount]);
+
+  const teamRoundResults = useMemo(() => {
+    const results: any[] = [];
+    const teamCumulativeScores: Record<string, number> = {};
+    const teamCumulativeHits: Record<string, number> = {};
+
+    const activeTeams = Array.from(new Set(resolvedTeamAthletes.map((a) => {
+      const raw = a.team.trim();
+      return raw === "" ? "VĐV Tự Do (Không Đội)" : raw;
+    }))) as string[];
+
+    for (let r = 0; r < activeTeamDistances.length; r++) {
+      const dist = activeTeamDistances[r];
+      const teamRoundScores: Record<string, {
+        roundHits: number;
+        roundScore: number;
+        cumulativeHits: number;
+        cumulativeScore: number;
+        displayScore: number;
+        accuracy: number;
+        displayScoreWithSolo: number;
+        hasUnshotMember: boolean;
+        hasAnySoloEntered: boolean;
+        teamSoloHits: number;
+      }> = {};
+
+      const currentRoundTeams = Array.from(new Set(resolvedTeamAthletes.map((a) => {
+        const raw = a.team.trim();
+        return raw === "" ? "VĐV Tự Do (Không Đội)" : raw;
+      }))).filter((tName) => activeTeams.includes(tName as string)) as string[];
+
+      currentRoundTeams.forEach((teamName: string) => {
+        const members = resolvedTeamAthletes.filter((a) => {
+          const raw = a.team.trim();
+          const t = raw === "" ? "VĐV Tự Do (Không Đội)" : raw;
+          return t === teamName;
+        });
+
+        const activeMembers = members.filter(memb => memb.status !== "Bỏ thi");
+
+        // Check if any active sibling has not shot in this round at all
+        const hasUnshotMember = activeMembers.some((memb) => {
+          const hits = memb.scores[dist.id] || [];
+          return !hits || hits.length === 0 || hits.every((v) => v === null || v === undefined);
+        });
+
+        let roundHits = 0;
+        let totalSoloHits = 0;
+        let hasAnySoloEntered = false;
+
+        activeMembers.forEach((memb) => {
+          const hits = memb.scores[dist.id] || [];
+          roundHits += getHitCount(hits);
+          const soloVal = memb.soloHits?.[dist.id];
+          if (soloVal !== undefined && soloVal !== null) {
+            totalSoloHits += soloVal;
+            hasAnySoloEntered = true;
+          }
+        });
+
+        const roundScore = roundHits * dist.multiplier;
+        const prevScore = teamCumulativeScores[teamName] || 0;
+        const prevHits = teamCumulativeHits[teamName] || 0;
+
+        const currCumulativeScore = prevScore + roundScore;
+        const currCumulativeHits = prevHits + roundHits;
+
+        teamCumulativeScores[teamName] = currCumulativeScore;
+        teamCumulativeHits[teamName] = currCumulativeHits;
+
+        const displayScore = dist.isCumulative ? currCumulativeScore : roundScore;
+        const displayHits = dist.isCumulative ? currCumulativeHits : roundHits;
+
+        let accuracy = 0;
+        if (isTeamDirectMode && teamDirectMaxPoints !== undefined && teamDirectMaxPoints > 0) {
+          let totalMultiplier = 0;
+          if (dist.isCumulative) {
+            for (let i = 0; i <= r; i++) {
+              totalMultiplier += activeTeamDistances[i].multiplier;
+            }
+          } else {
+            totalMultiplier = dist.multiplier;
+          }
+          const totalPossPoints = activeMembers.length * teamDirectMaxPoints * totalMultiplier;
+          accuracy = totalPossPoints > 0 ? (displayScore / totalPossPoints) * 100 : 0;
+        } else {
+          const totalPossShots = activeMembers.length * (dist.isCumulative ? (r + 1) * activeTeamShotsCount : activeTeamShotsCount);
+          accuracy = totalPossShots > 0 ? (displayHits / totalPossShots) * 100 : 0;
+        }
+
+        const displayScoreWithSolo = displayScore + (totalSoloHits * 0.001);
+
+        teamRoundScores[teamName] = {
+          roundHits,
+          roundScore,
+          cumulativeHits: currCumulativeHits,
+          cumulativeScore: currCumulativeScore,
+          displayScore,
+          accuracy,
+          displayScoreWithSolo,
+          hasUnshotMember,
+          hasAnySoloEntered,
+          teamSoloHits: totalSoloHits,
+        };
+      });
+
+      let nextRoundTeams: string[] = [];
+      let currentRoundEliminatedTeams: string[] = [];
+      let roundPendingSoloTeams: string[] = [];
+      let roundResoloTeams: string[] = [];
+
+      if (dist.isElimination) {
+        const sortedTeams = [...currentRoundTeams].sort((tA: string, tB: string) => {
+          const scoreA = teamRoundScores[tA]?.displayScoreWithSolo || 0;
+          const scoreB = teamRoundScores[tB]?.displayScoreWithSolo || 0;
+          if (scoreB !== scoreA) {
+            return scoreB - scoreA;
+          }
+          const accA = teamRoundScores[tA]?.accuracy || 0;
+          const accB = teamRoundScores[tB]?.accuracy || 0;
+          return accB - accA;
+        });
+
+        let N = sortedTeams.length;
+        const elimVal = dist.eliminationValue || 0;
+
+        if (dist.eliminationType === "count" || dist.eliminationType === "fixed") {
+          N = Math.min(sortedTeams.length, elimVal);
+        } else {
+          N = Math.max(1, Math.round(sortedTeams.length * (elimVal / 100)));
+        }
+
+        if (sortedTeams.length <= N) {
+          nextRoundTeams = [...sortedTeams];
+          currentRoundEliminatedTeams = [];
+        } else {
+          const cutoffBaseScore = teamRoundScores[sortedTeams[N - 1]]?.displayScore || 0;
+
+          const sures = sortedTeams.filter((t) => (teamRoundScores[t]?.displayScore || 0) > cutoffBaseScore);
+          const contenders = sortedTeams.filter((t) => (teamRoundScores[t]?.displayScore || 0) === cutoffBaseScore);
+          const purelyEliminated = sortedTeams.filter((t) => (teamRoundScores[t]?.displayScore || 0) < cutoffBaseScore);
+
+          const slotsLeft = N - sures.length;
+
+          const anyTeamUnfinished = currentRoundTeams.some((t) => teamRoundScores[t]?.hasUnshotMember);
+
+          if (anyTeamUnfinished) {
+            nextRoundTeams = [...currentRoundTeams];
+            currentRoundEliminatedTeams = [];
+          } else {
+            if (dist.isSolo && slotsLeft > 0 && slotsLeft < contenders.length) {
+              const finishedContendersWithNoSolo = contenders.filter((t) => !teamRoundScores[t]?.hasAnySoloEntered);
+              roundPendingSoloTeams = [...finishedContendersWithNoSolo];
+
+              if (finishedContendersWithNoSolo.length > 0) {
+                nextRoundTeams = [...sures, ...contenders];
+                currentRoundEliminatedTeams = [];
+              } else {
+                const contendersWithSolo = contenders.map((t) => ({
+                  id: t,
+                  soloHits: teamRoundScores[t]?.teamSoloHits || 0,
+                }));
+
+                contendersWithSolo.sort((a, b) => b.soloHits - a.soloHits);
+
+                const winnerScoreBoundary = contendersWithSolo[slotsLeft - 1].soloHits;
+                const loserScoreBoundary = contendersWithSolo[slotsLeft].soloHits;
+
+                if (winnerScoreBoundary === loserScoreBoundary) {
+                  const resoloCandidates = contendersWithSolo.filter((c) => c.soloHits === winnerScoreBoundary).map((c) => c.id);
+                  roundResoloTeams = resoloCandidates;
+
+                  const surelySoloPassed = contendersWithSolo.filter((c) => c.soloHits > winnerScoreBoundary).map((c) => c.id);
+                  const surelySoloFailed = contendersWithSolo.filter((c) => c.soloHits < winnerScoreBoundary).map((c) => c.id);
+
+                  nextRoundTeams = [...sures, ...surelySoloPassed, ...resoloCandidates];
+                  currentRoundEliminatedTeams = [...surelySoloFailed, ...purelyEliminated];
+                } else {
+                  const soloPassed = contendersWithSolo.slice(0, slotsLeft).map((c) => c.id);
+                  const soloFailed = contendersWithSolo.slice(slotsLeft).map((c) => c.id);
+
+                  nextRoundTeams = [...sures, ...soloPassed];
+                  currentRoundEliminatedTeams = [...soloFailed, ...purelyEliminated];
+                }
+              }
+            } else {
+              nextRoundTeams = [...sures, ...contenders];
+              currentRoundEliminatedTeams = [...purelyEliminated];
+            }
+          }
+        }
+      } else {
+        nextRoundTeams = [...currentRoundTeams];
+        currentRoundEliminatedTeams = [];
+      }
+
+      results.push({
+        distance: dist,
+        roundIndex: r,
+        qualifiedTeams: [...currentRoundTeams],
+        eliminatedTeams: currentRoundEliminatedTeams,
+        pendingSoloTeams: roundPendingSoloTeams,
+        pendingResoloTeams: roundResoloTeams,
+        scores: teamRoundScores,
+      });
+
+      activeTeams.length = 0;
+      activeTeams.push(...nextRoundTeams);
+    }
+
+    return results;
+  }, [resolvedTeamAthletes, activeTeamDistances, activeTeamShotsCount]);
+
   // -----------------------------------------------------------------
   // INDIVIDUAL SURVIVAL RANKINGS (For Podium & Top 10)
   // -----------------------------------------------------------------
@@ -595,18 +843,29 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
 
     return activeAthletesList.map((athlete) => {
       let eliminatedInRoundIdx: number | null = null;
-      for (let i = 0; i < roundResults.length; i++) {
-        if (roundResults[i].eliminatedIds.includes(athlete.id)) {
-          let hasSubsequentParticipation = false;
-          for (let j = i + 1; j < roundResults.length; j++) {
-            if (roundResults[j].qualifiedIds.includes(athlete.id)) {
-              hasSubsequentParticipation = true;
-              break;
-            }
-          }
-          if (!hasSubsequentParticipation) {
+      if (tournamentType === "team") {
+        const raw = athlete.team.trim();
+        const teamName = raw === "" ? "VĐV Tự Do (Không Đội)" : raw;
+        for (let i = 0; i < teamRoundResults.length; i++) {
+          if (teamRoundResults[i].eliminatedTeams.includes(teamName)) {
             eliminatedInRoundIdx = i;
             break;
+          }
+        }
+      } else {
+        for (let i = 0; i < roundResults.length; i++) {
+          if (roundResults[i].eliminatedIds.includes(athlete.id)) {
+            let hasSubsequentParticipation = false;
+            for (let j = i + 1; j < roundResults.length; j++) {
+              if (roundResults[j].qualifiedIds.includes(athlete.id)) {
+                hasSubsequentParticipation = true;
+                break;
+              }
+            }
+            if (!hasSubsequentParticipation) {
+              eliminatedInRoundIdx = i;
+              break;
+            }
           }
         }
       }
@@ -677,19 +936,9 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
         } else {
           const statsAtLastRound = roundResults[lastActiveRoundIdx]?.scores[athlete.id];
           if (statsAtLastRound) {
-            survivalScore = statsAtLastRound.cumulativeScore;
-            survivalHits = statsAtLastRound.cumulativeHits;
-            if (isDirectMode && activeDirectMaxPoints !== undefined && activeDirectMaxPoints > 0) {
-              let totalMultiplier = 0;
-              for (let i = 0; i <= lastActiveRoundIdx; i++) {
-                totalMultiplier += activeDistances[i].multiplier;
-              }
-              const totalPossPoints = activeDirectMaxPoints * totalMultiplier;
-              survivalAccuracy = totalPossPoints > 0 ? (survivalScore / totalPossPoints) * 100 : 0;
-            } else {
-              const totalPossShots = (lastActiveRoundIdx + 1) * effectiveShotsCount;
-              survivalAccuracy = totalPossShots > 0 ? (survivalHits / totalPossShots) * 100 : 0;
-            }
+            survivalScore = statsAtLastRound.displayScore;
+            survivalHits = statsAtLastRound.displayHits;
+            survivalAccuracy = statsAtLastRound.accuracy;
           }
           const lastActiveDist = activeDistances[lastActiveRoundIdx];
           if (lastActiveDist && lastActiveDist.isSolo) {
@@ -756,7 +1005,7 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
         eliminatedInRoundIdx,
       };
     });
-  }, [activeAthletesList, roundResults, activeDistances, effectiveShotsCount, isDirectMode, activeDirectMaxPoints]);
+  }, [activeAthletesList, roundResults, activeDistances, effectiveShotsCount, isDirectMode, activeDirectMaxPoints, teamRoundResults, tournamentType]);
 
   const activeRoundAthletes = useMemo(() => {
     if (selectedRoundIndex === 0) {
@@ -913,276 +1162,6 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
   }, [isOpen, top10SurvivalAthletes.length]);
 
 
-  // -----------------------------------------------------------------
-  // TEAM SURVIVAL RANKINGS (For Team Podium)
-  // -----------------------------------------------------------------
-  const resolvedTeamAthletes = useMemo(() => {
-    if (tournamentType === "individual") {
-      return activeAthletesList; // use individual list, no isPrimaryTeam filter
-    }
-    const source = leaderboardTeamAthletes && leaderboardTeamAthletes.length > 0 
-      ? leaderboardTeamAthletes 
-      : (teamAthletes && teamAthletes.length > 0 ? teamAthletes : []);
-    return source.filter((a) => a.isPrimaryTeam);
-  }, [leaderboardTeamAthletes, teamAthletes, activeAthletesList, tournamentType]);
-
-  const activeTeamDistances = useMemo(() => {
-    if (tournamentType === "individual") {
-      return activeDistances;
-    }
-    return teamDistances && teamDistances.length > 0 ? teamDistances : (distances || []);
-  }, [tournamentType, activeDistances, teamDistances, distances]);
-
-  const activeTeamShotsCount = useMemo(() => {
-    if (tournamentType === "individual") {
-      return effectiveShotsCount;
-    }
-    return effectiveTeamShotsCount;
-  }, [tournamentType, effectiveShotsCount, effectiveTeamShotsCount]);
-
-  const teamRoundResults = useMemo(() => {
-    const results: any[] = [];
-    const teamCumulativeScores: Record<string, number> = {};
-    const teamCumulativeHits: Record<string, number> = {};
-
-    const activeTeams = Array.from(new Set(resolvedTeamAthletes.map((a) => {
-      const raw = a.team.trim();
-      return raw === "" ? "VĐV Tự Do (Không Đội)" : raw;
-    }))) as string[];
-
-    for (let r = 0; r < activeTeamDistances.length; r++) {
-      const dist = activeTeamDistances[r];
-      const teamRoundScores: Record<string, {
-        roundHits: number;
-        roundScore: number;
-        cumulativeHits: number;
-        cumulativeScore: number;
-        displayScore: number;
-        accuracy: number;
-        displayScoreWithSolo: number;
-        hasUnshotMember: boolean;
-        hasAnySoloEntered: boolean;
-        teamSoloHits: number;
-      }> = {};
-
-      const currentRoundTeams = Array.from(new Set(resolvedTeamAthletes.map((a) => {
-        const raw = a.team.trim();
-        return raw === "" ? "VĐV Tự Do (Không Đội)" : raw;
-      }))).filter((tName) => activeTeams.includes(tName as string)) as string[];
-
-      currentRoundTeams.forEach((teamName: string) => {
-        const members = resolvedTeamAthletes.filter((a) => {
-          const raw = a.team.trim();
-          const t = raw === "" ? "VĐV Tự Do (Không Đội)" : raw;
-          return t === teamName;
-        });
-
-        const activeMembers = members.filter(memb => memb.status !== "Bỏ thi");
-
-        const hasUnshotMember = activeMembers.some((memb) => {
-          const hits = memb.scores[dist.id] || [];
-          return !hits || hits.length === 0 || hits.every((v) => v === null || v === undefined);
-        });
-
-        let roundHits = 0;
-        let totalSoloHits = 0;
-        let hasAnySoloEntered = false;
-
-        activeMembers.forEach((memb) => {
-          const hits = memb.scores[dist.id] || [];
-          roundHits += getHitCount(memb.scores[dist.id] || []);
-          const soloVal = memb.soloHits?.[dist.id];
-          if (soloVal !== undefined && soloVal !== null) {
-            totalSoloHits += soloVal;
-            hasAnySoloEntered = true;
-          }
-        });
-
-        const roundScore = roundHits * dist.multiplier;
-        const prevScore = teamCumulativeScores[teamName] || 0;
-        const prevHits = teamCumulativeHits[teamName] || 0;
-
-        const currCumulativeScore = prevScore + roundScore;
-        const currCumulativeHits = prevHits + roundHits;
-
-        teamCumulativeScores[teamName] = currCumulativeScore;
-        teamCumulativeHits[teamName] = currCumulativeHits;
-
-        const displayScore = dist.isCumulative ? currCumulativeScore : roundScore;
-        const displayHits = dist.isCumulative ? currCumulativeHits : roundHits;
-
-        let accuracy = 0;
-        let totalPossPoints = 0;
-        let totalPossShots = 0;
-        const currentTeamDistances = teamDistances || distances;
-
-        activeMembers.forEach((memb) => {
-          if (dist.isCumulative) {
-            for (let i = 0; i <= r; i++) {
-              const distI = currentTeamDistances[i];
-              const wasShot = memb.scores[distI.id] && memb.scores[distI.id].length > 0 && memb.scores[distI.id].some(v => v !== null && v !== undefined);
-              if (wasShot) {
-                if (isTeamDirectMode && teamDirectMaxPoints !== undefined && teamDirectMaxPoints > 0) {
-                  totalPossPoints += teamDirectMaxPoints * distI.multiplier;
-                } else {
-                  totalPossShots += activeTeamShotsCount;
-                }
-              }
-            }
-          } else {
-            const wasShot = memb.scores[dist.id] && memb.scores[dist.id].length > 0 && memb.scores[dist.id].some(v => v !== null && v !== undefined);
-            if (wasShot) {
-              if (isTeamDirectMode && teamDirectMaxPoints !== undefined && teamDirectMaxPoints > 0) {
-                totalPossPoints += teamDirectMaxPoints * dist.multiplier;
-              } else {
-                totalPossShots += activeTeamShotsCount;
-              }
-            } else {
-              if (isTeamDirectMode && teamDirectMaxPoints !== undefined && teamDirectMaxPoints > 0) {
-                totalPossPoints += teamDirectMaxPoints * dist.multiplier;
-              } else {
-                totalPossShots += activeTeamShotsCount;
-              }
-            }
-          }
-        });
-
-        if (isTeamDirectMode && teamDirectMaxPoints !== undefined && teamDirectMaxPoints > 0) {
-          if (totalPossPoints === 0) {
-            totalPossPoints = activeMembers.length * teamDirectMaxPoints * dist.multiplier;
-          }
-          accuracy = totalPossPoints > 0 ? (displayScore / totalPossPoints) * 100 : 0;
-        } else {
-          if (totalPossShots === 0) {
-            const totalShotsCountInRounds = dist.isCumulative ? (r + 1) * activeTeamShotsCount : activeTeamShotsCount;
-            totalPossShots = activeMembers.length * totalShotsCountInRounds;
-          }
-          accuracy = totalPossShots > 0 ? (displayHits / totalPossShots) * 100 : 0;
-        }
-
-        const displayScoreWithSolo = displayScore + (totalSoloHits * 0.001);
-
-        teamRoundScores[teamName] = {
-          roundHits,
-          roundScore,
-          cumulativeHits: currCumulativeHits,
-          cumulativeScore: currCumulativeScore,
-          displayScore,
-          accuracy,
-          displayScoreWithSolo,
-          hasUnshotMember,
-          hasAnySoloEntered,
-          teamSoloHits: totalSoloHits,
-        };
-      });
-
-      let nextRoundTeams: string[] = [];
-      let currentRoundEliminatedTeams: string[] = [];
-      let roundPendingSoloTeams: string[] = [];
-      let roundResoloTeams: string[] = [];
-
-      if (dist.isElimination) {
-        const sortedTeams = [...currentRoundTeams].sort((tA: string, tB: string) => {
-          const scoreA = teamRoundScores[tA]?.displayScoreWithSolo || 0;
-          const scoreB = teamRoundScores[tB]?.displayScoreWithSolo || 0;
-          if (scoreB !== scoreA) {
-            return scoreB - scoreA;
-          }
-          const accA = teamRoundScores[tA]?.accuracy || 0;
-          const accB = teamRoundScores[tB]?.accuracy || 0;
-          return accB - accA;
-        });
-
-        let N = sortedTeams.length;
-        const elimVal = dist.eliminationValue || 0;
-
-        if (dist.eliminationType === "count") {
-          N = Math.min(sortedTeams.length, elimVal);
-        } else {
-          N = Math.max(1, Math.round(sortedTeams.length * (elimVal / 100)));
-        }
-
-        if (sortedTeams.length <= N) {
-          nextRoundTeams = [...sortedTeams];
-          currentRoundEliminatedTeams = [];
-        } else {
-          const cutoffBaseScore = teamRoundScores[sortedTeams[N - 1]]?.displayScore || 0;
-
-          const sures = sortedTeams.filter((t) => (teamRoundScores[t]?.displayScore || 0) > cutoffBaseScore);
-          const contenders = sortedTeams.filter((t) => (teamRoundScores[t]?.displayScore || 0) === cutoffBaseScore);
-          const purelyEliminated = sortedTeams.filter((t) => (teamRoundScores[t]?.displayScore || 0) < cutoffBaseScore);
-
-          const slotsLeft = N - sures.length;
-
-          const anyTeamUnfinished = currentRoundTeams.some((t) => teamRoundScores[t]?.hasUnshotMember);
-
-          if (anyTeamUnfinished) {
-            nextRoundTeams = [...currentRoundTeams];
-            currentRoundEliminatedTeams = [];
-          } else {
-            if (dist.isSolo && slotsLeft > 0 && slotsLeft < contenders.length) {
-              const finishedContendersWithNoSolo = contenders.filter((t) => !teamRoundScores[t]?.hasAnySoloEntered);
-              roundPendingSoloTeams = [...finishedContendersWithNoSolo];
-
-              if (finishedContendersWithNoSolo.length > 0) {
-                nextRoundTeams = [...sures, ...contenders];
-                currentRoundEliminatedTeams = [];
-              } else {
-                const contendersWithSolo = contenders.map((t) => ({
-                  id: t,
-                  soloHits: teamRoundScores[t]?.teamSoloHits || 0,
-                }));
-
-                contendersWithSolo.sort((a, b) => b.soloHits - a.soloHits);
-
-                const winnerScoreBoundary = contendersWithSolo[slotsLeft - 1].soloHits;
-                const loserScoreBoundary = contendersWithSolo[slotsLeft].soloHits;
-
-                if (winnerScoreBoundary === loserScoreBoundary) {
-                  const resoloCandidates = contendersWithSolo.filter((c) => c.soloHits === winnerScoreBoundary).map((c) => c.id);
-                  roundResoloTeams = resoloCandidates;
-
-                  const surelySoloPassed = contendersWithSolo.filter((c) => c.soloHits > winnerScoreBoundary).map((c) => c.id);
-                  const surelySoloFailed = contendersWithSolo.filter((c) => c.soloHits < winnerScoreBoundary).map((c) => c.id);
-
-                  nextRoundTeams = [...sures, ...surelySoloPassed, ...resoloCandidates];
-                  currentRoundEliminatedTeams = [...surelySoloFailed, ...purelyEliminated];
-                } else {
-                  const soloPassed = contendersWithSolo.slice(0, slotsLeft).map((c) => c.id);
-                  const soloFailed = contendersWithSolo.slice(slotsLeft).map((c) => c.id);
-
-                  nextRoundTeams = [...sures, ...soloPassed];
-                  currentRoundEliminatedTeams = [...soloFailed, ...purelyEliminated];
-                }
-              }
-            } else {
-              nextRoundTeams = [...sures, ...contenders];
-              currentRoundEliminatedTeams = [...purelyEliminated];
-            }
-          }
-        }
-      } else {
-        nextRoundTeams = [...currentRoundTeams];
-        currentRoundEliminatedTeams = [];
-      }
-
-      results.push({
-        distance: dist,
-        roundIndex: r,
-        qualifiedTeams: [...currentRoundTeams],
-        eliminatedTeams: currentRoundEliminatedTeams,
-        pendingSoloTeams: roundPendingSoloTeams,
-        pendingResoloTeams: roundResoloTeams,
-        scores: teamRoundScores,
-      });
-
-      activeTeams.length = 0;
-      activeTeams.push(...nextRoundTeams);
-    }
-
-    return results;
-  }, [resolvedTeamAthletes, activeTeamDistances, activeTeamShotsCount]);
-
   const activeTeamScores = useMemo(() => {
     const scores: Record<string, number> = {};
     const hasMaxRoundScoreConf = activeTeamDistances.some(d => d.isMaxRoundScore);
@@ -1215,18 +1194,34 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
         personalScore = maxScore >= 0 ? maxScore : 0;
         personalSolo = maxSoloHits;
       } else {
-        activeTeamDistances.forEach((distance, rIdx) => {
-          const isQualified = rIdx === 0 || (teamRoundResults[rIdx]?.qualifiedTeams.includes(teamName));
+        const lastRound = activeTeamDistances[activeTeamDistances.length - 1];
+        if (lastRound && !lastRound.isCumulative) {
+          // Independent mode: only calculate for the active (last) round
+          const isQualified = (activeTeamDistances.length - 1) === 0 || (teamRoundResults[activeTeamDistances.length - 1]?.qualifiedTeams.includes(teamName));
           if (isQualified) {
-            const hits = athlete.scores[distance.id] || [];
+            const hits = athlete.scores[lastRound.id] || [];
             const hitCount = getHitCount(hits);
-            personalScore += hitCount * distance.multiplier;
+            personalScore = hitCount * lastRound.multiplier;
 
-            const soloVal = athlete.soloHits?.[distance.id];
+            const soloVal = athlete.soloHits?.[lastRound.id];
             const soloHitsNum = (soloVal === null || soloVal === undefined) ? 0 : soloVal;
-            personalSolo += soloHitsNum;
+            personalSolo = soloHitsNum;
           }
-        });
+        } else {
+          // Cumulative mode: sum up all qualified rounds
+          activeTeamDistances.forEach((distance, rIdx) => {
+            const isQualified = rIdx === 0 || (teamRoundResults[rIdx]?.qualifiedTeams.includes(teamName));
+            if (isQualified) {
+              const hits = athlete.scores[distance.id] || [];
+              const hitCount = getHitCount(hits);
+              personalScore += hitCount * distance.multiplier;
+
+              const soloVal = athlete.soloHits?.[distance.id];
+              const soloHitsNum = (soloVal === null || soloVal === undefined) ? 0 : soloVal;
+              personalSolo += soloHitsNum;
+            }
+          });
+        }
       }
 
       scores[teamName] = (scores[teamName] || 0) + personalScore + (personalSolo * 0.001);
@@ -1326,11 +1321,37 @@ export const LiveBoard: React.FC<LiveBoardProps> = ({
       groups[teamName].memberCount += 1;
     });
 
-    const list = Object.entries(groups).map(([teamName, item]) => ({
-      teamName,
-      totalScore: item.totalScore,
-      memberCount: item.memberCount,
-    }));
+    const list = Object.entries(groups).map(([teamName, item]) => {
+      let eliminatedInRoundIdx: number | null = null;
+      for (let i = 0; i < teamRoundResults.length; i++) {
+        if (teamRoundResults[i].eliminatedTeams.includes(teamName)) {
+          eliminatedInRoundIdx = i;
+          break;
+        }
+      }
+      const sVal = eliminatedInRoundIdx === null ? activeTeamDistances.length : eliminatedInRoundIdx;
+
+      let teamSoloHits = 0;
+      resolvedTeamAthletes.forEach((athlete) => {
+        const rawTeam = athlete.team.trim();
+        const tName = rawTeam === "" ? "VĐV Tự Do (Không Đội)" : rawTeam;
+        if (tName === teamName) {
+          activeTeamDistances.forEach((distance) => {
+            const soloVal = athlete.soloHits?.[distance.id];
+            const soloHitsNum = (soloVal === null || soloVal === undefined) ? 0 : soloVal;
+            teamSoloHits += soloHitsNum;
+          });
+        }
+      });
+
+      return {
+        teamName,
+        totalScore: item.totalScore,
+        memberCount: item.memberCount,
+        totalSurvivalVal: sVal,
+        totalSoloHits: teamSoloHits,
+      };
+    });
 
     return list.sort((a, b) => {
       const rankA = teamRanks[a.teamName] || 999;

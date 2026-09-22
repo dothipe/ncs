@@ -71,13 +71,25 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
     return hits.filter(Boolean).length;
   };
 
-  // All active athletes: in team mode, only include those who are primary team players (bắn chính)
+  const hasAnyPrimary = useMemo(() => {
+    return athletes.some((a) => a.isPrimaryTeam);
+  }, [athletes]);
+
+  // All active athletes: in team mode, only include those who are primary team players (bắn chính) and not unaligned/free athletes (Tự do)
   const activeAthletes = useMemo(() => {
     if (competitionMode === "team") {
-      return athletes.filter((a) => a.isPrimaryTeam);
+      return athletes.filter((a) => {
+        const teamName = a.team ? a.team.trim() : "";
+        const isFree = !teamName || 
+                       teamName.includes("Tự Do") || 
+                       teamName.includes("VĐV Tự Do") || 
+                       teamName === "Không Có";
+        if (isFree) return false;
+        return hasAnyPrimary ? a.isPrimaryTeam : true;
+      });
     }
     return athletes;
-  }, [athletes, competitionMode]);
+  }, [athletes, competitionMode, hasAnyPrimary]);
 
   // All unique teams
   const uniqueTeams = useMemo(() => {
@@ -224,7 +236,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
         let N = sortedTeams.length;
         const elimVal = dist.eliminationValue || 0;
 
-        if (dist.eliminationType === "count") {
+        if (dist.eliminationType === "count" || dist.eliminationType === "fixed") {
           N = Math.min(sortedTeams.length, elimVal);
         } else {
           N = Math.max(1, Math.round(sortedTeams.length * (elimVal / 100)));
@@ -330,7 +342,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
         const members = activeAthletes.filter((a) => {
           const raw = a.team.trim();
           const t = raw === "" ? "VĐV Tự Do (Không Đội)" : raw;
-          return t === teamName && a.isPrimaryTeam && a.status !== "Bỏ thi";
+          return t === teamName && (hasAnyPrimary ? a.isPrimaryTeam : true) && a.status !== "Bỏ thi";
         });
 
         let teamScoreSum = 0;
@@ -365,7 +377,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
     } else {
       activeAthletes.forEach((athlete) => {
         // In team mode, only primary team members contribute to team score
-        if (!athlete.isPrimaryTeam) return;
+        if (!(hasAnyPrimary ? athlete.isPrimaryTeam : true)) return;
 
         const rawTeam = athlete.team.trim();
         const teamName = rawTeam === "" ? "VĐV Tự Do (Không Đội)" : rawTeam;
@@ -373,18 +385,34 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
         let personalScore = 0;
         let personalSolo = 0;
         if (selectedRoundTab === "all") {
-          distances.forEach((distance, rIdx) => {
-            const isQualified = rIdx === 0 || (teamRoundResults[rIdx]?.qualifiedTeams.includes(teamName));
+          const lastRound = distances[distances.length - 1];
+          if (lastRound && !lastRound.isCumulative) {
+            // Independent mode: only calculate for the active (last) round
+            const isQualified = (distances.length - 1) === 0 || (teamRoundResults[distances.length - 1]?.qualifiedTeams.includes(teamName));
             if (isQualified) {
-              const hits = athlete.scores[distance.id] || [];
+              const hits = athlete.scores[lastRound.id] || [];
               const hitCount = getLeaderboardHitCount(hits);
-              personalScore += hitCount * distance.multiplier;
+              personalScore = hitCount * lastRound.multiplier;
 
-              const soloVal = athlete.soloHits?.[distance.id];
+              const soloVal = athlete.soloHits?.[lastRound.id];
               const soloHitsNum = (soloVal === null || soloVal === undefined) ? 0 : soloVal;
-              personalSolo += soloHitsNum;
+              personalSolo = soloHitsNum;
             }
-          });
+          } else {
+            // Cumulative mode: sum up all qualified rounds
+            distances.forEach((distance, rIdx) => {
+              const isQualified = rIdx === 0 || (teamRoundResults[rIdx]?.qualifiedTeams.includes(teamName));
+              if (isQualified) {
+                const hits = athlete.scores[distance.id] || [];
+                const hitCount = getLeaderboardHitCount(hits);
+                personalScore += hitCount * distance.multiplier;
+
+                const soloVal = athlete.soloHits?.[distance.id];
+                const soloHitsNum = (soloVal === null || soloVal === undefined) ? 0 : soloVal;
+                personalSolo += soloHitsNum;
+              }
+            });
+          }
         } else {
           const isQualified = selectedRoundTab === 0 || (teamRoundResults[selectedRoundTab]?.qualifiedTeams.includes(teamName));
           if (isQualified) {
@@ -566,43 +594,9 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
         } else {
           const statsAtLastRound = roundResults[lastActiveRoundIdx]?.scores[athlete.id];
           if (statsAtLastRound) {
-            survivalScore = statsAtLastRound.cumulativeScore;
-            survivalHits = statsAtLastRound.cumulativeHits;
-            if (isPointModeActive && effectiveDirectMaxPoints !== undefined) {
-              let totalMultiplier = 0;
-              for (let i = 0; i <= lastActiveRoundIdx; i++) {
-                const d = distances[i];
-                const wasShot = athlete.scores[d.id] && athlete.scores[d.id].length > 0 && athlete.scores[d.id].some(v => v !== null && v !== undefined);
-                if (wasShot) {
-                  totalMultiplier += d.multiplier;
-                }
-              }
-              if (totalMultiplier === 0 && distances[lastActiveRoundIdx]) {
-                totalMultiplier = distances[lastActiveRoundIdx].multiplier;
-              }
-              const totalPossPoints = effectiveDirectMaxPoints * totalMultiplier;
-              survivalAccuracy = totalPossPoints > 0 ? (survivalScore / totalPossPoints) * 100 : 0;
-            } else {
-              let dynamicTotalPossShots = 0;
-              for (let i = 0; i <= lastActiveRoundIdx; i++) {
-                const d = distances[i];
-                const wasShot = athlete.scores[d.id] && athlete.scores[d.id].length > 0 && athlete.scores[d.id].some(v => v !== null && v !== undefined);
-                if (wasShot) {
-                  const distShotCount = (d.shotCount !== undefined && d.shotCount !== null && d.shotCount !== "")
-                    ? Number(d.shotCount)
-                    : effectiveShotsCount;
-                  dynamicTotalPossShots += distShotCount;
-                }
-              }
-              if (dynamicTotalPossShots === 0) {
-                const fallbackDist = distances[lastActiveRoundIdx];
-                const distShotCount = (fallbackDist && fallbackDist.shotCount !== undefined && fallbackDist.shotCount !== null && fallbackDist.shotCount !== "")
-                  ? Number(fallbackDist.shotCount)
-                  : effectiveShotsCount;
-                dynamicTotalPossShots = distShotCount;
-              }
-              survivalAccuracy = dynamicTotalPossShots > 0 ? (survivalHits / dynamicTotalPossShots) * 100 : 0;
-            }
+            survivalScore = statsAtLastRound.displayScore;
+            survivalHits = statsAtLastRound.displayHits;
+            survivalAccuracy = statsAtLastRound.accuracy;
           }
           const lastActiveDist = distances[lastActiveRoundIdx];
           if (lastActiveDist && lastActiveDist.isSolo) {
@@ -706,7 +700,10 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
           ? (totalPossibleShots > 0 ? (totalScore / totalPossibleShots) * 100 : 0)
           : (totalPossibleShots > 0 ? (totalHits / totalPossibleShots) * 100 : 0);
 
-        const totalScoreValue = hasMaxRoundScoreConf ? survivalScore : totalScore;
+        const lastRound = distances[distances.length - 1];
+        const isIndependent = lastRound && !lastRound.isCumulative;
+
+        const totalScoreValue = (hasMaxRoundScoreConf || isIndependent) ? survivalScore : totalScore;
         const totalHitsValue = totalHits;
         const accuracyValue = calculatedAccuracy;
 

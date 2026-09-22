@@ -632,37 +632,9 @@ export const OnlineTournamentsPanel: React.FC<OnlineTournamentsPanelProps> = ({
         } else {
           const statsAtLastRound = roundResults[lastActiveRoundIdx]?.scores[athlete.id];
           if (statsAtLastRound) {
-            survivalScore = statsAtLastRound.cumulativeScore;
-            survivalHits = statsAtLastRound.cumulativeHits;
-            if (isDirectMode && directMaxPoints !== undefined && directMaxPoints > 0) {
-              let totalMultiplier = 0;
-              for (let i = 0; i <= lastActiveRoundIdx; i++) {
-                const d = distances[i];
-                const wasShot = athlete.scores[d.id] && athlete.scores[d.id].length > 0 && athlete.scores[d.id].some(v => v !== null && v !== undefined);
-                if (wasShot) {
-                  totalMultiplier += d.multiplier;
-                }
-              }
-              if (totalMultiplier === 0 && distances[lastActiveRoundIdx]) {
-                totalMultiplier = distances[lastActiveRoundIdx].multiplier;
-              }
-              const totalPossPoints = directMaxPoints * totalMultiplier;
-              survivalAccuracy = totalPossPoints > 0 ? (survivalScore / totalPossPoints) * 100 : 0;
-            } else {
-              let shotRoundsCount = 0;
-              for (let i = 0; i <= lastActiveRoundIdx; i++) {
-                const d = distances[i];
-                const wasShot = athlete.scores[d.id] && athlete.scores[d.id].length > 0 && athlete.scores[d.id].some(v => v !== null && v !== undefined);
-                if (wasShot) {
-                  shotRoundsCount++;
-                }
-              }
-              if (shotRoundsCount === 0) {
-                shotRoundsCount = 1;
-              }
-              const totalPossShots = shotRoundsCount * effectiveShotsCount;
-              survivalAccuracy = totalPossShots > 0 ? (survivalHits / totalPossShots) * 100 : 0;
-            }
+            survivalScore = statsAtLastRound.displayScore;
+            survivalHits = statsAtLastRound.displayHits;
+            survivalAccuracy = statsAtLastRound.accuracy;
           }
           const lastActiveDist = distances[lastActiveRoundIdx];
           if (lastActiveDist && lastActiveDist.isSolo) {
@@ -957,7 +929,7 @@ export const OnlineTournamentsPanel: React.FC<OnlineTournamentsPanelProps> = ({
         let N = sortedTeams.length;
         const elimVal = dist.eliminationValue || 0;
 
-        if (dist.eliminationType === "count") {
+        if (dist.eliminationType === "count" || dist.eliminationType === "fixed") {
           N = Math.min(sortedTeams.length, elimVal);
         } else {
           N = Math.max(1, Math.round(sortedTeams.length * (elimVal / 100)));

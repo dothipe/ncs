@@ -8,7 +8,7 @@ export interface DistanceConfig {
   isCumulative?: boolean;
   isElimination?: boolean;
   isMaxRoundScore?: boolean;
-  eliminationType?: "percent" | "count";
+  eliminationType?: "percent" | "count" | "fixed";
   eliminationValue?: number;
   isSolo?: boolean; // Solo shootout option if ties occur at elimination boundary
 }

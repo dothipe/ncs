@@ -59,27 +59,31 @@ export const TeamLeaderboard: React.FC<TeamLeaderboardProps> = ({
   const effectiveDirectMaxPoints = competitionMode === "team" ? teamDirectMaxPoints : directMaxPoints;
   const isPointModeActive = isDirectMode && effectiveDirectMaxPoints !== undefined && effectiveDirectMaxPoints > 0;
 
+  const hasAnyPrimary = useMemo(() => {
+    return athletes.some((a) => a.isPrimaryTeam);
+  }, [athletes]);
+
   // In team mode, only include those who are primary team players (bắn chính)
   const activeAthletes = useMemo(() => {
-    return athletes.filter((a) => a.isPrimaryTeam);
-  }, [athletes]);
+    return athletes.filter((a) => hasAnyPrimary ? a.isPrimaryTeam : true);
+  }, [athletes, hasAnyPrimary]);
 
   // Determine which athletes are included under the active conditions
   const activeAthletesForCalculation = useMemo(() => {
     if (competitionMode === "team") {
       // In team mode, only include primary team players (bắn chính)
-      return athletes.filter((a) => a.isPrimaryTeam);
+      return athletes.filter((a) => hasAnyPrimary ? a.isPrimaryTeam : true);
     } else {
       // In individual mode:
       if (activeTab === "survival") {
         // "Team Bắn Chính" -> only include primary team players (bắn chính)
-        return athletes.filter((a) => a.isPrimaryTeam);
+        return athletes.filter((a) => hasAnyPrimary ? a.isPrimaryTeam : true);
       } else {
         // "500 Anh Em" -> include all athletes (both primary and backup/reserve)
         return athletes;
       }
     }
-  }, [athletes, competitionMode, activeTab]);
+  }, [athletes, competitionMode, activeTab, hasAnyPrimary]);
 
   // Compute qualifications and rounds results using the direct, consistent utils helper
   const roundResults = useMemo(() => {
@@ -244,7 +248,7 @@ export const TeamLeaderboard: React.FC<TeamLeaderboardProps> = ({
         let N = sortedTeams.length;
         const elimVal = dist.eliminationValue || 0;
 
-        if (dist.eliminationType === "count") {
+        if (dist.eliminationType === "count" || dist.eliminationType === "fixed") {
           N = Math.min(sortedTeams.length, elimVal);
         } else {
           N = Math.max(1, Math.round(sortedTeams.length * (elimVal / 100)));
@@ -431,22 +435,29 @@ export const TeamLeaderboard: React.FC<TeamLeaderboardProps> = ({
         } else {
           const statsAtLastRound = roundResults[lastActiveRoundIdx]?.scores[athlete.id];
           if (statsAtLastRound) {
-            survivalScore = statsAtLastRound.cumulativeScore;
-            survivalHits = statsAtLastRound.cumulativeHits;
+            survivalScore = statsAtLastRound.displayScore;
+            survivalHits = statsAtLastRound.displayHits;
+            
             let calculatedPossShots = 0;
+            const lastRoundConf = distances[lastActiveRoundIdx];
             if (isPointModeActive && effectiveDirectMaxPoints !== undefined) {
               let totalMultiplier = 0;
-              for (let i = 0; i <= lastActiveRoundIdx; i++) {
-                totalMultiplier += distances[i].multiplier;
+              if (lastRoundConf?.isCumulative) {
+                for (let i = 0; i <= lastActiveRoundIdx; i++) {
+                  totalMultiplier += distances[i].multiplier;
+                }
+              } else {
+                totalMultiplier = lastRoundConf ? lastRoundConf.multiplier : 1;
               }
-              const totalPossPoints = effectiveDirectMaxPoints * totalMultiplier;
-              calculatedPossShots = totalPossPoints;
-              survivalAccuracy = totalPossPoints > 0 ? (survivalScore / totalPossPoints) * 100 : 0;
+              calculatedPossShots = effectiveDirectMaxPoints * totalMultiplier;
             } else {
-              const totalPossShots = (lastActiveRoundIdx + 1) * effectiveShotsCount;
-              calculatedPossShots = totalPossShots;
-              survivalAccuracy = totalPossShots > 0 ? (survivalHits / totalPossShots) * 100 : 0;
+              if (lastRoundConf?.isCumulative) {
+                calculatedPossShots = (lastActiveRoundIdx + 1) * effectiveShotsCount;
+              } else {
+                calculatedPossShots = effectiveShotsCount;
+              }
             }
+            survivalAccuracy = statsAtLastRound.accuracy;
             map[athlete.id] = {
               eliminatedInRoundIdx,
               survivalVal,
@@ -478,7 +489,7 @@ export const TeamLeaderboard: React.FC<TeamLeaderboardProps> = ({
         const members = activeAthletes.filter((a) => {
           const raw = a.team.trim();
           const t = raw === "" ? "VĐV Tự Do (Không Đội)" : raw;
-          return t === teamName && a.isPrimaryTeam && a.status !== "Bỏ thi";
+          return t === teamName && (hasAnyPrimary ? a.isPrimaryTeam : true) && a.status !== "Bỏ thi";
         });
 
         let teamScoreSum = 0;
@@ -517,18 +528,34 @@ export const TeamLeaderboard: React.FC<TeamLeaderboardProps> = ({
 
         let personalScore = 0;
         let personalSolo = 0;
-        distances.forEach((distance, rIdx) => {
-          const isQualified = rIdx === 0 || (teamRoundResults[rIdx]?.qualifiedTeams.includes(teamName));
+        const lastRound = distances[distances.length - 1];
+        if (lastRound && !lastRound.isCumulative) {
+          // Independent mode: only calculate for the active (last) round
+          const isQualified = (distances.length - 1) === 0 || (teamRoundResults[distances.length - 1]?.qualifiedTeams.includes(teamName));
           if (isQualified) {
-            const hits = athlete.scores[distance.id] || [];
+            const hits = athlete.scores[lastRound.id] || [];
             const hitCount = getHitCount(hits);
-            personalScore += hitCount * distance.multiplier;
+            personalScore = hitCount * lastRound.multiplier;
 
-            const soloVal = athlete.soloHits?.[distance.id];
+            const soloVal = athlete.soloHits?.[lastRound.id];
             const soloHitsNum = (soloVal === null || soloVal === undefined) ? 0 : soloVal;
-            personalSolo += soloHitsNum;
+            personalSolo = soloHitsNum;
           }
-        });
+        } else {
+          // Cumulative mode: sum up all qualified rounds
+          distances.forEach((distance, rIdx) => {
+            const isQualified = rIdx === 0 || (teamRoundResults[rIdx]?.qualifiedTeams.includes(teamName));
+            if (isQualified) {
+              const hits = athlete.scores[distance.id] || [];
+              const hitCount = getHitCount(hits);
+              personalScore += hitCount * distance.multiplier;
+
+              const soloVal = athlete.soloHits?.[distance.id];
+              const soloHitsNum = (soloVal === null || soloVal === undefined) ? 0 : soloVal;
+              personalSolo += soloHitsNum;
+            }
+          });
+        }
 
         scores[teamName] = (scores[teamName] || 0) + personalScore + (personalSolo * 0.001);
       });
@@ -581,29 +608,27 @@ export const TeamLeaderboard: React.FC<TeamLeaderboardProps> = ({
     return ranks;
   }, [activeAthletes, teamRoundResults, activeTeamScores, distances.length]);
 
-  // Compute standard joint ranks for "Toàn Giải" tab (simple team score descending)
+  // Compute standard joint ranks for "Toàn Giải" tab (simple team score descending, or survival-first if elimination is active)
   const teamRanksAllRound = useMemo(() => {
-    const teamStats: Record<string, { score: number }> = {};
+    const teamStats: Record<string, { score: number; survivalVal: number }> = {};
 
     activeAthletes.forEach((ath) => {
       const rawTeam = ath.team.trim();
       const teamName = rawTeam === "" ? "VĐV Tự Do (Không Đội)" : rawTeam;
       if (!teamStats[teamName]) {
-        let totalScoreAll = 0;
-        const members = activeAthletes.filter((a) => {
-          const r = a.team.trim();
-          const t = r === "" ? "VĐV Tự Do (Không Đội)" : r;
-          return t === teamName && a.isPrimaryTeam && a.status !== "Bỏ thi";
-        });
+        let eliminatedInRoundIdx: number | null = null;
+        for (let i = 0; i < teamRoundResults.length; i++) {
+          if (teamRoundResults[i].eliminatedTeams.includes(teamName)) {
+            eliminatedInRoundIdx = i;
+            break;
+          }
+        }
+        const sVal = eliminatedInRoundIdx === null ? distances.length : eliminatedInRoundIdx;
 
-        members.forEach((memb) => {
-          distances.forEach((dist) => {
-            const hits = memb.scores[dist.id] || [];
-            const hitCount = getHitCount(hits);
-            totalScoreAll += hitCount * dist.multiplier;
-          });
-        });
-        teamStats[teamName] = { score: totalScoreAll };
+        teamStats[teamName] = {
+          score: activeTeamScores[teamName] || 0,
+          survivalVal: sVal,
+        };
       }
     });
 
@@ -615,14 +640,21 @@ export const TeamLeaderboard: React.FC<TeamLeaderboardProps> = ({
       teamNames.forEach((otherName) => {
         if (otherName === tName) return;
         const otherStats = teamStats[otherName];
-        if (otherStats.score > tStats.score) {
+        let isOtherBetter = false;
+        if (otherStats.survivalVal !== tStats.survivalVal) {
+          isOtherBetter = otherStats.survivalVal > tStats.survivalVal;
+        } else {
+          isOtherBetter = otherStats.score > tStats.score;
+        }
+
+        if (isOtherBetter) {
           betterTeamsCount++;
         }
       });
       ranks[tName] = betterTeamsCount + 1;
     });
     return ranks;
-  }, [activeAthletes, distances, teamRoundResults, competitionMode]);
+  }, [activeAthletes, distances, teamRoundResults, competitionMode, activeTeamScores]);
 
   // Group and aggregate statistics by Team
   const teamLeaderboardData = useMemo(() => {
@@ -639,7 +671,7 @@ export const TeamLeaderboard: React.FC<TeamLeaderboardProps> = ({
       let accuracy = 0;
 
       if (competitionMode === "team") {
-        if (hasMaxRoundScoreConf && activeTab !== "allRound") {
+        if (hasMaxRoundScoreConf) {
           if (activeTab === "allRound") {
             // Find max score of all rounds without elimination limit
             let maxScore = -1;
@@ -710,13 +742,17 @@ export const TeamLeaderboard: React.FC<TeamLeaderboardProps> = ({
           }
         } else {
           if (activeTab === "allRound") {
-            // Complete cumulative stats (accumulate all rounds)
-            distances.forEach((dist) => {
-              const hits = athlete.scores[dist.id] || [];
-              const hitCount = getHitCount(hits);
-              const score = hitCount * dist.multiplier;
-              totalScore += score;
-              totalHits += hitCount;
+            // Complete cumulative stats (accumulate all rounds where they actually qualified)
+            const teamName = athlete.team.trim() === "" ? "VĐV Tự Do (Không Đội)" : athlete.team.trim();
+            distances.forEach((dist, rIdx) => {
+              const isQualified = rIdx === 0 || (teamRoundResults[rIdx]?.qualifiedTeams.includes(teamName));
+              if (isQualified) {
+                const hits = athlete.scores[dist.id] || [];
+                const hitCount = getHitCount(hits);
+                const score = hitCount * dist.multiplier;
+                totalScore += score;
+                totalHits += hitCount;
+              }
             });
             let totalMultiplierOfShotRounds = 0;
             let countShotRounds = 0;
@@ -880,7 +916,7 @@ export const TeamLeaderboard: React.FC<TeamLeaderboardProps> = ({
       let totalHits = members.reduce((sum, m) => sum + m.totalHits, 0);
       let totalShots = members.reduce((sum, m) => sum + m.totalShots, 0);
 
-      if (competitionMode === "team" && hasMaxRoundScoreConf && activeTab !== "allRound") {
+      if (competitionMode === "team" && hasMaxRoundScoreConf) {
         let teamScoreSum = 0;
         let teamHitsSum = 0;
         let teamShotsSum = 0;
@@ -897,7 +933,7 @@ export const TeamLeaderboard: React.FC<TeamLeaderboardProps> = ({
           let memberShotsAtMax = 0;
 
           distances.forEach((dist, rIdx) => {
-            const isQualified = activeTab === "allRound" || rIdx === 0 || (teamRoundResults[rIdx]?.qualifiedTeams.includes(teamName));
+            const isQualified = rIdx === 0 || (teamRoundResults[rIdx]?.qualifiedTeams.includes(teamName));
             if (isQualified) {
               const hits = memb.scores[dist.id] || [];
               const hitCount = getHitCount(hits);
@@ -924,8 +960,8 @@ export const TeamLeaderboard: React.FC<TeamLeaderboardProps> = ({
         });
 
         totalScore = teamScoreSum;
-        totalHits = members.reduce((sum, m) => sum + m.totalHits, 0);
-        totalShots = members.reduce((sum, m) => sum + m.totalShots, 0);
+        totalHits = teamHitsSum;
+        totalShots = teamShotsSum;
       }
 
       const averageAccuracy = isPointModeActive && effectiveDirectMaxPoints !== undefined
@@ -955,8 +991,15 @@ export const TeamLeaderboard: React.FC<TeamLeaderboardProps> = ({
       };
     });
 
+    const filteredTeams = teamsArray.filter(t => 
+      !t.teamName.includes("VĐV Tự Do") && 
+      !t.teamName.includes("Tự Do") && 
+      t.teamName !== "Không Có" &&
+      t.teamName !== "VĐV Tự Do (Không Đội)"
+    );
+
     // Sort teams by survival/score depending on activeTab
-    return teamsArray.sort((a, b) => {
+    return filteredTeams.sort((a, b) => {
       if (competitionMode === "team") {
         if (activeTab === "survival") {
           const rankA = teamRanks[a.teamName] || 999;
@@ -1121,7 +1164,7 @@ export const TeamLeaderboard: React.FC<TeamLeaderboardProps> = ({
 
             const isIndividualTeam = team.teamName.includes("VĐV Tự Do");
 
-            const isTeamEliminated = competitionMode === "team" && activeTab === "survival" && team.survivalVal < distances.length;
+            const isTeamEliminated = competitionMode === "team" && team.survivalVal < distances.length;
             const lastActiveRound = isTeamEliminated ? distances[team.survivalVal] : null;
 
             return (
@@ -1197,7 +1240,7 @@ export const TeamLeaderboard: React.FC<TeamLeaderboardProps> = ({
                         </h3>
                       </div>
 
-                      {activeTab === "survival" && competitionMode === "team" && (
+                      {competitionMode === "team" && (
                         <div className="mt-2.5">
                           {isTeamEliminated ? (
                             <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-red-100 dark:bg-red-950/50 text-red-600 dark:text-red-300 font-bold uppercase">

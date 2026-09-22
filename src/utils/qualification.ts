@@ -178,7 +178,7 @@ export function calculateRounds(
       let N = sortedQualified.length;
       const elimVal = dist.eliminationValue || 0;
 
-      if (dist.eliminationType === "count") {
+      if (dist.eliminationType === "count" || dist.eliminationType === "fixed") {
         N = Math.min(sortedQualified.length, elimVal);
       } else {
         // Percent
