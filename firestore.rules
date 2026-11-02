@@ -140,6 +140,16 @@ service cloud.firestore {
       allow write: if true;
     }
 
+    // --- VSC Versus Tournaments & Matches (Cup Play) ---
+    match /versus_tournaments/{documentId} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /versus_matches/{documentId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
     // --- VSC Official System Clubs ---
     function isValidClub(data) {
       return ('id' in data && data.id is string) &&

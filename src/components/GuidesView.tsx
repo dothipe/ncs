@@ -336,6 +336,39 @@ export const GUIDES_DATA: GuideItem[] = [
       "If you spot a score mismatch during referee input, raise a claim to the referee BEFORE signing.",
       "Once signed, the protocol is locked in the VSC Cloud database and cannot be altered by anyone, including Admins."
     ]
+  },
+  {
+    id: "versus_cup_guide",
+    titleVi: "Cài Đặt Cúp Đối Kháng - Vòng Bảng, Knockout & Số Phát Bắn",
+    titleEn: "Versus Cup Tournament Configuration & Rules",
+    category: "tournament",
+    icon: Sword,
+    badgeVi: "Cúp Đối Kháng",
+    badgeEn: "Cup Tournaments",
+    badgeColor: "bg-violet-500/10 text-violet-500 dark:bg-violet-400/15 dark:text-violet-400 border border-violet-500/25",
+    spanClass: "md:col-span-2 lg:col-span-2",
+    stepsVi: [
+      "Vòng Bảng: Lượt (Số viên bắn Vòng bảng): Đây là số phát bắn quy định cho mỗi vận động viên trong một trận đấu vòng bảng (ví dụ: kéo thanh gạt chọn 10 phát). Hệ thống sẽ tính tổng điểm tích lũy sau đủ số phát bắn này để xếp hạng bảng đấu.",
+      "Knockout: Lượt (Số viên bắn Knockout): Đây là số phát bắn quy định cho mỗi trận đấu ở nhánh đấu loại trực tiếp (ví dụ: 15 phát). Thiết lập này sẽ có hiệu lực trực tiếp khi chọn cơ chế đấu đếm phát bắn.",
+      "Cơ Chế Phân Định Thắng Thua Knockout: Chọn 1 trong 3 cơ chế phân định:\n1. 'So tổng điểm lượt' (Shots Counter): Đấu đủ số phát bắn (ví dụ: 15 phát) ở mục 'Knockout: Lượt', ai có tổng điểm cao hơn sẽ thắng. Nếu điểm bằng nhau, hệ thống yêu cầu bắn thêm phát phụ 'Sudden Death' quyết định.\n2. 'Đấu Hiệp (Set)' (Points Target): Thi đấu solo chạm điểm, phân chia thành từng set/hiệp để tăng tính kịch tính.\n3. 'Nhanh Chậm (Sudden)' (Sudden Death): Đấu bắn trúng/trượt trực tiếp từng phát một, ai trượt trước hoặc có điểm phát bắn thấp hơn sẽ bị loại lập tức.",
+      "Cấu hình ghép cặp Vòng Bán Kết:\n- 'Cố định' (Fixed): Các cặp đấu bán kết tự động xếp chéo (Nhất bảng A gặp Nhì bảng B, v.v.).\n- 'Bốc thăm lại' (Redraw): Cho phép Ban Tổ Chức ngẫu nhiên bốc thăm chia lại cặp đấu bán kết sau khi hoàn tất vòng bảng để tạo tính bất ngờ.",
+      "Sinh Nhánh Knockout: Sau khi tất cả các trận đấu vòng bảng được hoàn tất ghi nhận điểm số đầy đủ, nút 'Sinh Nhánh Knockout' sẽ xuất hiện để ban tổ chức tự động chuyển giải đấu sang sơ đồ nhánh đấu loại trực tiếp."
+    ],
+    stepsEn: [
+      "Group Stage: Shots Count: Represents the number of shots allowed per player in a group stage match (e.g. 10 shots). The system compiles the cumulative score after these shots to rank players in the table.",
+      "Knockout: Shots Count: Represents the number of shots allowed per player in a knockout stage match (e.g. 15 shots). This is active when using the Shots Counter format.",
+      "Knockout Rules Format: Choose from 3 win/loss decider mechanisms:\n1. 'Shots Counter' (So tổng điểm lượt): Players shoot the fixed number of shots set in 'Knockout: Shots'. Highest score wins. If tied, a sudden-death decider shootout is triggered.\n2. 'Points Target/Sets' (Đấu Hiệp): Matches are played in sets, with players winning set points to advance.\n3. 'Sudden Death' (Nhanh Chậm): Sudden-death single-shot shootout where any single lower score results in instant elimination.",
+      "Semi-finals Bracket Draw Rules:\n- 'Fixed' (Cố định): Semi-finalists are paired automatically in a cross-over layout (Winner Group A vs Runner-up Group B, etc.).\n- 'Redraw' (Bốc thăm lại): Allows organizers to draw and re-couple semi-finals matches randomly after the group stage ends.",
+      "Generate Knockout Bracket: Once all group stage matches are completed and scores recorded, click 'Advance to Knockout' to dynamically generate the direct elimination bracket."
+    ],
+    tipsVi: [
+      "Hãy chắc chắn cấu hình đúng số phát bắn (ví dụ: 10 viên vòng bảng, 15 viên knockout) trước khi tạo giải để các vận động viên chuẩn bị đầy đủ đạn dược.",
+      "Trong trường hợp trận đấu loại trực tiếp kết thúc hòa điểm, trọng tài sẽ bấm nút chọn người chiến thắng phát phụ Sudden Death ngay tại bảng Ghi điểm để hệ thống tự động đưa VĐV đó đi tiếp vào vòng trong."
+    ],
+    tipsEn: [
+      "Be sure to configure the correct shot count (e.g., 10 shots for groups, 15 shots for knockout) before cup creation so players can prepare their ammunition.",
+      "If a knockout match ends in a draw, the referee will select the winner of the Sudden Death shootout in the Scoring Modal, advancing them automatically to the next round."
+    ]
   }
 ];
 

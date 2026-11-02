@@ -514,7 +514,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const [modalDirectMaxPoints, setModalDirectMaxPoints] = useState<number | undefined>(undefined);
   const [modalTeamDirectMaxShots, setModalTeamDirectMaxShots] = useState(10);
   const [modalTeamDirectMaxPoints, setModalTeamDirectMaxPoints] = useState<number | undefined>(undefined);
-  const [modalTournamentType, setModalTournamentType] = useState<"individual" | "team" | "combined">("combined");
+  const [modalTournamentType, setModalTournamentType] = useState<"individual" | "team" | "combined" | "versus">("combined");
   const [modalIsNational, setModalIsNational] = useState(false);
   const [hoveringIsNational, setHoveringIsNational] = useState(false);
   const [hoveringQuickIsNational, setHoveringQuickIsNational] = useState(false);
@@ -552,14 +552,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
       setModalDirectMaxPoints(directMaxPoints);
       setModalTeamDirectMaxShots(teamDirectMaxShots || 10);
       setModalTeamDirectMaxPoints(teamDirectMaxPoints);
-      setModalTournamentType("combined");
+      setModalTournamentType(tournamentType);
       setModalIsNational(false);
       setModalHeadReferee("");
       setTournamentError("");
     } else if (!isNewTournamentModalOpen) {
       setModalTournamentId("");
     }
-  }, [isNewTournamentModalOpen, laneCapacity, shotsCount, teamShotsCount, directMaxShots, directMaxPoints, teamDirectMaxShots, teamDirectMaxPoints]);
+  }, [isNewTournamentModalOpen, laneCapacity, shotsCount, teamShotsCount, directMaxShots, directMaxPoints, teamDirectMaxShots, teamDirectMaxPoints, tournamentType]);
 
   useEffect(() => {
     if (isTournamentLocked) {
@@ -3092,17 +3092,18 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
               {/* Lựa Chọn Tạo Giải / Cơ Chế Giải Đấu */}
               <div>
-                <label className="block text-[10px] font-black text-gray-550 uppercase tracking-widest mb-1">
+                <label className="block text-[10px] font-black text-gray-555 uppercase tracking-widest mb-1">
                   {language === "en" ? "Tournament Type *" : "Cơ chế giải đấu *"}
                 </label>
                 <select
                   value={modalTournamentType}
-                  onChange={(e) => setModalTournamentType(e.target.value as "individual" | "team" | "combined")}
+                  onChange={(e) => setModalTournamentType(e.target.value as "individual" | "team" | "combined" | "versus")}
                   className="w-full px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 font-bold text-xs"
                 >
                   <option value="individual">{language === "en" ? "Individual Only" : "Cá Nhân (Chỉ hiển thị môi trường Cá Nhân)"}</option>
                   <option value="team">{language === "en" ? "Team Only" : "Đồng Đội (Chỉ hiển thị môi trường Đồng Đội)"}</option>
                   <option value="combined">{language === "en" ? "Combined (Individual + Team)" : "Cá Nhân + Đồng Đội (Kết Hợp)"}</option>
+                  <option value="versus">{language === "en" ? "Match Play Cup" : "CÚP ĐỐI KHÁNG (Bốc thăm chia bảng & Trực tiếp)"}</option>
                 </select>
               </div>
 

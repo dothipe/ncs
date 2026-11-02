@@ -18,6 +18,7 @@ export interface Athlete {
   name: string; // e.g. "Nguyễn Văn A"
   team: string; // e.g. "Team 1"
   isPrimaryTeam?: boolean;
+  isPrimary?: boolean;
   /**
    * Object mapping distanceId -> array of boolean representing hits (true) or misses (false).
    * Array length equals shot count (shotsCount).

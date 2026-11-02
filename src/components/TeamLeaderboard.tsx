@@ -63,16 +63,35 @@ export const TeamLeaderboard: React.FC<TeamLeaderboardProps> = ({
     return athletes.some((a) => a.isPrimaryTeam);
   }, [athletes]);
 
-  // In team mode, only include those who are primary team players (bắn chính)
+  // In team mode, only include those who are primary team players (bắn chính) and not unaligned/free athletes (Tự do)
   const activeAthletes = useMemo(() => {
+    if (competitionMode === "team") {
+      return athletes.filter((a) => {
+        const teamName = a.team ? a.team.trim() : "";
+        const isFree = !teamName || 
+                       teamName.toLowerCase().includes("tự do") || 
+                       teamName === "Không Có" ||
+                       teamName === "VĐV Tự Do (Không Đội)";
+        if (isFree) return false;
+        return hasAnyPrimary ? a.isPrimaryTeam : true;
+      });
+    }
     return athletes.filter((a) => hasAnyPrimary ? a.isPrimaryTeam : true);
-  }, [athletes, hasAnyPrimary]);
+  }, [athletes, competitionMode, hasAnyPrimary]);
 
   // Determine which athletes are included under the active conditions
   const activeAthletesForCalculation = useMemo(() => {
     if (competitionMode === "team") {
-      // In team mode, only include primary team players (bắn chính)
-      return athletes.filter((a) => hasAnyPrimary ? a.isPrimaryTeam : true);
+      // In team mode, only include primary team players (bắn chính) and not unaligned/free athletes
+      return athletes.filter((a) => {
+        const teamName = a.team ? a.team.trim() : "";
+        const isFree = !teamName || 
+                       teamName.toLowerCase().includes("tự do") || 
+                       teamName === "Không Có" ||
+                       teamName === "VĐV Tự Do (Không Đội)";
+        if (isFree) return false;
+        return hasAnyPrimary ? a.isPrimaryTeam : true;
+      });
     } else {
       // In individual mode:
       if (activeTab === "survival") {

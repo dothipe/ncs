@@ -31,6 +31,7 @@ interface HomeViewProps {
   setGlobalSearch: (search: string) => void;
   homeFilter: string;
   setHomeFilter: (filter: string) => void;
+  onRedirectToCreateTournament?: () => void;
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({
@@ -63,6 +64,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   setGlobalSearch,
   homeFilter,
   setHomeFilter,
+  onRedirectToCreateTournament,
 }) => {
   return (
     <div className="animate-fadeIn" id="home-view-container">
@@ -71,14 +73,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
         activeHistoryId={activeHistoryId}
         onSelectTournament={onSelectTournament}
         onOpenAuthModal={onOpenAuthModal}
-        onRedirectToCreateTournament={() => {
+        onRedirectToCreateTournament={onRedirectToCreateTournament || (() => {
           if (activeHistoryId) {
             handleExitTournament();
           }
           setActiveTab("settings");
           setSettingsSubTab("config");
           setIsNewTournamentModalOpen(true);
-        }}
+        })}
         currentSetup={{
           matchName,
           competitionMode,

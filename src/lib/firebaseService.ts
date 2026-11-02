@@ -54,7 +54,7 @@ export interface TournamentData {
   startDate?: string;
   endDate?: string;
   location?: string;
-  tournamentType?: "individual" | "team" | "combined";
+  tournamentType?: "individual" | "team" | "combined" | "versus";
   bannerUrl?: string;
   avatarUrl?: string;
   viewCount?: number;
@@ -276,7 +276,7 @@ export async function createOnlineTournament(
     tournamentCode?: string;
     tournamentSeq?: number;
     competitionMode: "individual" | "team";
-    tournamentType?: "individual" | "team" | "combined";
+    tournamentType?: "individual" | "team" | "combined" | "versus";
     shotsCount: number;
     teamShotsCount: number;
     laneCapacity?: number;

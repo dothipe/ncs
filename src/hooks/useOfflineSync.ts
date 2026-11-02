@@ -3,7 +3,24 @@ import { useState, useEffect, useRef } from "react";
 export const useOfflineSync = () => {
   const [networkStatus, setNetworkStatus] = useState<"online" | "offline" | null>(null);
   const [isFirebaseQuotaExceeded, setIsFirebaseQuotaExceeded] = useState(false);
+  const [rawPendingWrites, setRawPendingWrites] = useState(false);
   const [dbHasPendingWrites, setDbHasPendingWrites] = useState(false);
+  const pendingTimeoutRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (rawPendingWrites) {
+      if (pendingTimeoutRef.current) clearTimeout(pendingTimeoutRef.current);
+      setDbHasPendingWrites(true);
+    } else {
+      if (pendingTimeoutRef.current) clearTimeout(pendingTimeoutRef.current);
+      pendingTimeoutRef.current = setTimeout(() => {
+        setDbHasPendingWrites(false);
+      }, 1000); // Smooth transition back to idle sync status
+    }
+    return () => {
+      if (pendingTimeoutRef.current) clearTimeout(pendingTimeoutRef.current);
+    };
+  }, [rawPendingWrites]);
   const onlineTimerRef = useRef<any>(null);
 
   useEffect(() => {
@@ -45,6 +62,6 @@ export const useOfflineSync = () => {
     isFirebaseQuotaExceeded,
     setIsFirebaseQuotaExceeded,
     dbHasPendingWrites,
-    setDbHasPendingWrites,
+    setDbHasPendingWrites: setRawPendingWrites,
   };
 };

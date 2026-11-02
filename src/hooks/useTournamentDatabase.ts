@@ -275,6 +275,7 @@ export const useTournamentDatabase = ({
   // Cloud state publisher effect (Debounced to aggregate scoring events)
   useEffect(() => {
     if (!activeHistoryId || !activeHistoryId.startsWith("tour-")) return;
+    if (activeHistoryId.startsWith("tour-versus-") || currentTournamentDoc?.tournamentType === "versus") return;
     if (dbHasPendingWrites) return;
     if (loadedTournamentIdRef.current !== activeHistoryId) return;
     if (currentTournamentDoc?.id !== activeHistoryId) return;

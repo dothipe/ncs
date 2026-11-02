@@ -81,9 +81,9 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
       return athletes.filter((a) => {
         const teamName = a.team ? a.team.trim() : "";
         const isFree = !teamName || 
-                       teamName.includes("Tự Do") || 
-                       teamName.includes("VĐV Tự Do") || 
-                       teamName === "Không Có";
+                       teamName.toLowerCase().includes("tự do") || 
+                       teamName === "Không Có" ||
+                       teamName === "VĐV Tự Do (Không Đội)";
         if (isFree) return false;
         return hasAnyPrimary ? a.isPrimaryTeam : true;
       });

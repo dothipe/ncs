@@ -127,6 +127,8 @@ interface PkLobbyViewProps {
   editChallengeId?: string | null;
   onClearEditChallengeId?: () => void;
   onViewClubHub?: (club: any) => void;
+  autoOpenCreateModal?: boolean;
+  onClearAutoOpenCreateModal?: () => void;
 }
 
 export const PkLobbyView: React.FC<PkLobbyViewProps> = ({ 
@@ -138,7 +140,9 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
   onSubTabChange,
   editChallengeId,
   onClearEditChallengeId,
-  onViewClubHub
+  onViewClubHub,
+  autoOpenCreateModal,
+  onClearAutoOpenCreateModal
 }) => {
   const { language } = useLanguage();
   const [internalSubTab, setInternalSubTab] = useState<"dashboard" | "lobby" | "leaderboard" | "history">("dashboard");
@@ -271,6 +275,13 @@ export const PkLobbyView: React.FC<PkLobbyViewProps> = ({
 
   // Create Challenge Modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (autoOpenCreateModal) {
+      setIsCreateModalOpen(true);
+      onClearAutoOpenCreateModal?.();
+    }
+  }, [autoOpenCreateModal, onClearAutoOpenCreateModal]);
   const [formTitle, setFormTitle] = useState("");
   const [formType, setFormType] = useState<"solo_1v1" | "team_vs_team">("solo_1v1");
   const [formTeamSize, setFormTeamSize] = useState<number>(3);

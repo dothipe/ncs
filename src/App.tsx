@@ -37,7 +37,9 @@ import {
   Eye,
   Tv,
   CloudUpload,
-  LayoutDashboard
+  LayoutDashboard,
+  ChevronRight,
+  Sword
 } from "lucide-react";
 import { DistanceConfig, Athlete, MatchHistoryItem, StoredAthleteList, Club, VSC_DEFAULT_LOGO } from "./types";
 import { useLanguage } from "./context/LanguageContext";
@@ -51,6 +53,7 @@ import { AthleteManagement } from "./components/AthleteManagement";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { TournamentExecutionHub } from "./components/TournamentExecutionHub";
 import { TournamentRegistrationView } from "./components/TournamentRegistrationView";
+import { VersusTournamentHub } from "./components/VersusTournamentHub";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { MainDashboard } from "./components/MainDashboard";
 import { ExportModal } from "./components/ExportModal";
@@ -233,7 +236,8 @@ export default function App() {
     return "individual";
   });
 
-  const [tournamentType, setTournamentType] = useState<"individual" | "team" | "combined">("combined");
+  const [tournamentType, setTournamentType] = useState<"individual" | "team" | "combined" | "versus">("combined");
+  const [versusInitialCreateMode, setVersusInitialCreateMode] = useState(false);
 
   useEffect(() => {
     if (tournamentType === "individual" && competitionMode !== "individual") {
@@ -351,12 +355,16 @@ export default function App() {
 
         // 2. Active Tab
         const tabParam = params.get("tab");
-        const allowedTabs = ["home", "desktop", "dashboard", "scoring", "input_scores", "leaderboard", "teams", "athletes", "settings", "history", "control_panel", "qltv", "vsc_system_directory", "vsc_clubs_directory", "pk_lobby", "tournament_execution", "tournament_registration", "guides"];
+        const allowedTabs = ["home", "desktop", "dashboard", "scoring", "input_scores", "leaderboard", "teams", "athletes", "settings", "history", "control_panel", "qltv", "vsc_system_directory", "vsc_clubs_directory", "pk_lobby", "tournament_execution", "tournament_registration", "guides", "versus_tournament"];
         if (tabParam && allowedTabs.includes(tabParam)) {
           setActiveTab(tabParam as any);
         } else {
           if (tourParam && tourParam.startsWith("tour-")) {
-            setActiveTab("dashboard");
+            if (tourParam.startsWith("tour-versus-")) {
+              setActiveTab("versus_tournament");
+            } else {
+              setActiveTab("dashboard");
+            }
           } else {
             setActiveTab("home");
           }
@@ -506,11 +514,11 @@ export default function App() {
     });
   }, [masterAthletes.length]);
 
-  const [activeTab, setActiveTab] = useState<"home" | "desktop" | "dashboard" | "scoring" | "input_scores" | "leaderboard" | "teams" | "athletes" | "settings" | "history" | "control_panel" | "qltv" | "vsc_system_directory" | "vsc_clubs_directory" | "pk_lobby" | "tournament_execution" | "tournament_registration" | "guides">(() => {
+  const [activeTab, setActiveTab] = useState<"home" | "desktop" | "dashboard" | "scoring" | "input_scores" | "leaderboard" | "teams" | "athletes" | "settings" | "history" | "control_panel" | "qltv" | "vsc_system_directory" | "vsc_clubs_directory" | "pk_lobby" | "tournament_execution" | "tournament_registration" | "guides" | "versus_tournament">(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get("tab");
-      const allowedTabs = ["home", "desktop", "dashboard", "scoring", "input_scores", "leaderboard", "teams", "athletes", "settings", "history", "control_panel", "qltv", "vsc_system_directory", "vsc_clubs_directory", "pk_lobby", "tournament_execution", "tournament_registration", "guides"];
+      const allowedTabs = ["home", "desktop", "dashboard", "scoring", "input_scores", "leaderboard", "teams", "athletes", "settings", "history", "control_panel", "qltv", "vsc_system_directory", "vsc_clubs_directory", "pk_lobby", "tournament_execution", "tournament_registration", "guides", "versus_tournament"];
       if (tabParam && allowedTabs.includes(tabParam)) {
         return tabParam as any;
       }
@@ -529,6 +537,12 @@ export default function App() {
     }
     return "home";
   });
+
+  useEffect(() => {
+    if (activeTab === "versus_tournament" && versusInitialCreateMode) {
+      setVersusInitialCreateMode(false);
+    }
+  }, [activeTab, versusInitialCreateMode]);
 
   useEffect(() => {
     const needsDecoupled = ["vsc_system_directory", "vsc_clubs_directory", "control_panel"].includes(activeTab);
@@ -608,7 +622,7 @@ export default function App() {
 
   // Keep non-logged in guests restricted to public-facing viewing tabs
   useEffect(() => {
-    if (!currentUser && !["home", "dashboard", "leaderboard", "teams", "vsc_system_directory", "vsc_clubs_directory", "pk_lobby", "guides"].includes(activeTab)) {
+    if (!currentUser && !["home", "dashboard", "leaderboard", "teams", "vsc_system_directory", "vsc_clubs_directory", "pk_lobby", "guides", "versus_tournament"].includes(activeTab)) {
       setActiveTab("home");
     }
   }, [currentUser, activeTab]);
@@ -657,12 +671,24 @@ export default function App() {
 
   const handleSelectTournament = async (id: string, tournament: any, targetTab?: string) => {
     const targetId = id;
-    const resolvedTargetTab = targetTab || "dashboard";
+    let resolvedTargetTab = targetTab || "dashboard";
+    if (targetId && (targetId.startsWith("tour-versus-") || tournament?.tournamentType === "versus" || tournament?.type === "versus")) {
+      resolvedTargetTab = "versus_tournament";
+    }
 
     // SAFETY CHECK: If re-selecting the EXACT SAME tournament that is already active, DO NOT reset state!
     if (activeHistoryId && activeHistoryId === targetId) {
       if (targetId) {
         setActiveTab(resolvedTargetTab as any);
+        // Synchronously update URL search params to ensure state and URL are perfectly in sync
+        const nextParams = new URLSearchParams();
+        nextParams.set("tour", targetId);
+        nextParams.set("tab", resolvedTargetTab);
+        const nextUrl = `${window.location.origin}${window.location.pathname}?${nextParams.toString()}`;
+        window.history.pushState({
+          tour: targetId,
+          tab: resolvedTargetTab,
+        }, "", nextUrl);
       }
       return;
     }
@@ -725,9 +751,32 @@ export default function App() {
     setDirectMaxPoints(undefined);
     setTeamDirectMaxPoints(undefined);
 
-    setActiveHistoryId(targetId);
+    const prevHistoryId = activeHistoryId;
+    setActiveHistoryId(targetId || null);
     if (targetId) {
       setActiveTab(resolvedTargetTab as any);
+      // Synchronously update URL search params to ensure state and URL are perfectly in sync
+      const nextParams = new URLSearchParams();
+      nextParams.set("tour", targetId);
+      nextParams.set("tab", resolvedTargetTab);
+      const nextUrl = `${window.location.origin}${window.location.pathname}?${nextParams.toString()}`;
+      window.history.pushState({
+        tour: targetId,
+        tab: resolvedTargetTab,
+      }, "", nextUrl);
+    } else {
+      // If we are exiting/going back from a versus tournament, make sure activeTab is versus_tournament to highlight the header tab correctly
+      if (prevHistoryId && prevHistoryId.startsWith("tour-versus-")) {
+        setActiveTab("versus_tournament");
+      }
+      // Synchronously clear URL search params to return to the Match Play Lobby cleanly
+      const nextParams = new URLSearchParams();
+      nextParams.set("tab", "versus_tournament");
+      const nextUrl = `${window.location.origin}${window.location.pathname}?${nextParams.toString()}`;
+      window.history.pushState({
+        tour: null,
+        tab: "versus_tournament",
+      }, "", nextUrl);
     }
   };
 
@@ -736,6 +785,8 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isLiveBoardOpen, setIsLiveBoardOpen] = useState(false);
+  const [isCreateSelectionModalOpen, setIsCreateSelectionModalOpen] = useState(false);
+  const [pkAutoOpenCreate, setPkAutoOpenCreate] = useState(false);
 
   // Protection and lock/unlock mode for Ghi Diem tab
   const [isScoringEditAuthorized, setIsScoringEditAuthorized] = useState(false);
@@ -2929,6 +2980,17 @@ export default function App() {
 
     setHomeFilter(filter);
     setActiveTab("home");
+
+    // Synchronously update URL search params to ensure state and URL are perfectly in sync
+    const nextParams = new URLSearchParams();
+    nextParams.set("tab", "home");
+    nextParams.set("subtab", filter);
+    const nextUrl = `${window.location.origin}${window.location.pathname}?${nextParams.toString()}`;
+    window.history.pushState({
+      tour: null,
+      tab: "home",
+      subtab: filter
+    }, "", nextUrl);
   };
 
   // Restore scores state from archive
@@ -3683,37 +3745,54 @@ export default function App() {
               setGlobalSearch={setGlobalSearch}
               homeFilter={homeFilter}
               setHomeFilter={setHomeFilter}
+              onRedirectToCreateTournament={() => {
+                if (activeHistoryId) {
+                  handleExitTournament();
+                }
+                setIsCreateSelectionModalOpen(true);
+              }}
             />
           )}
 
           {/* TAB 0: SUMMARY TOURNAMENT DASHBOARD */}
           {activeTab === "dashboard" && (
-            <DashboardView
-              leaderboardAthletes={leaderboardAthletes}
-              distances={distances}
-              shotsCount={shotsCount}
-              matchName={matchName}
-              masterAthletes={masterAthletes}
-              teamAthletes={teamAthletes}
-              teamDistances={teamDistances}
-              teamShotsCount={teamShotsCount}
-              leaderboardTeamAthletes={leaderboardTeamAthletes}
-              directMaxShots={directMaxShots}
-              teamDirectMaxShots={teamDirectMaxShots}
-              directMaxPoints={directMaxPoints}
-              teamDirectMaxPoints={teamDirectMaxPoints}
-              tournamentType={tournamentType}
-              clubs={clubs}
-              setIsLiveBoardOpen={setIsLiveBoardOpen}
-              setIsExportModalOpen={setIsExportModalOpen}
-              currentTournamentDoc={currentTournamentDoc}
-              activeHistoryId={activeHistoryId}
-              currentUser={currentUser}
-              onOpenAuthModal={() => setIsAuthModalOpen(true)}
-              userRole={userRole}
-              systemClubs={clubs}
-              systemAthletes={vscSystemAthletes}
-            />
+            ((activeHistoryId && activeHistoryId.startsWith("tour-versus-")) || currentTournamentDoc?.tournamentType === "versus") ? (
+              <VersusTournamentHub
+                activeHistoryId={activeHistoryId}
+                athletes={athletes}
+                isExecutor={isGlobalAdmin || isTournamentOwner || isTournamentSubAdmin || (!!currentUser && currentTournamentDoc?.headReferee?.toLowerCase() === currentUser.email?.toLowerCase())}
+                userRole={userRole}
+                language={language}
+                onSelectTournament={handleSelectTournament}
+              />
+            ) : (
+              <DashboardView
+                leaderboardAthletes={leaderboardAthletes}
+                distances={distances}
+                shotsCount={shotsCount}
+                matchName={matchName}
+                masterAthletes={masterAthletes}
+                teamAthletes={teamAthletes}
+                teamDistances={teamDistances}
+                teamShotsCount={teamShotsCount}
+                leaderboardTeamAthletes={leaderboardTeamAthletes}
+                directMaxShots={directMaxShots}
+                teamDirectMaxShots={teamDirectMaxShots}
+                directMaxPoints={directMaxPoints}
+                teamDirectMaxPoints={teamDirectMaxPoints}
+                tournamentType={tournamentType}
+                clubs={clubs}
+                setIsLiveBoardOpen={setIsLiveBoardOpen}
+                setIsExportModalOpen={setIsExportModalOpen}
+                currentTournamentDoc={currentTournamentDoc}
+                activeHistoryId={activeHistoryId}
+                currentUser={currentUser}
+                onOpenAuthModal={() => setIsAuthModalOpen(true)}
+                userRole={userRole}
+                systemClubs={clubs}
+                systemAthletes={vscSystemAthletes}
+              />
+            )
           )}
 
           {/* TAB 1: GHI ĐIỂM OFFICIAL SCORECARDS WORKSPACE */}
@@ -3840,6 +3919,19 @@ export default function App() {
               onOpenAuthModal={() => setIsAuthModalOpen(true)}
               onAddAuditLog={handleAddAuditLog}
               setActiveTab={setActiveTab}
+            />
+          )}
+
+          {/* TAB 2D: ĐẤU ĐỐI KHÁNG (VERSUS / CUP MATCH PLAY) */}
+          {activeTab === "versus_tournament" && (
+            <VersusTournamentHub
+              activeHistoryId={activeHistoryId}
+              athletes={activeHistoryId ? athletes : masterAthletes}
+              isExecutor={isGlobalAdmin || isTournamentOwner || isTournamentSubAdmin || (!!currentUser && currentTournamentDoc?.headReferee?.toLowerCase() === currentUser.email?.toLowerCase())}
+              userRole={userRole}
+              language={language}
+              onSelectTournament={handleSelectTournament}
+              initialCreateMode={versusInitialCreateMode}
             />
           )}
 
@@ -4007,6 +4099,8 @@ export default function App() {
               editChallengeId={pkChallengeToEditId}
               onClearEditChallengeId={() => setPkChallengeToEditId(null)}
               onViewClubHub={(club) => setGlobalSelectedClub(club)}
+              autoOpenCreateModal={pkAutoOpenCreate}
+              onClearAutoOpenCreateModal={() => setPkAutoOpenCreate(false)}
             />
           )}
 
@@ -4023,6 +4117,173 @@ export default function App() {
 
             {/* Sportive Footer */}
       <SportiveFooter />
+
+      {isCreateSelectionModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-fadeIn font-sans">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-xl rounded-3xl p-6 shadow-2xl border border-slate-100 dark:border-slate-800 relative">
+            <button
+              onClick={() => setIsCreateSelectionModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors border-none bg-transparent cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="text-center mb-6">
+              <Trophy className="w-12 h-12 text-[#9c0c13] mx-auto mb-2.5 animate-bounce" />
+              <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                {language === "en" ? "Select Tournament Category" : "CHỌN HẠNG MỤC TẠO GIẢI ĐẤU"}
+              </h2>
+              <p className="text-xs text-slate-500 mt-1 dark:text-slate-400">
+                {language === "en" 
+                  ? "Select the correct category matching your desired game format" 
+                  : "Vui lòng chọn đúng hạng mục thi đấu phù hợp với thể thức bạn muốn tạo"}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 max-h-[420px] overflow-y-auto pr-1">
+              {/* Option 1: THI ĐẤU CÁ NHÂN */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTournamentType("individual");
+                  setCompetitionMode("individual");
+                  setActiveTab("settings");
+                  setSettingsSubTab("config");
+                  setIsNewTournamentModalOpen(true);
+                  setIsCreateSelectionModalOpen(false);
+                }}
+                className="w-full text-left p-3.5 bg-slate-50 hover:bg-indigo-50/50 dark:bg-slate-800/40 dark:hover:bg-slate-800/80 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-900/40 transition-all flex items-start gap-4 cursor-pointer group"
+              >
+                <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-xl group-hover:scale-110 transition-transform">
+                  <User className="w-5 h-5 shrink-0" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-xs font-black text-slate-800 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors uppercase">
+                    {language === "en" ? "Individual Tournament" : "Thi đấu Cá Nhân 🎯"}
+                  </h4>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-normal font-bold">
+                    {language === "en" 
+                      ? "Score entries for individual athletes on custom distances." 
+                      : "Thi đấu tính điểm cá nhân cho từng VĐV theo từng cự ly riêng biệt."}
+                  </p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-400 self-center group-hover:translate-x-1 transition-transform shrink-0" />
+              </button>
+
+              {/* Option 2: THI ĐẤU ĐỒNG ĐỘI */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTournamentType("team");
+                  setCompetitionMode("team");
+                  setActiveTab("settings");
+                  setSettingsSubTab("config");
+                  setIsNewTournamentModalOpen(true);
+                  setIsCreateSelectionModalOpen(false);
+                }}
+                className="w-full text-left p-3.5 bg-slate-50 hover:bg-emerald-50/50 dark:bg-slate-800/40 dark:hover:bg-slate-800/80 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-emerald-200 dark:hover:border-emerald-900/40 transition-all flex items-start gap-4 cursor-pointer group"
+              >
+                <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-xl group-hover:scale-110 transition-transform">
+                  <Users className="w-5 h-5 shrink-0" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-xs font-black text-slate-800 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors uppercase">
+                    {language === "en" ? "Team Tournament" : "Thi đấu Đồng Đội 👥"}
+                  </h4>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-normal font-bold">
+                    {language === "en" 
+                      ? "Score entries for club teams, coordinated in lines." 
+                      : "Tính điểm bắn đồng đội phối hợp cho các Câu lạc bộ, đội nhóm tranh tài."}
+                  </p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-400 self-center group-hover:translate-x-1 transition-transform shrink-0" />
+              </button>
+
+              {/* Option 3: THI ĐẤU CÁ NHÂN & ĐỒNG ĐỘI KẾT HỢP */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTournamentType("combined");
+                  setCompetitionMode("individual");
+                  setActiveTab("settings");
+                  setSettingsSubTab("config");
+                  setIsNewTournamentModalOpen(true);
+                  setIsCreateSelectionModalOpen(false);
+                }}
+                className="w-full text-left p-3.5 bg-slate-50 hover:bg-amber-50/50 dark:bg-slate-800/40 dark:hover:bg-slate-800/80 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-amber-200 dark:hover:border-amber-900/40 transition-all flex items-start gap-4 cursor-pointer group"
+              >
+                <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl group-hover:scale-110 transition-transform">
+                  <Trophy className="w-5 h-5 shrink-0" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-xs font-black text-slate-800 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors uppercase">
+                    {language === "en" ? "Combined Tournament" : "Cá nhân & Đồng đội kết hợp 🏆"}
+                  </h4>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-normal font-bold">
+                    {language === "en" 
+                      ? "Integrates both individual and team scoring in a single comprehensive tournament." 
+                      : "Mô hình giải đấu quốc gia: Tích hợp đầy đủ cả Ghi Điểm cá nhân và đồng đội."}
+                  </p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-400 self-center group-hover:translate-x-1 transition-transform shrink-0" />
+              </button>
+
+              {/* Option 4: TẠO THÁCH ĐẤU PK */}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("pk_lobby");
+                  setPkAutoOpenCreate(true);
+                  setIsCreateSelectionModalOpen(false);
+                }}
+                className="w-full text-left p-3.5 bg-slate-50 hover:bg-rose-50/50 dark:bg-slate-800/40 dark:hover:bg-slate-800/80 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-rose-200 dark:hover:border-rose-900/40 transition-all flex items-start gap-4 cursor-pointer group"
+              >
+                <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-xl group-hover:scale-110 transition-transform">
+                  <Sword className="w-5 h-5 shrink-0 animate-pulse" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-xs font-black text-slate-800 dark:text-white group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors uppercase">
+                    {language === "en" ? "PK Matchmaking" : "Thách đấu PK Kèo ⚔️"}
+                  </h4>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-normal font-bold">
+                    {language === "en" 
+                      ? "Create solo 1v1 or team vs team custom matchplay with points wager." 
+                      : "Giao lưu võ lâm, so tài trực tiếp 1v1 hoặc Team vs Team có đặt cược điểm VSC."}
+                  </p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-400 self-center group-hover:translate-x-1 transition-transform shrink-0" />
+              </button>
+
+              {/* Option 5: TẠO CÚP ĐỐI KHÁNG */}
+              <button
+                type="button"
+                onClick={() => {
+                  handleExitTournament();
+                  setVersusInitialCreateMode(true);
+                  setActiveTab("versus_tournament");
+                  setIsCreateSelectionModalOpen(false);
+                }}
+                className="w-full text-left p-3.5 bg-slate-50 hover:bg-violet-50/50 dark:bg-slate-800/40 dark:hover:bg-slate-800/80 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-violet-200 dark:hover:border-violet-900/40 transition-all flex items-start gap-4 cursor-pointer group"
+              >
+                <div className="p-2.5 bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 rounded-xl group-hover:scale-110 transition-transform">
+                  <Award className="w-5 h-5 shrink-0" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-xs font-black text-slate-800 dark:text-white group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors uppercase">
+                    {language === "en" ? "Versus / Cup Tournament" : "Cúp Đấu Đối Kháng 🏆"}
+                  </h4>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-normal font-bold">
+                    {language === "en" 
+                      ? "Divide groups, play round robin, and automatically generate knockout brackets." 
+                      : "Phân chia bảng đấu, đấu vòng tròn/Mini PK và tự động dựng Nhánh Đấu loại trực tiếp."}
+                  </p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-400 self-center group-hover:translate-x-1 transition-transform shrink-0" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ExportModal
         isOpen={isExportModalOpen}

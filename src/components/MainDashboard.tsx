@@ -73,10 +73,21 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
 
   // Resolve active source variables based on tournamentType
   const activeAthletesList = useMemo(() => {
+    const source = (tournamentType === "team")
+      ? (leaderboardTeamAthletes || teamAthletes || athletes)
+      : athletes;
+
     if (tournamentType === "team") {
-      return leaderboardTeamAthletes || teamAthletes || athletes;
+      return source.filter((a) => {
+        const teamName = a.team ? a.team.trim() : "";
+        const isFree = !teamName || 
+                       teamName.toLowerCase().includes("tự do") || 
+                       teamName === "Không Có" ||
+                       teamName === "VĐV Tự Do (Không Đội)";
+        return !isFree;
+      });
     }
-    return athletes;
+    return source;
   }, [tournamentType, athletes, teamAthletes, leaderboardTeamAthletes]);
 
   const activeDistances = useMemo(() => {
@@ -225,7 +236,15 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
       return activeAthletesList; // use individual list, no isPrimaryTeam filter
     }
     const source = leaderboardTeamAthletes || teamAthletes || athletes;
-    return source.filter((a) => hasAnyPrimary ? a.isPrimaryTeam : true);
+    return source.filter((a) => {
+      const teamName = a.team ? a.team.trim() : "";
+      const isFree = !teamName || 
+                     teamName.toLowerCase().includes("tự do") || 
+                     teamName === "Không Có" ||
+                     teamName === "VĐV Tự Do (Không Đội)";
+      if (isFree) return false;
+      return hasAnyPrimary ? a.isPrimaryTeam : true;
+    });
   }, [leaderboardTeamAthletes, teamAthletes, athletes, activeAthletesList, tournamentType, hasAnyPrimary]);
 
   const activeTeamDistances = useMemo(() => {
@@ -1841,7 +1860,14 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
       };
     });
 
-    const sortedTeams = teamsArray.sort((a, b) => {
+    const filteredTeamsArray = (competitionMode === "team")
+      ? teamsArray.filter((t) => {
+          const name = t.teamName.toLowerCase();
+          return !name.includes("tự do") && name !== "không có" && name !== "vđv tự do (không đội)";
+        })
+      : teamsArray;
+
+    const sortedTeams = filteredTeamsArray.sort((a, b) => {
       if (competitionMode === "team") {
         if (activeTab === "survival") {
           const rankA = teamRanks[a.teamName] || 999;

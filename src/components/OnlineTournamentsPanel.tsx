@@ -1478,7 +1478,9 @@ export const OnlineTournamentsPanel: React.FC<OnlineTournamentsPanelProps> = ({
           {/* Subtitle / Competition Mode */}
           <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none mt-0.5">
             --- {
-              tour.tournamentType === "combined" 
+              (tour.tournamentType as any) === "versus"
+                ? (language === "en" ? "Match Play Format" : "Thi Đấu Đối Kháng")
+                : tour.tournamentType === "combined" 
                 ? (language === "en" ? "Combined Format" : "Cá Nhân & Đồng Đội") 
                 : tour.tournamentType === "team"
                 ? (language === "en" ? "Team Format" : "Thi Đồng Đội")

@@ -119,7 +119,7 @@ const cleanFacebookUrlForEmbed = (url: string): string => {
   return clean;
 };
 
-export const resolveTournamentType = (tour: TournamentData): "individual" | "team" | "combined" => {
+export const resolveTournamentType = (tour: TournamentData): "individual" | "team" | "combined" | "versus" => {
   if (tour.tournamentType) return tour.tournamentType;
   if (tour.competitionMode === "team") return "team";
   if (tour.competitionMode === "individual") {

@@ -184,11 +184,89 @@ export function MobileBottomNav({
   }
 
   if (isTournamentActive) {
+    const isInsideVersusTournament = !!activeHistoryId && activeHistoryId.startsWith("tour-versus-");
     const isInputScoresActive = activeTab === "input_scores" || activeTab === "scoring";
     const isDashboardActive = activeTab === "dashboard";
     const isHomeActive = activeTab === "home";
     const isLeaderboardActive = activeTab === "leaderboard";
     const isSettingsActive = activeTab === "settings";
+
+    if (isInsideVersusTournament) {
+      return (
+        <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-gradient-to-b from-[#b80e16] to-[#8c0a10] border-t border-red-500/25 shadow-2xl h-16 pb-safe flex items-stretch">
+          <div className="grid grid-cols-3 w-full h-full items-center text-center relative px-1">
+            {/* Tab 1: Trang chủ (Exit) */}
+            <button
+              onClick={() => changeExitTournament("all")}
+              className="flex flex-col items-center justify-center h-full relative cursor-pointer select-none border-none bg-transparent"
+            >
+              <div className={`transition-all duration-300 flex flex-col items-center ${isHomeActive ? "-translate-y-3.5" : "translate-y-0"}`}>
+                <div className={`transition-all duration-300 flex items-center justify-center ${
+                  isHomeActive 
+                    ? "w-12 h-12 bg-gradient-to-b from-[#d8141c] to-[#9c0c13] rounded-full border-4 border-white dark:border-slate-950 shadow-lg" 
+                    : "w-9 h-9 bg-transparent"
+                }`}>
+                  <Home className={`w-5 h-5 transition-all duration-300 ${isHomeActive ? "text-white scale-110" : "text-white/70"}`} />
+                </div>
+                <span className={`text-[8px] transition-all duration-300 tracking-tight ${
+                  isHomeActive 
+                    ? "font-black text-yellow-400 mt-0.5 uppercase tracking-wider" 
+                    : "font-bold text-white/70 mt-1"
+                }`}>
+                  {language === "en" ? "Home" : "Sảnh đấu"}
+                </span>
+              </div>
+            </button>
+
+            {/* Tab 2: Overview (Dashboard) */}
+            <button
+              onClick={() => changeTab("dashboard")}
+              className="flex flex-col items-center justify-center h-full relative cursor-pointer select-none border-none bg-transparent"
+            >
+              <div className={`transition-all duration-300 flex flex-col items-center ${isDashboardActive ? "-translate-y-3.5" : "translate-y-0"}`}>
+                <div className={`transition-all duration-300 flex items-center justify-center ${
+                  isDashboardActive 
+                    ? "w-12 h-12 bg-gradient-to-b from-[#d8141c] to-[#9c0c13] rounded-full border-4 border-white dark:border-slate-950 shadow-lg" 
+                    : "w-9 h-9 bg-transparent"
+                }`}>
+                  <LayoutDashboard className={`w-5 h-5 transition-all duration-300 ${isDashboardActive ? "text-white scale-110" : "text-white/70"}`} />
+                </div>
+                <span className={`text-[8px] transition-all duration-300 tracking-tight ${
+                  isDashboardActive 
+                    ? "font-black text-yellow-400 mt-0.5 uppercase tracking-wider" 
+                    : "font-bold text-white/70 mt-1"
+                }`}>
+                  {language === "en" ? "Overview" : "Tổng quan"}
+                </span>
+              </div>
+            </button>
+
+            {/* Tab 3: Setting (Cấu hình) */}
+            <button
+              onClick={() => changeTab("settings")}
+              className="flex flex-col items-center justify-center h-full relative cursor-pointer select-none border-none bg-transparent"
+            >
+              <div className={`transition-all duration-300 flex flex-col items-center ${isSettingsActive ? "-translate-y-3.5" : "translate-y-0"}`}>
+                <div className={`transition-all duration-300 flex items-center justify-center ${
+                  isSettingsActive 
+                    ? "w-12 h-12 bg-gradient-to-b from-[#d8141c] to-[#9c0c13] rounded-full border-4 border-white dark:border-slate-950 shadow-lg" 
+                    : "w-9 h-9 bg-transparent"
+                }`}>
+                  <Settings className={`w-5 h-5 transition-all duration-300 ${isSettingsActive ? "text-white scale-110" : "text-white/70"}`} />
+                </div>
+                <span className={`text-[8px] transition-all duration-300 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis max-w-[62px] ${
+                  isSettingsActive 
+                    ? "font-black text-yellow-400 mt-0.5 uppercase tracking-wider" 
+                    : "font-bold text-white/70 mt-1"
+                }`}>
+                  {language === "en" ? "Settings" : "Cài đặt"}
+                </span>
+              </div>
+            </button>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-gradient-to-b from-[#b80e16] to-[#8c0a10] border-t border-red-500/25 shadow-2xl h-16 pb-safe flex items-stretch">
@@ -319,10 +397,11 @@ export function MobileBottomNav({
   const isHomeActive = activeTab === "home" && (homeFilter === "all" || homeFilter === "all_list");
   const isFollowedActive = activeTab === "home" && homeFilter === "followed";
   const isProfileActive = activeTab === "control_panel" && controlPanelSubTab === "profile";
+  const isVersusActive = activeTab === "versus_tournament";
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-gradient-to-b from-[#b80e16] to-[#8c0a10] border-t border-red-500/25 shadow-2xl h-16 pb-safe flex items-stretch">
-      <div className="grid grid-cols-5 w-full h-full items-center text-center relative px-2">
+      <div className="grid grid-cols-6 w-full h-full items-center text-center relative px-1">
         
         {/* Button 1: THÁCH ĐẤU PK */}
         <button
@@ -345,6 +424,31 @@ export function MobileBottomNav({
                 : "font-bold text-white/70 mt-1"
             }`}>
               {language === "en" ? "Battle" : "Thách Đấu PK"}
+            </span>
+          </div>
+        </button>
+
+        {/* Button 1.5: ĐỐI KHÁNG */}
+        <button
+          onClick={() => {
+            changeTab("versus_tournament");
+          }}
+          className="flex flex-col items-center justify-center h-full relative cursor-pointer select-none border-none bg-transparent"
+        >
+          <div className={`transition-all duration-300 flex flex-col items-center ${isVersusActive ? "-translate-y-3.5" : "translate-y-0"}`}>
+            <div className={`transition-all duration-300 flex items-center justify-center ${
+              isVersusActive 
+                ? "w-12 h-12 bg-gradient-to-b from-[#d8141c] to-[#9c0c13] rounded-full border-4 border-white dark:border-slate-950 shadow-lg" 
+                : "w-9 h-9 bg-transparent"
+            }`}>
+              <Trophy className={`w-5 h-5 transition-all duration-300 ${isVersusActive ? "text-white scale-110" : "text-white/70"}`} />
+            </div>
+            <span className={`text-[8px] transition-all duration-300 tracking-tight ${
+              isVersusActive 
+                ? "font-black text-yellow-400 mt-0.5 uppercase tracking-wider" 
+                : "font-bold text-white/70 mt-1"
+            }`}>
+              {language === "en" ? "Match Play" : "Đối Kháng"}
             </span>
           </div>
         </button>
